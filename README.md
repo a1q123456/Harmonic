@@ -1,7 +1,7 @@
 #rtmp-sharp-with-server
-fork of [rtmp-sharp](https://github.com/imiuka/rtmp-sharp)
+forked from [rtmp-sharp](https://github.com/imiuka/rtmp-sharp)
 
-#usage
+#Usage
 
 ```csharp
 RtmpServer server = new RtmpServer(new RtmpSharp.IO.SerializationContext());
@@ -20,3 +20,40 @@ RtmpServer server = new RtmpServer(new RtmpSharp.IO.SerializationContext(), publ
 ```
 
 you can rewrite RtmpConnect or WebsocketConnect to implement your own service logic
+
+
+#Test
+
+## push video file using ffmpeg
+```bash
+ffmpeg -i test.mp4 -f flv -vcodec h264 -acodec aac "rtmp://127.0.0.1/app/live"
+```
+## play rtmp stream using ffplay
+
+```bash
+ffplay "rtmp://127.0.0.1/app/live"
+```
+
+## play flv stream using [flv.js](https://github.com/Bilibili/flv.js) over websocket
+
+```html
+<video id="player"></video>
+
+<script>
+
+    if (flvjs.isSupported()) {
+        var player = document.getElementById('player');
+        var flvPlayer = flvjs.createPlayer({
+            type: 'flv',
+            url: 'ws://127.0.0.1:80/app/live'
+        });
+        flvPlayer.attachMediaElement(player);
+        flvPlayer.load();
+        flvPlayer.play();
+    }
+</script>
+```
+
+
+
+```
