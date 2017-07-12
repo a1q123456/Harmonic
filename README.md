@@ -4,6 +4,8 @@ forked from [rtmp-sharp](https://github.com/imiuka/rtmp-sharp)
 # Usage
 
 ```csharp
+using RtmpSharp.Net;
+
 RtmpServer server = new RtmpServer(new RtmpSharp.IO.SerializationContext());
 server.RegisterApp("app");
 server.Start();
