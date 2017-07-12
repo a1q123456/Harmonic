@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 14
-VisualStudioVersion = 14.0.24720.0
+# Visual Studio 15
+VisualStudioVersion = 15.0.26430.14
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "rtmp-sharp", "rtmp-sharp.csproj", "{AA1A4F5D-3BD4-4832-9F5D-90727007727E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "demo", "demo\demo.csproj", "{AAEE01B0-9D09-4D09-A367-3CDC75BAF270}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{AA1A4F5D-3BD4-4832-9F5D-90727007727E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AA1A4F5D-3BD4-4832-9F5D-90727007727E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AA1A4F5D-3BD4-4832-9F5D-90727007727E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AAEE01B0-9D09-4D09-A367-3CDC75BAF270}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AAEE01B0-9D09-4D09-A367-3CDC75BAF270}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AAEE01B0-9D09-4D09-A367-3CDC75BAF270}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AAEE01B0-9D09-4D09-A367-3CDC75BAF270}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
