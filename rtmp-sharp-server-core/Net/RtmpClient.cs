@@ -131,7 +131,11 @@ namespace RtmpSharp.Net
             };
 
             CancellationTokenSource cts = new CancellationTokenSource();
-            Timer timer = new Timer((s) => { cts.Cancel(); throw new TimeoutException(); }, null, SendTimeout, Timeout.Infinite);
+            Timer timer = new Timer((s) => 
+            {
+                cts.Cancel();
+                throw new TimeoutException();
+            }, null, SendTimeout, Timeout.Infinite);
             await Handshake.WriteAsync(stream, c01, true, cts.Token);
             timer.Change(Timeout.Infinite, Timeout.Infinite);
 
