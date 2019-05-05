@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Complete;
 using RtmpSharp.Messaging.Events;
+using System.Threading;
 
 namespace RtmpSharp.Net
 {
@@ -27,7 +28,7 @@ namespace RtmpSharp.Net
         Task PingAsync(int pingTimeout);
         void OnDisconnected(ExceptionalEventArgs exceptionalEventArgs);
         void SendRawData(byte[] data);
-        Task ReadOnceAsync();
-        Task WriteOnceAsync();
+        Task ReadOnceAsync(CancellationToken ct);
+        Task WriteOnceAsync(CancellationToken ct);
     }
 }

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace RtmpSharp.IO.AMF3
 {
@@ -21,6 +23,13 @@ namespace RtmpSharp.IO.AMF3
         public void WriteExternal(IDataOutput output)
         {
             output.WriteObject(this.ToArray());
+        }
+
+        public async Task ReadExternalAsync(IDataInput input, CancellationToken ct)
+        {
+            var obj = await input.ReadObjectAsync(ct) as object[];
+            if (obj != null)
+                this.AddRange(obj);
         }
     }
 

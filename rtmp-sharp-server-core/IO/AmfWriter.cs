@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using System.Timers;
 using System.ComponentModel;
+using System.Threading;
 
 namespace RtmpSharp.IO.Extensions
 {
@@ -268,10 +269,11 @@ namespace RtmpSharp.IO
         }
 
 
-        public async Task StartWriteAsync()
+        public async Task StartWriteAsync(CancellationToken ct = default(CancellationToken))
         {
             if (!asyncMode) throw new InvalidOperationException("can only work on async mode");
-            await asyncBaseStream.WriteAsync(asyncBuffer.GetBuffer(), 0, (int)asyncBuffer.Length);
+            await asyncBaseStream.WriteAsync(asyncBuffer.GetBuffer(), 0, (int)asyncBuffer.Length, ct);
+            ct.ThrowIfCancellationRequested();
             asyncBuffer.SetLength(0);
             asyncBuffer.Seek(0, SeekOrigin.Begin);
         }

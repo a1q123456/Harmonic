@@ -30,8 +30,8 @@ namespace RtmpSharp.Net
         public bool IsDisconnected => disconnectsFired != 0;
         volatile int disconnectsFired = 0;
         readonly TaskCallbackManager<int, object> callbackManager;
-        public RtmpPacketWriter writer;
-        public RtmpPacketReader reader;
+        public RtmpPacketWriter writer = null;
+        public RtmpPacketReader reader = null;
         ObjectEncoding objectEncoding;
         RtmpServer server;
         Socket clientSocket;
@@ -61,7 +61,6 @@ namespace RtmpSharp.Net
             reader.Disconnected += OnPacketProcessorDisconnected;
             writer.Disconnected += OnPacketProcessorDisconnected;
             callbackManager = new TaskCallbackManager<int, object>();
-            
         }
         
         public event ChannelDataReceivedEventHandler ChannelDataReceived;
@@ -86,14 +85,14 @@ namespace RtmpSharp.Net
             return reader.ReadOnce();
         }
 
-        public Task WriteOnceAsync()
+        public Task WriteOnceAsync(CancellationToken ct = default(CancellationToken))
         {
-            return writer.WriteOnceAsync();
+            return writer.WriteOnceAsync(ct);
         }
 
-        public Task ReadOnceAsync()
+        public Task ReadOnceAsync(CancellationToken ct = default(CancellationToken))
         {
-            return reader.ReadOnceAsync();
+            return reader.ReadOnceAsync(ct);
         }
 
 

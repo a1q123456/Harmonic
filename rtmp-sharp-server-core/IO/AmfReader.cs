@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
@@ -33,26 +34,26 @@ namespace RtmpSharp.IO
             public bool IsTyped => !string.IsNullOrEmpty(TypeName);
         }
 
-        static readonly List<Func<AmfReader, Task<object>>> Amf0TypeAsyncReaders = new List<Func<AmfReader, Task<object>>>
+        static readonly List<Func<AmfReader, CancellationToken, Task<object>>> Amf0TypeAsyncReaders = new List<Func<AmfReader, CancellationToken, Task<object>>>
         {
-            async r => await r.ReadDoubleAsync(),                                          // 0x00 - number
-            async r => await r.ReadBooleanAsync(),                                         // 0x01 - boolean
-            async r => await r.ReadUtfAsync(),                                             // 0x02 - string
-            async r => await r.ReadAmf0AsObjectAsync(),                                    // 0x03 - object
-            r => { throw new NotSupportedException(); },                  // 0x04 - movieclip
-            r => null,                                                    // 0x05 - null
-            r => null,                                                    // 0x06 - undefined
-            async r => await r.ReadAmf0ObjectReferenceAsync(),                             // 0x07 - reference
-            async r => await r.ReadAmf0AssociativeArrayAsync(),                            // 0x08 - ECMA array
-            r => { throw new NotSupportedException(); },                  // 0x09 - 'object end marker' - we handle this in deserializer block; we shouldn't encounter it here
-            async r => await r.ReadAmf0ArrayAsync(),                                       // 0x0A - strict array
-            async r => await r.ReadAmf0DateAsync(),                                        // 0x0B - date
-            async r => await r.ReadAmf0LongStringAsync(),                                  // 0x0C - long string
-            r => { throw new NotSupportedException(); },                  // 0x0D - 'unsupported marker'
-            r => { throw new NotSupportedException(); },                  // 0x0E - recordset
-            async r => await r.ReadAmf0XmlDocumentAsync(),                                 // 0x0F - xml document
-            async r => await r.ReadAmf0ObjectAsync(),                                      // 0x10 - typed object
-            async r => await r.ReadAmf3ItemAsync()                                         // 0x11 - avmplus object
+            async (r, ct) => await r.ReadDoubleAsync(ct),                                          // 0x00 - number
+            async (r, ct) => await r.ReadBooleanAsync(ct),                                         // 0x01 - boolean
+            async (r, ct) => await r.ReadUtfAsync(ct),                                             // 0x02 - string
+            async (r, ct) => await r.ReadAmf0AsObjectAsync(ct),                                    // 0x03 - object
+            (r, ct) => { throw new NotSupportedException(); },                  // 0x04 - movieclip
+            (r, ct) => null,                                                    // 0x05 - null
+            (r, ct) => null,                                                    // 0x06 - undefined
+            async (r, ct) => await r.ReadAmf0ObjectReferenceAsync(ct),                             // 0x07 - reference
+            async (r, ct) => await r.ReadAmf0AssociativeArrayAsync(ct),                            // 0x08 - ECMA array
+            (r, ct) => { throw new NotSupportedException(); },                  // 0x09 - 'object end marker' - we handle this in deserializer block; we shouldn't encounter it here
+            async (r, ct) => await r.ReadAmf0ArrayAsync(ct),                                       // 0x0A - strict array
+            async (r, ct) => await r.ReadAmf0DateAsync(ct),                                        // 0x0B - date
+            async (r, ct) => await r.ReadAmf0LongStringAsync(ct),                                  // 0x0C - long string
+            (r, ct) => { throw new NotSupportedException(); },                  // 0x0D - 'unsupported marker'
+            (r, ct) => { throw new NotSupportedException(); },                  // 0x0E - recordset
+            async (r, ct) => await r.ReadAmf0XmlDocumentAsync(ct),                                 // 0x0F - xml document
+            async (r, ct) => await r.ReadAmf0ObjectAsync(ct),                                      // 0x10 - typed object
+            async (r, ct) => await r.ReadAmf3ItemAsync(ct)                                         // 0x11 - avmplus object
         };
 
         static readonly List<Func<AmfReader, object>> Amf0TypeReaders = new List<Func<AmfReader, object>>
@@ -74,7 +75,29 @@ namespace RtmpSharp.IO
             r => { throw new NotSupportedException(); },                  // 0x0E - recordset
             r => r.ReadAmf0XmlDocument(),                                 // 0x0F - xml document
             r => r.ReadAmf0Object(),                                      // 0x10 - typed object
-            r => r.ReadAmf3ItemAsync()                                         // 0x11 - avmplus object
+            r => r.ReadAmf3Item()                                         // 0x11 - avmplus object
+        };
+
+        static readonly List<Func<AmfReader, CancellationToken, Task<object>>> Amf3AsyncTypeReaders = new List<Func<AmfReader, CancellationToken, Task<object>>>
+        {
+            (r, ct) => null,                                                    // 0x00 - undefined
+            (r, ct) => null,                                                    // 0x01 - null
+            (r, ct) => { var tsk = new TaskCompletionSource<object>(); tsk.SetResult(false); return tsk.Task; },      // 0x02 - false
+            (r, ct) => { var tsk = new TaskCompletionSource<object>(); tsk.SetResult(true); return tsk.Task; },       // 0x03 - true
+            async (r, ct) => await r.ReadAmf3IntAsync(ct),                                         // 0x04 - integer
+            async (r, ct) => await r.ReadDoubleAsync(ct),                                          // 0x05 - double
+            async (r, ct) => await r.ReadAmf3StringAsync(ct),                                      // 0x06 - string
+            async (r, ct) => await r.ReadAmf3XmlDocumentAsync(ct),                                 // 0x07 - xml document
+            async (r, ct) => await r.ReadAmf3DateAsync(ct),                                        // 0x08 - date
+            async (r, ct) => await r.ReadAmf3ArrayAsync(ct),                                       // 0x09 - array
+            async (r, ct) => await r.ReadAmf3ObjectAsync(ct),                                      // 0x0A - object
+            async (r, ct) => await r.ReadAmf3XmlDocumentAsync(ct),                                 // 0x0B - xml
+            async (r, ct) => await r.ReadAmf3ByteArrayAsync(ct),                                   // 0x0C - byte array
+            async (r, ct) => await r.ReadAmf3VectorAsync(false, x => (int)x.ReadInt32(), ct),        // 0x0D - int vector
+            async (r, ct) => await r.ReadAmf3VectorAsync(false, x => (uint)x.ReadInt32(), ct),       // 0x0E - uint vector
+            async (r, ct) => await r.ReadAmf3VectorAsync(false, x => (double)x.ReadDouble(), ct),    // 0x0F - double vector
+            async (r, ct) => await r.ReadAmf3VectorAsync(true, x => (object)x.ReadAmf3ItemAsync(), ct),   // 0x10 - object vector
+            async (r, ct) => await r.ReadAmf3DictionaryAsync(ct),                                  // 0x11 - dictionary
         };
 
         static readonly List<Func<AmfReader, object>> Amf3TypeReaders = new List<Func<AmfReader, object>>
@@ -155,11 +178,11 @@ namespace RtmpSharp.IO
             return underlying.ReadByte();
         }
 
-        public async Task<byte> ReadByteAsync()
+        public async Task<byte> ReadByteAsync(CancellationToken ct = default(CancellationToken))
         {
             if (!asyncMode)
                 throw new InvalidOperationException("must use async mode");
-            byte[] ret = await ReadBytesAsync(1);
+            byte[] ret = await ReadBytesAsync(1, ct);
             return ret[0];
         }
 
@@ -170,7 +193,7 @@ namespace RtmpSharp.IO
             return underlying.ReadBytes(count);
         }
 
-        public async Task<byte[]> ReadBytesAsync(int count)
+        public async Task<byte[]> ReadBytesAsync(int count, CancellationToken ct = default(CancellationToken))
         {
             if (!asyncMode)
                 throw new InvalidOperationException("must use async mode");
@@ -183,7 +206,7 @@ namespace RtmpSharp.IO
                 asyncBuffer.SetLength(remain_bytes);
                 asyncBuffer.Seek(remain_bytes, SeekOrigin.Begin);
                 asyncBuffer.SetLength(asyncBuffer.Capacity);
-                int bytes_read = await asyncBaseStream.ReadAsync(asyncBuffer.GetBuffer(), (int)remain_bytes, (int)asyncBuffer.Capacity - (int)asyncBuffer.Position);
+                int bytes_read = await asyncBaseStream.ReadAsync(asyncBuffer.GetBuffer(), (int)remain_bytes, (int)asyncBuffer.Capacity - (int)asyncBuffer.Position, ct);
                 asyncBuffer.SetLength(bytes_read + remain_bytes);
                 asyncBuffer.Seek(0, SeekOrigin.Begin);
             }
@@ -199,9 +222,9 @@ namespace RtmpSharp.IO
             return (ushort)(((bytes[0] & 0xFF) << 8) | (bytes[1] & 0xFF));
         }
 
-        public async Task<ushort> ReadUInt16Async()
+        public async Task<ushort> ReadUInt16Async(CancellationToken ct = default(CancellationToken))
         {
-            var bytes = await ReadBytesAsync(2);
+            var bytes = await ReadBytesAsync(2, ct);
             return (ushort)(((bytes[0] & 0xFF) << 8) | (bytes[1] & 0xFF));
         }
 
@@ -211,9 +234,9 @@ namespace RtmpSharp.IO
             return (short)((bytes[0] << 8) | bytes[1]);
         }
 
-        public async Task<short> ReadInt16Async()
+        public async Task<short> ReadInt16Async(CancellationToken ct = default(CancellationToken))
         {
-            var bytes = await ReadBytesAsync(2);
+            var bytes = await ReadBytesAsync(2, ct);
             return (short)((bytes[0] << 8) | bytes[1]);
         }
 
@@ -222,9 +245,9 @@ namespace RtmpSharp.IO
             return underlying.ReadBoolean();
         }
 
-        public async Task<bool> ReadBooleanAsync()
+        public async Task<bool> ReadBooleanAsync(CancellationToken ct = default(CancellationToken))
         {
-            var bytes = await ReadBytesAsync(sizeof(bool));
+            var bytes = await ReadBytesAsync(sizeof(bool), ct);
             return BitConverter.ToBoolean(bytes, 0);
         }
 
@@ -234,9 +257,9 @@ namespace RtmpSharp.IO
             return (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
         }
 
-        public async Task<int> ReadInt32Async()
+        public async Task<int> ReadInt32Async(CancellationToken ct = default(CancellationToken))
         {
-            var bytes = await ReadBytesAsync(4);
+            var bytes = await ReadBytesAsync(4, ct);
             return (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
         }
 
@@ -246,9 +269,9 @@ namespace RtmpSharp.IO
             return (uint)((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]);
         }
 
-        public async Task<uint> ReadUInt32Async()
+        public async Task<uint> ReadUInt32Async(CancellationToken ct = default(CancellationToken))
         {
-            return (uint)(await ReadInt32Async());
+            return (uint)(await ReadInt32Async(ct));
         }
 
         public int ReadReverseInt()
@@ -257,9 +280,9 @@ namespace RtmpSharp.IO
             return (bytes[3] << 24) | (bytes[2] << 16) | (bytes[1] << 8) | bytes[0];
         }
 
-        public async Task<int> ReadReverseIntAsync()
+        public async Task<int> ReadReverseIntAsync(CancellationToken ct = default(CancellationToken))
         {
-            var bytes = await ReadBytesAsync(4);
+            var bytes = await ReadBytesAsync(4, ct);
             return (bytes[3] << 24) | (bytes[2] << 16) | (bytes[1] << 8) | bytes[0];
         }
 
@@ -269,9 +292,9 @@ namespace RtmpSharp.IO
             return bytes[0] << 16 | bytes[1] << 8 | bytes[2];
         }
 
-        public async Task<int> ReadUInt24Async()
+        public async Task<int> ReadUInt24Async(CancellationToken ct = default(CancellationToken))
         {
-            var bytes = await ReadBytesAsync(3);
+            var bytes = await ReadBytesAsync(3, ct);
             return bytes[0] << 16 | bytes[1] << 8 | bytes[2];
         }
 
@@ -284,9 +307,9 @@ namespace RtmpSharp.IO
             return BitConverter.ToDouble(bytes, 0);
         }
 
-        public async Task<double> ReadDoubleAsync()
+        public async Task<double> ReadDoubleAsync(CancellationToken ct = default(CancellationToken))
         {
-            var bytes = await ReadBytesAsync(8);
+            var bytes = await ReadBytesAsync(8, ct);
             if (BitConverter.IsLittleEndian)
                 Array.Reverse(bytes);
             return BitConverter.ToDouble(bytes, 0);
@@ -301,9 +324,9 @@ namespace RtmpSharp.IO
             return BitConverter.ToSingle(bytes, 0);
         }
 
-        public async Task<float> ReadFloatAsync()
+        public async Task<float> ReadFloatAsync(CancellationToken ct = default(CancellationToken))
         {
-            var bytes = await ReadBytesAsync(4);
+            var bytes = await ReadBytesAsync(4, ct);
             if (BitConverter.IsLittleEndian)
                 Array.Reverse(bytes);
             return BitConverter.ToSingle(bytes, 0);
@@ -316,10 +339,10 @@ namespace RtmpSharp.IO
             return ReadUtf(stringLength);
         }
 
-        public async Task<string> ReadUtfAsync()
+        public async Task<string> ReadUtfAsync(CancellationToken ct = default(CancellationToken))
         {
-            var stringLength = await ReadUInt16Async();
-            return await ReadUtfAsync(stringLength);
+            var stringLength = await ReadUInt16Async(ct);
+            return await ReadUtfAsync(stringLength, ct);
         }
 
         // utf8 string
@@ -331,11 +354,11 @@ namespace RtmpSharp.IO
             return Encoding.UTF8.GetString(bytes, 0, bytes.Length);
         }
 
-        public async Task<string> ReadUtfAsync(int length)
+        public async Task<string> ReadUtfAsync(int length, CancellationToken ct = default(CancellationToken))
         {
             if (length == 0)
                 return string.Empty;
-            var bytes = await ReadBytesAsync(length);
+            var bytes = await ReadBytesAsync(length, ct);
             return Encoding.UTF8.GetString(bytes, 0, bytes.Length);
         }
 
@@ -350,10 +373,10 @@ namespace RtmpSharp.IO
             return ReadAmf0Item(type);
         }
 
-        public async Task<object> ReadAmf0ItemAsync()
+        public async Task<object> ReadAmf0ItemAsync(CancellationToken ct = default(CancellationToken))
         {
-            var type = await ReadByteAsync();
-            return await ReadAmf0ItemAsync(type);
+            var type = await ReadByteAsync(ct);
+            return await ReadAmf0ItemAsync(type, ct);
         }
 
         object ReadAmf0Item(byte typeMarker)
@@ -361,9 +384,9 @@ namespace RtmpSharp.IO
             return Amf0TypeReaders[typeMarker].Invoke(this);
         }
 
-        async Task<object> ReadAmf0ItemAsync(byte typeMarker)
+        async Task<object> ReadAmf0ItemAsync(byte typeMarker, CancellationToken ct = default(CancellationToken))
         {
-            return await Amf0TypeAsyncReaders[typeMarker].Invoke(this);
+            return await Amf0TypeAsyncReaders[typeMarker].Invoke(this, ct);
         }
 
         internal object ReadAmf0ObjectReference()
@@ -372,9 +395,9 @@ namespace RtmpSharp.IO
             return amf0ObjectReferences[reference];
         }
 
-        async internal Task<object> ReadAmf0ObjectReferenceAsync()
+        async internal Task<object> ReadAmf0ObjectReferenceAsync(CancellationToken ct = default(CancellationToken))
         {
-            int reference = await ReadUInt16Async();
+            int reference = await ReadUInt16Async(ct);
             return amf0ObjectReferences[reference];
         }
 
@@ -383,9 +406,9 @@ namespace RtmpSharp.IO
             return EnumerableReadAmf0Pairs().ToDictionary(x => x.Key, x => x.Value);
         }
 
-        async Task<Dictionary<string, object>> ReadAmf0PairsAsync()
+        async Task<Dictionary<string, object>> ReadAmf0PairsAsync(CancellationToken ct = default(CancellationToken))
         {
-            return (await EnumerableReadAmf0PairsAsync()).ToDictionary(x => x.Key, x => x.Value);
+            return (await EnumerableReadAmf0PairsAsync(ct)).ToDictionary(x => x.Key, x => x.Value);
         }
 
         // this method blocks when enumerating through the stream. consider using ReadAmf0Pairs() instead.
@@ -403,13 +426,13 @@ namespace RtmpSharp.IO
             }
         }
 
-        async Task<List<KeyValuePair<string, object>>> EnumerableReadAmf0PairsAsync()
+        async Task<List<KeyValuePair<string, object>>> EnumerableReadAmf0PairsAsync(CancellationToken ct = default(CancellationToken))
         {
             List<KeyValuePair<string, object>> ret = new List<KeyValuePair<string, object>>();
             while (true)
             {
-                var key = await ReadUtfAsync();
-                var typeMarker = await ReadByteAsync();
+                var key = await ReadUtfAsync(ct);
+                var typeMarker = await ReadByteAsync(ct);
                 if (typeMarker == (byte)Amf0TypeMarkers.ObjectEnd)
                     break;
 
@@ -458,19 +481,19 @@ namespace RtmpSharp.IO
             }
         }
 
-        async internal Task<object> ReadAmf0ObjectAsync()
+        async internal Task<object> ReadAmf0ObjectAsync(CancellationToken ct = default(CancellationToken))
         {
             if (SerializationContext == null)
                 throw new NullReferenceException("Cannot deserialize objects because no SerializationContext was provided.");
 
-            var typeName = await ReadUtfAsync();
+            var typeName = await ReadUtfAsync(ct);
             var strategy = SerializationContext.GetDeserializationStrategy(typeName);
             switch (strategy)
             {
                 case DeserializationStrategy.TypedObject:
                     var instance = SerializationContext.Create(typeName);
                     var classDescription = SerializationContext.GetClassDescription(instance);
-                    var pairs = await ReadAmf0PairsAsync();
+                    var pairs = await ReadAmf0PairsAsync(ct);
                     foreach (var pair in pairs)
                     {
                         IMemberWrapper wrapper;
@@ -481,7 +504,7 @@ namespace RtmpSharp.IO
 
                 case DeserializationStrategy.DynamicObject:
                     // object reference added in this.ReadAmf0AsObject()
-                    var aso = await ReadAmf0AsObjectAsync();
+                    var aso = await ReadAmf0AsObjectAsync(ct);
                     aso.TypeName = typeName;
                     return aso;
 
@@ -498,9 +521,9 @@ namespace RtmpSharp.IO
             return obj;
         }
 
-        async internal Task<AsObject> ReadAmf0AsObjectAsync()
+        async internal Task<AsObject> ReadAmf0AsObjectAsync(CancellationToken ct = default(CancellationToken))
         {
-            var obj = new AsObject(await ReadAmf0PairsAsync());
+            var obj = new AsObject(await ReadAmf0PairsAsync(ct));
             AddAmf0ObjectReference(obj);
             return obj;
         }
@@ -511,10 +534,10 @@ namespace RtmpSharp.IO
             return ReadUtf(length);
         }
 
-        async internal Task<string> ReadAmf0LongStringAsync()
+        async internal Task<string> ReadAmf0LongStringAsync(CancellationToken ct = default(CancellationToken))
         {
-            var length = await ReadInt32Async();
-            return await ReadUtfAsync(length);
+            var length = await ReadInt32Async(ct);
+            return await ReadUtfAsync(length, ct);
         }
 
         internal Dictionary<string, object> ReadAmf0AssociativeArray()
@@ -525,10 +548,10 @@ namespace RtmpSharp.IO
             return obj;
         }
 
-        async internal Task<Dictionary<string, object>> ReadAmf0AssociativeArrayAsync()
+        async internal Task<Dictionary<string, object>> ReadAmf0AssociativeArrayAsync(CancellationToken ct = default(CancellationToken))
         {
-            var length = await ReadInt32Async();
-            var obj = await ReadAmf0PairsAsync();
+            var length = await ReadInt32Async(ct);
+            var obj = await ReadAmf0PairsAsync(ct);
             AddAmf0ObjectReference(obj);
             return obj;
         }
@@ -541,10 +564,10 @@ namespace RtmpSharp.IO
             return array;
         }
 
-        async internal Task<object[]> ReadAmf0ArrayAsync()
+        async internal Task<object[]> ReadAmf0ArrayAsync(CancellationToken ct = default(CancellationToken))
         {
-            var length = await ReadInt32Async();
-            var array = Enumerable.Range(0, length).Select(async x => await ReadAmf0ItemAsync()).ToArray();
+            var length = await ReadInt32Async(ct);
+            var array = Enumerable.Range(0, length).Select(async x => await ReadAmf0ItemAsync(ct)).ToArray();
             AddAmf0ObjectReference(array);
             return array;
         }
@@ -566,12 +589,12 @@ namespace RtmpSharp.IO
             return date;
         }
 
-        async internal Task<DateTime> ReadAmf0DateAsync()
+        async internal Task<DateTime> ReadAmf0DateAsync(CancellationToken ct = default(CancellationToken))
         {
-            var milliseconds = await ReadDoubleAsync();
+            var milliseconds = await ReadDoubleAsync(ct);
             var date = epoch.AddMilliseconds(milliseconds);
             
-            int timeOffset = await ReadUInt16Async();
+            int timeOffset = await ReadUInt16Async(ct);
             return date;
         }
 
@@ -581,9 +604,9 @@ namespace RtmpSharp.IO
             return string.IsNullOrEmpty(str) ? new XDocument() : XDocument.Parse(str);
         }
 
-        async internal Task<XDocument> ReadAmf0XmlDocumentAsync()
+        async internal Task<XDocument> ReadAmf0XmlDocumentAsync(CancellationToken ct = default(CancellationToken))
         {
-            var str = await ReadAmf0LongStringAsync();
+            var str = await ReadAmf0LongStringAsync(ct);
             return string.IsNullOrEmpty(str) ? new XDocument() : XDocument.Parse(str);
         }
 
@@ -606,14 +629,15 @@ namespace RtmpSharp.IO
             public int Value;
         }
 
-        public async Task<object> ReadAmf3ItemAsync()
+        public async Task<object> ReadAmf3ItemAsync(CancellationToken ct = default(CancellationToken))
         {
-            var typeMarker = await ReadByteAsync();
-            return ReadAmf3Item(typeMarker);
+            var typeMarker = await ReadByteAsync(ct);
+            return Amf3AsyncTypeReaders[typeMarker].Invoke(this, ct);
         }
 
-        internal object ReadAmf3Item(byte typeMarker)
+        public object ReadAmf3Item()
         {
+            var typeMarker = ReadByte();
             return Amf3TypeReaders[typeMarker].Invoke(this);
         }
 
@@ -626,6 +650,16 @@ namespace RtmpSharp.IO
         Amf3Field ReadAmf3Field()
         {
             var data = ReadAmf3Int();
+            return new Amf3Field()
+            {
+                IsReference = (data & 1) == 0, // 1 == inline object
+                Value = data >> 1
+            };
+        }
+
+        async Task<Amf3Field> ReadAmf3FieldAsync(CancellationToken ct = default(CancellationToken))
+        {
+            var data = await ReadAmf3IntAsync(ct);
             return new Amf3Field()
             {
                 IsReference = (data & 1) == 0, // 1 == inline object
@@ -684,6 +718,57 @@ namespace RtmpSharp.IO
             return -(total & mask) | total;
         }
 
+                // variable-length integer which uses the highest bit or each byte as a continuation flag.
+        internal async Task<int> ReadAmf3IntAsync(CancellationToken ct = default(CancellationToken))
+        {
+            // http://download.macromedia.com/pub/labs/amf/Amf3_spec_121207.pdf
+            // """
+            // AMF 3 makes use of a special compact format for writing integers to reduce the
+            // number of bytes required for encoding. As with a normal 32-bit integer, up to
+            // 4 bytes are required to hold the value however the high bit of the first 3
+            // bytes are used as flags to determine whether the next byte is part of the
+            // integer. With up to 3 bits of the 32 bits being used as flags, only 29
+            // significant bits remain for encoding an integer. This means the largest
+            // unsigned integer value that can be represented is 2^29 - 1.
+            // -- AMF3 specification, 1.3.1 Variable Length Unsigned 29-bit Integer Encoding
+            // """
+
+            // first byte
+            int total = await ReadByteAsync(ct);
+            if (total < 128)
+                return total;
+
+            total = (total & 0x7f) << 7;
+            // second byte
+            int nextByte = await ReadByteAsync(ct);
+            if (nextByte < 128)
+            {
+                total = total | nextByte;
+            }
+            else
+            {
+                total = (total | nextByte & 0x7f) << 7;
+                // third byte
+                nextByte = await ReadByteAsync(ct);
+                if (nextByte < 128)
+                {
+                    total = total | nextByte;
+                }
+                else
+                {
+                    total = (total | nextByte & 0x7f) << 8;
+                    // fourth byte
+                    nextByte = await ReadByteAsync(ct);
+                    total = total | nextByte;
+                }
+            }
+
+            // to sign extend a value from some number of bits to a greater number of bits just copy the sign bit into all the additional bits in the new format.
+            // convert / sign extend the 29-bit two's complement number to 32 bit
+            const int mask = 1 << 28;
+            return -(total & mask) | total;
+        }
+
         internal DateTime ReadAmf3Date()
         {
             var header = ReadAmf3Field();
@@ -691,6 +776,18 @@ namespace RtmpSharp.IO
                 return (DateTime)GetAmf3ObjectReference(header.Value);
 
             var milliseconds = ReadDouble();
+            var date = epoch.AddMilliseconds(milliseconds);
+            amf3ObjectReferences.Add(date);
+            return date;
+        }
+
+        internal async Task<DateTime> ReadAmf3DateAsync(CancellationToken ct = default(CancellationToken))
+        {
+            var header = await ReadAmf3FieldAsync(ct);
+            if (header.IsReference)
+                return (DateTime)GetAmf3ObjectReference(header.Value);
+
+            var milliseconds = await ReadDoubleAsync(ct);
             var date = epoch.AddMilliseconds(milliseconds);
             amf3ObjectReferences.Add(date);
             return date;
@@ -711,6 +808,21 @@ namespace RtmpSharp.IO
             return str;
         }
 
+        internal async Task<string> ReadAmf3StringAsync(CancellationToken ct = default(CancellationToken))
+        {
+            var header = await ReadAmf3FieldAsync(ct);
+            if (header.IsReference)
+                return stringReferences[header.Value] as string;
+
+            var length = header.Value;
+            if (length == 0)
+                return string.Empty;
+
+            var str = await ReadUtfAsync(length, ct);
+            stringReferences.Add(str);
+            return str;
+        }
+
         internal XDocument ReadAmf3XmlDocument()
         {
             string xml;
@@ -727,6 +839,22 @@ namespace RtmpSharp.IO
             return string.IsNullOrEmpty(xml) ? new XDocument() : XDocument.Parse(xml);
         }
 
+        internal async Task<XDocument> ReadAmf3XmlDocumentAsync(CancellationToken ct = default(CancellationToken))
+        {
+            string xml;
+            var header = await ReadAmf3FieldAsync(ct);
+            if (header.IsReference)
+            {
+                xml = GetAmf3ObjectReference(header.Value) as string;
+            }
+            else
+            {
+                xml = header.Value > 0 ? await ReadUtfAsync(header.Value, ct) : string.Empty;
+                amf3ObjectReferences.Add(xml);
+            }
+            return string.IsNullOrEmpty(xml) ? new XDocument() : XDocument.Parse(xml);
+        }
+
         internal ByteArray ReadAmf3ByteArray()
         {
             var header = ReadAmf3Field();
@@ -735,6 +863,18 @@ namespace RtmpSharp.IO
 
             var length = header.Value;
             var byteArray = new ByteArray(ReadBytes(length), SerializationContext);
+            amf3ObjectReferences.Add(byteArray);
+            return byteArray;
+        }
+
+        internal async Task<ByteArray> ReadAmf3ByteArrayAsync(CancellationToken ct = default(CancellationToken))
+        {
+            var header = await ReadAmf3FieldAsync(ct);
+            if (header.IsReference)
+                return GetAmf3ObjectReference(header.Value) as ByteArray;
+
+            var length = header.Value;
+            var byteArray = new ByteArray(await ReadBytesAsync(length, ct), SerializationContext);
             amf3ObjectReferences.Add(byteArray);
             return byteArray;
         }
@@ -755,7 +895,7 @@ namespace RtmpSharp.IO
             // associative elements
             while (!string.IsNullOrEmpty(key))
             {
-                var value = ReadAmf3ItemAsync();
+                var value = ReadAmf3Item();
                 associative.Add(key, value);
 
                 key = ReadAmf3String();
@@ -767,7 +907,49 @@ namespace RtmpSharp.IO
             if (!hasAssociative)
                 amf3ObjectReferences.Add(array);
             for (var i = 0; i < length; i++)
-                array[i] = ReadAmf3ItemAsync();
+                array[i] = ReadAmf3Item();
+
+            // merge associative and strict elements, if there's an associative
+            // otherwise return strict array
+            if (hasAssociative)
+            {
+                for (var i = 0; i < array.Length; i++)
+                    associative.Add(i.ToString(CultureInfo.InvariantCulture), array[i]);
+                return associative;
+            }
+
+            return array;
+        }
+
+        internal async Task<object> ReadAmf3ArrayAsync(CancellationToken ct = default(CancellationToken))
+        {
+            var header = await ReadAmf3FieldAsync(ct);
+            if (header.IsReference)
+                return GetAmf3ObjectReference(header.Value);
+
+            var key = await ReadAmf3StringAsync(ct);
+            var hasAssociative = !string.IsNullOrEmpty(key);
+
+            var associative = new Dictionary<string, object>();
+            if (hasAssociative)
+                amf3ObjectReferences.Add(associative);
+
+            // associative elements
+            while (!string.IsNullOrEmpty(key))
+            {
+                var value = await ReadAmf3ItemAsync(ct);
+                associative.Add(key, value);
+
+                key = await ReadAmf3StringAsync(ct);
+            }
+
+            // strict array elements
+            var length = header.Value;
+            var array = new object[length];
+            if (!hasAssociative)
+                amf3ObjectReferences.Add(array);
+            for (var i = 0; i < length; i++)
+                array[i] = await ReadAmf3ItemAsync(ct);
 
             // merge associative and strict elements, if there's an associative
             // otherwise return strict array
@@ -801,6 +983,26 @@ namespace RtmpSharp.IO
             return list;
         }
 
+        internal async Task<object> ReadAmf3VectorAsync<T>(bool hasTypeName, Func<AmfReader, T> readElement, CancellationToken ct = default(CancellationToken))
+        {
+            var header = await ReadAmf3FieldAsync();
+            if (header.IsReference)
+                return GetAmf3ObjectReference(header.Value);
+
+            var itemCount = header.Value;
+            var fixedSize = await ReadByteAsync() == 0x01;
+            var list = new List<T>(itemCount);
+            amf3ObjectReferences.Add(list);
+
+            var typeName = hasTypeName ? await ReadAmf3StringAsync() : null;
+            for (var i = 0; i < itemCount; i++)
+                list.Add(readElement(this));
+
+            if (fixedSize)
+                return list.ToArray();
+            return list;
+        }
+
         internal object ReadAmf3Dictionary()
         {
             var header = ReadAmf3Field();
@@ -815,8 +1017,29 @@ namespace RtmpSharp.IO
             var wrapObject = new Func<object, object>(obj => isWeak ? new WeakReference(obj) : obj);
             for (int i = 0; i < itemCount; i++)
             {
-                var key = ReadAmf3ItemAsync();
-                var value = ReadAmf3ItemAsync();
+                var key = ReadAmf3Item();
+                var value = ReadAmf3Item();
+                dictionary.Add(wrapObject(key), wrapObject(value));
+            }
+            return dictionary;
+        }
+
+        internal async Task<object> ReadAmf3DictionaryAsync(CancellationToken ct = default(CancellationToken))
+        {
+            var header = await ReadAmf3FieldAsync(ct);
+            if (header.IsReference)
+                return GetAmf3ObjectReference(header.Value);
+
+            var itemCount = header.Value;
+            var isWeak = await ReadByteAsync() == 0x01;
+            var dictionary = new Dictionary<object, object>(itemCount);
+            amf3ObjectReferences.Add(dictionary);
+
+            var wrapObject = new Func<object, object>(obj => isWeak ? new WeakReference(obj) : obj);
+            for (int i = 0; i < itemCount; i++)
+            {
+                var key = await ReadAmf3ItemAsync(ct);
+                var value = await ReadAmf3ItemAsync(ct);
                 dictionary.Add(wrapObject(key), wrapObject(value));
             }
             return dictionary;
@@ -845,6 +1068,34 @@ namespace RtmpSharp.IO
             return classDefinition;
         }
 
+        async Task<Amf3ClassDescription> ReadClassDefinitionAsync(int flags, CancellationToken ct)
+        {
+            var isReference = (flags & 1) == 0;
+            if (isReference)
+                return amf3ClassDefinitions[flags >> 1];
+
+            var typeName = await ReadAmf3StringAsync(ct);
+            var externalizable = ((flags >> 1) & 1) != 0;
+            var dynamic = ((flags >> 2) & 1) != 0;
+            var memberCount = flags >> 3;
+
+            var memberNames = new List<string>();
+            for (var i = 0; i < memberCount; i++)
+            {
+                memberNames.Add(await ReadAmf3StringAsync(ct));
+            }
+
+            var classDefinition = new Amf3ClassDescription()
+            {
+                TypeName = typeName,
+                MemberNames = memberNames.ToArray(),
+                IsExternalizable = externalizable,
+                IsDynamic = dynamic
+            };
+            amf3ClassDefinitions.Add(classDefinition);
+            return classDefinition;
+        }
+
         internal object ReadAmf3Object()
         {
             if (SerializationContext == null)
@@ -854,47 +1105,101 @@ namespace RtmpSharp.IO
             if (header.IsReference)
                 return GetAmf3ObjectReference(header.Value);
 
-            var klass = ReadClassDefinition(header.Value);
+            var @class = ReadClassDefinition(header.Value);
 
-
-
-
-            var strategy = SerializationContext.GetDeserializationStrategy(klass.TypeName);
+            var strategy = SerializationContext.GetDeserializationStrategy(@class.TypeName);
             if (strategy == DeserializationStrategy.Exception)
-                throw new SerializationException($"can't deserialize a `{klass.TypeName}`");
+                throw new SerializationException($"can't deserialize a `{@class.TypeName}`");
 
-            var instance = klass.IsTyped && strategy == DeserializationStrategy.TypedObject
-                ? SerializationContext.Create(klass.TypeName)
-                : new AsObject(klass.TypeName);
+            var instance = @class.IsTyped && strategy == DeserializationStrategy.TypedObject
+                ? SerializationContext.Create(@class.TypeName)
+                : new AsObject(@class.TypeName);
             amf3ObjectReferences.Add(instance);
 
-            if (klass.IsExternalizable)
+            if (@class.IsExternalizable)
             {
                 var externalizable = instance as IExternalizable;
                 if (externalizable == null)
-                    throw new SerializationException($"{klass.TypeName} does not implement IExternalizable");
+                    throw new SerializationException($"{@class.TypeName} does not implement IExternalizable");
 
                 externalizable.ReadExternal(new DataInput(this));
             }
             else
             {
                 var classDescription = SerializationContext.GetClassDescription(instance);
-                foreach (var memberName in klass.MemberNames)
+                foreach (var memberName in @class.MemberNames)
                 {
                     IMemberWrapper member;
-                    var value = ReadAmf3ItemAsync();
+                    var value = ReadAmf3Item();
                     if (classDescription.TryGetMember(memberName, out member))
                         member.SetValue(instance, value);
                 }
 
-                if (klass.IsDynamic)
+                if (@class.IsDynamic)
                 {
                     while (true)
                     {
                         var key = ReadAmf3String();
                         if (string.IsNullOrEmpty(key))
                             break;
-                        var obj = ReadAmf3ItemAsync();
+                        var obj = ReadAmf3Item();
+
+                        IMemberWrapper wrapper;
+                        if (classDescription.TryGetMember(key, out wrapper))
+                            wrapper.SetValue(instance, obj);
+                    }
+                }
+            }
+            return instance;
+        }
+
+        internal async Task<object> ReadAmf3ObjectAsync(CancellationToken ct = default(CancellationToken))
+        {
+            if (SerializationContext == null)
+                throw new NullReferenceException("no serialization context was provided");
+
+            var header = await ReadAmf3FieldAsync(ct);
+            if (header.IsReference)
+                return GetAmf3ObjectReference(header.Value);
+
+            var @class = await ReadClassDefinitionAsync(header.Value, ct);
+
+            var strategy = SerializationContext.GetDeserializationStrategy(@class.TypeName);
+            if (strategy == DeserializationStrategy.Exception)
+                throw new SerializationException($"can't deserialize a `{@class.TypeName}`");
+
+            var instance = @class.IsTyped && strategy == DeserializationStrategy.TypedObject
+                ? SerializationContext.Create(@class.TypeName)
+                : new AsObject(@class.TypeName);
+            amf3ObjectReferences.Add(instance);
+
+            if (@class.IsExternalizable)
+            {
+                var externalizable = instance as IExternalizable;
+                if (externalizable == null)
+                    throw new SerializationException($"{@class.TypeName} does not implement IExternalizable");
+
+                await externalizable.ReadExternalAsync(new DataInput(this), ct);
+            }
+            else
+            {
+                var classDescription = SerializationContext.GetClassDescription(instance);
+                foreach (var memberName in @class.MemberNames)
+                {
+                    IMemberWrapper member;
+                    var value = await ReadAmf3ItemAsync(ct);
+                    if (classDescription.TryGetMember(memberName, out member))
+                        member.SetValue(instance, value);
+                }
+
+                if (@class.IsDynamic)
+                {
+                    while (true)
+                    {
+                        var key = await ReadAmf3StringAsync(ct);
+                        if (string.IsNullOrEmpty(key))
+                            break;
+                        var obj = await ReadAmf3ItemAsync(ct);
 
                         IMemberWrapper wrapper;
                         if (classDescription.TryGetMember(key, out wrapper))

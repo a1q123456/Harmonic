@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace RtmpSharp.IO.AMF3
 {
@@ -34,7 +36,6 @@ namespace RtmpSharp.IO.AMF3
                     throw new ArgumentOutOfRangeException();
             }
         }
-
         public void WriteBoolean(bool value) => writer.WriteBoolean(value);
         public void WriteUInt32(uint value) => writer.WriteUInt32(value);
         public void WriteByte(byte value) => writer.WriteByte(value);

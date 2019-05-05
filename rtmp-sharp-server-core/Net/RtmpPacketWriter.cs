@@ -62,13 +62,13 @@ namespace RtmpSharp.Net
             return false;
         }
 
-        public async Task<bool> WriteOnceAsync()
+        public async Task<bool> WriteOnceAsync(CancellationToken ct = default(CancellationToken))
         {
             if (Interlocked.Exchange(ref packetAvailable, 0) == 1)
             {
                 RtmpPacket packet;
                 while (queuedPackets.TryDequeue(out packet))
-                    await WritePacketAsync(packet);
+                    await WritePacketAsync(packet, ct);
                 return true;
             }
             return false;
@@ -171,7 +171,7 @@ namespace RtmpSharp.Net
 
         }
 
-        async Task WritePacketAsync(RtmpPacket packet)
+        async Task WritePacketAsync(RtmpPacket packet, CancellationToken ct = default(CancellationToken))
         {
             var header = packet.Header;
             var streamId = header.StreamId;
@@ -201,7 +201,7 @@ namespace RtmpSharp.Net
             var chunkSizeMsg = message as ChunkSize;
             if (chunkSizeMsg != null)
                 writeChunkSize = chunkSizeMsg.Size;
-            await writer.StartWriteAsync();
+            await writer.StartWriteAsync(ct);
         }
 
         void WriteBasicHeader(ChunkMessageHeaderType messageHeaderFormat, int streamId)

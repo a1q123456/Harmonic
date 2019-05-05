@@ -39,6 +39,7 @@ namespace RtmpSharp.IO
             while (count > 0)
             {
                 var n = await stream.ReadAsync(result, bytesRead, count, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
                 if (n == 0)
                     break;
                 bytesRead += n;

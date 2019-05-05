@@ -1,4 +1,7 @@
 
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace RtmpSharp.IO.AMF3
 {
     public interface IDataOutput

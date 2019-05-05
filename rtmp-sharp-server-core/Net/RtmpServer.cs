@@ -19,13 +19,12 @@ using System.Security.Authentication;
 
 namespace RtmpSharp.Net
 {
-    public class RtmpServer
+    public class RtmpServer : IDisposable
     {
-        public int ReceiveTimeout = 10000;
-        public int SendTimeout = 10000;
-
-        public int PingPeriod = 10;
-        public int PingTimeout = 10;
+        public int ReceiveTimeout { get; set; } = 10000;
+        public int SendTimeout { get; set; } = 10000;
+        public int PingPeriod { get; set; } = 10;
+        public int PingTimeout { get; set; } = 10;
         public bool Started { get; private set; } = false;
 
         // TODO: add rtmps support
@@ -35,12 +34,11 @@ namespace RtmpSharp.Net
         List<string> registeredApps = new List<string>();
         List<ushort> allocated_stream_id = new List<ushort>();
         List<ushort> allocated_client_id = new List<ushort>();
-        
+
         Random random = new Random();
-        Thread ioThread;
-        Socket listener;
+        Socket listener = null;
         ManualResetEvent allDone = new ManualResetEvent(false);
-        private SerializationContext context;
+        private SerializationContext context = null;
         private ObjectEncoding objectEncoding;
         private X509Certificate2 cert = null;
         private readonly int PROTOCOL_MIN_CSID = 3;
@@ -55,9 +53,9 @@ namespace RtmpSharp.Net
             SerializationContext context,
             X509Certificate2 cert = null,
             ObjectEncoding object_encoding = ObjectEncoding.Amf0,
-            ParameterAuthCallback publishParameterAuth = null, 
-            ParameterAuthCallback playParameterAuth = null, 
-            string bindIp = "0.0.0.0", 
+            ParameterAuthCallback publishParameterAuth = null,
+            ParameterAuthCallback playParameterAuth = null,
+            string bindIp = "0.0.0.0",
             int bindRtmpPort = 1935,
             int bindWebsocketPort = -1
             )
@@ -80,7 +78,7 @@ namespace RtmpSharp.Net
                     {
                         var path = socket.ConnectionInfo.Path.Split('/');
                         if (path.Length != 3) socket.Close();
-                        ushort client_id = GetNewClientId();
+                        ushort client_id = _getNewClientId();
                         IStreamConnect connect = new WebsocketConnect(socket, context, object_encoding);
                         lock (connects)
                         {
@@ -99,34 +97,45 @@ namespace RtmpSharp.Net
                             ConnectToClient(path[1], path[2], client_id, ChannelType.Audio);
                             ConnectToClient(path[1], path[2], client_id, ChannelType.Video);
                         }
-                        catch { Close(client_id); }
+                        catch { CloseClient(client_id); }
 
                     };
                     socket.OnPing = b => socket.SendPong(b);
                 });
             }
-            
-            if (publishParameterAuth != null) this.publishParameterAuth = publishParameterAuth;
-            if (playParameterAuth != null) this.playParameterAuth = playParameterAuth;
-            ioThread = new Thread(() =>
+
+            if (publishParameterAuth != null) this._publishParameterAuth = publishParameterAuth;
+            if (playParameterAuth != null) this._playParameterAuth = playParameterAuth;
+
+            listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            listener.NoDelay = true;
+            IPEndPoint localEndPoint = new IPEndPoint(IPAddress.Parse(bindIp), bindRtmpPort);
+            listener.Bind(localEndPoint);
+            listener.Listen(10);
+        }
+
+        private void _ioLoop(CancellationToken ct)
+        {
+            try
             {
-                while (true)
+                while (Started)
                 {
                     foreach (var current in connects)
                     {
+                        ct.ThrowIfCancellationRequested();
                         StreamConnectState state = current.Value;
                         ushort client_id = current.Key;
                         IStreamConnect connect = state.Connect;
                         if (connect.IsDisconnected)
                         {
-                            Close(client_id);
+                            CloseClient(client_id);
                             continue;
                         }
                         try
                         {
                             if (state.WriterTask == null || state.WriterTask.IsCompleted)
                             {
-                                state.WriterTask = connect.WriteOnceAsync();
+                                state.WriterTask = connect.WriteOnceAsync(ct);
                             }
                             if (state.WriterTask.IsCanceled || state.WriterTask.IsFaulted)
                             {
@@ -141,7 +150,7 @@ namespace RtmpSharp.Net
 
                             if (state.ReaderTask == null || state.ReaderTask.IsCompleted)
                             {
-                                state.ReaderTask = connect.ReadOnceAsync();
+                                state.ReaderTask = connect.ReadOnceAsync(ct);
                             }
                             if (state.ReaderTask.IsCanceled || state.ReaderTask.IsFaulted)
                             {
@@ -151,7 +160,7 @@ namespace RtmpSharp.Net
                         }
                         catch
                         {
-                            Close(client_id);
+                            CloseClient(client_id);
                             continue;
                         }
                     }
@@ -165,7 +174,6 @@ namespace RtmpSharp.Net
                             prepare_to_add.RemoveAt(0);
                         }
                     }
-                    
 
                     var prepare_remove_length = prepare_to_remove.Count;
                     if (prepare_remove_length != 0)
@@ -173,53 +181,80 @@ namespace RtmpSharp.Net
                         for (int i = 0; i < prepare_remove_length; i++)
                         {
                             var current = prepare_to_remove[0];
+                            connects.TryGetValue(current, out var connection);
                             connects.Remove(current);
                             prepare_to_remove.RemoveAt(0);
+
                         }
                     }
-                    
                 }
-            })
-            { IsBackground = true };
-            
-            ioThread.Start();
+            }
+            catch
+            {
 
-            listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            listener.NoDelay = true;
-            IPEndPoint localEndPoint = new IPEndPoint(IPAddress.Parse(bindIp), bindRtmpPort);
-            listener.Bind(localEndPoint);
-            listener.Listen(10);
+            }
         }
-        
-        public void Start()
+
+        public Task StartAsync(CancellationToken ct = default(CancellationToken))
         {
+            if (Started)
+            {
+                throw new InvalidOperationException("already started");
+            }
             Started = true;
-            try
+            var ioThread = new Thread(() => _ioLoop(ct))
+            { 
+                IsBackground = true
+            };
+            var ret = new TaskCompletionSource<int>();
+            var t = new Thread(o =>
             {
-                while (true)
+                try
                 {
-                    allDone.Reset();
-                    Console.WriteLine("Waiting for a connection...");
-                    listener.BeginAccept(new AsyncCallback(acceptCallback), listener);
-                    allDone.WaitOne();
+                    while (!ct.IsCancellationRequested)
+                    {
+                        try
+                        {
+                            allDone.Reset();
+                            Console.WriteLine("Waiting for a connection...");
+                            listener.BeginAccept(new AsyncCallback(ar =>
+                            {
+                                _acceptCallback(ar, ct);
+                            }), listener);
+                            while (!allDone.WaitOne(1))
+                            {
+                                ct.ThrowIfCancellationRequested();
+                            }
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            throw;
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine(e.ToString());
+                        }
+                    }
                 }
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e.ToString());
-            }
-        }
+                catch (OperationCanceledException) { }
+                finally
+                {
+                    _clearConnections();
+                    ioThread.Join();
+                    ret.SetResult(1);
+                }
+            });
 
-        public void StartAsync()
-        {
-            var t = new Thread(Start);
+
+            ioThread.Start();
             t.Start();
+            return ret.Task;
         }
 
-        public void Stop()
+        private void _clearConnections()
         {
             Started = false;
-            foreach(var current in connects)
+            foreach (var current in connects)
             {
                 StreamConnectState state = current.Value;
                 ushort client_id = current.Key;
@@ -230,7 +265,7 @@ namespace RtmpSharp.Net
                 }
                 try
                 {
-                    Close(client_id);
+                    CloseClient(client_id);
                 }
                 catch (Exception e)
                 {
@@ -240,10 +275,9 @@ namespace RtmpSharp.Net
             connects.Clear();
             allocated_client_id.Clear();
             allocated_stream_id.Clear();
-            listener.Close();
         }
 
-        async void acceptCallback(IAsyncResult ar)
+        async void _acceptCallback(IAsyncResult ar, CancellationToken ct)
         {
             Socket listener = (Socket)ar.AsyncState;
             Socket handler = listener.EndAccept(ar);
@@ -252,21 +286,21 @@ namespace RtmpSharp.Net
             allDone.Set();
             try
             {
-                await HandshakeAsync(handler);
+                await _handshakeAsync(handler, ct);
             }
             catch (TimeoutException)
             {
                 handler.Close();
             }
-            catch (AuthenticationException)
+            catch (Exception e)
             {
+                Console.WriteLine("{0} Message: {1}", e.GetType().ToString(), e.Message);
+                Console.WriteLine(e.StackTrace);
                 handler.Close();
-                throw;
             }
-
         }
 
-        private ushort GetUniqueIdOfList(IList<ushort> list, int min_value, int max_value)
+        private ushort _getUniqueIdOfList(IList<ushort> list, int min_value, int max_value)
         {
             ushort id;
             do
@@ -276,7 +310,7 @@ namespace RtmpSharp.Net
             return id;
         }
 
-        private ushort GetUniqueIdOfList(IList<ushort> list)
+        private ushort _getUniqueIdOfList(IList<ushort> list)
         {
             ushort id;
             do
@@ -286,17 +320,17 @@ namespace RtmpSharp.Net
             return id;
         }
 
-        public ushort RequestStreamId()
+        internal ushort RequestStreamId()
         {
-            return GetUniqueIdOfList(allocated_stream_id, PROTOCOL_MIN_CSID, PROTOCOL_MAX_CSID);
+            return _getUniqueIdOfList(allocated_stream_id, PROTOCOL_MIN_CSID, PROTOCOL_MAX_CSID);
         }
 
-        private ushort GetNewClientId()
+        private ushort _getNewClientId()
         {
-            return GetUniqueIdOfList(allocated_client_id);
+            return _getUniqueIdOfList(allocated_client_id);
         }
 
-        public async Task<int> HandshakeAsync(Socket client_socket)
+        private async Task<int> _handshakeAsync(Socket client_socket, CancellationToken ct)
         {
             Stream stream;
             if (cert != null)
@@ -304,12 +338,13 @@ namespace RtmpSharp.Net
                 var temp_stream = new SslStream(new NetworkStream(client_socket));
                 try
                 {
-                    await temp_stream.AuthenticateAsServerAsync(cert);
+                    var op = new SslServerAuthenticationOptions();
+                    op.ServerCertificate = cert;
+                    await temp_stream.AuthenticateAsServerAsync(op, ct);
                 }
-                catch (AuthenticationException)
+                finally
                 {
                     temp_stream.Close();
-                    throw;
                 }
                 stream = temp_stream;
             }
@@ -317,56 +352,59 @@ namespace RtmpSharp.Net
             {
                 stream = new NetworkStream(client_socket);
             }
-            var randomBytes = new byte[1528];
+            var randomBytes = new byte[HandshakeRandomSize];
             random.NextBytes(randomBytes);
             client_socket.NoDelay = true;
-            var s01 = new Handshake()
+            var s0s1 = new Handshake()
             {
                 Version = 3,
-                Time = (uint)Environment.TickCount,
+                Time = 0,
                 Time2 = 0,
                 Random = randomBytes
             };
-            CancellationTokenSource cts = new CancellationTokenSource();
+            using (var cts = new CancellationTokenSource())
+            {
+                using (var newCt = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, ct))
+                {
+                    // read c0 + c1
+                    var timer = new Timer((s) => { cts.Cancel(); }, null, ReceiveTimeout, Timeout.Infinite);
+                    var c1 = await Handshake.ReadAsync(stream, true, newCt.Token);
+                    timer.Change(Timeout.Infinite, Timeout.Infinite);
 
-            Timer timer = new Timer((s) => { cts.Cancel(); throw new TimeoutException(); }, null, ReceiveTimeout, Timeout.Infinite);
-            var c01 = await Handshake.ReadAsync(stream, true, cts.Token);
-            timer.Change(Timeout.Infinite, Timeout.Infinite);
+                    // write s0 + s1
+                    timer.Change(SendTimeout, Timeout.Infinite);
+                    await Handshake.WriteAsync(stream, s0s1, true, newCt.Token);
+                    timer.Change(Timeout.Infinite, Timeout.Infinite);
 
-            timer.Change(ReceiveTimeout, Timeout.Infinite);
-            await Handshake.WriteAsync(stream, s01, true, cts.Token);
-            timer.Change(Timeout.Infinite, Timeout.Infinite);
-            // read c2
+                    // write s2
+                    var s2 = c1;
+                    timer.Change(SendTimeout, Timeout.Infinite);
+                    await Handshake.WriteAsync(stream, s2, false, newCt.Token);
+                    timer.Change(Timeout.Infinite, Timeout.Infinite);
 
-            timer.Change(SendTimeout, Timeout.Infinite);
-            var c2 = await Handshake.ReadAsync(stream, false, cts.Token);
-            timer.Change(Timeout.Infinite, Timeout.Infinite);
+                    // read c2
+                    timer.Change(ReceiveTimeout, Timeout.Infinite);
+                    var c2 = await Handshake.ReadAsync(stream, false, newCt.Token);
+                    timer.Change(Timeout.Infinite, Timeout.Infinite);
 
-            // write s2
-            var s2 = c01.Clone();
-            // s2.Time2 = (uint)Environment.TickCount;
+                    // handshake check
+                    if (!c2.Random.SequenceEqual(s0s1.Random))
+                        throw new ProtocolViolationException();
+                }
+            }
 
-
-            timer.Change(ReceiveTimeout, Timeout.Infinite);
-            await Handshake.WriteAsync(stream, s2, false, cts.Token);
-            timer.Change(Timeout.Infinite, Timeout.Infinite);
-
-            // handshake check
-            if (!c01.Random.SequenceEqual(s2.Random))
-                throw new ProtocolViolationException();
-
-
-            ushort client_id = GetNewClientId();
+            ushort client_id = _getNewClientId();
             var connect = new RtmpConnect(client_socket, stream, this, client_id, context, objectEncoding, true);
-            connect.ChannelDataReceived += sendDataHandler;
+            connect.ChannelDataReceived += _sendDataHandler;
 
-            prepare_to_add.Add(new KeyValuePair<ushort, StreamConnectState>(client_id, new StreamConnectState() {
+            prepare_to_add.Add(new KeyValuePair<ushort, StreamConnectState>(client_id, new StreamConnectState()
+            {
                 Connect = connect,
                 LastPing = DateTime.UtcNow,
                 ReaderTask = null,
                 WriterTask = null
             }));
-            
+
             return client_id;
         }
 
@@ -379,7 +417,7 @@ namespace RtmpSharp.Net
             }
         }
 
-        public void Close(ushort client_id)
+        public void CloseClient(ushort client_id)
         {
             allocated_client_id.Remove(client_id);
             allocated_stream_id.Remove(client_id);
@@ -389,7 +427,7 @@ namespace RtmpSharp.Net
             IStreamConnect connect = state.Connect;
 
             prepare_to_remove.Add(client_id);
-            
+
             if (connect.IsPublishing) UnRegisterPublish(client_id);
             if (connect.IsPlaying)
             {
@@ -399,13 +437,13 @@ namespace RtmpSharp.Net
                 {
                     routedClients.Remove(i);
                 }
-                
+
             }
             connect.OnDisconnected(new ExceptionalEventArgs("disconnected"));
-            
+
         }
 
-        private void sendDataHandler(object sender, ChannelDataReceivedEventArgs e)
+        private void _sendDataHandler(object sender, ChannelDataReceivedEventArgs e)
         {
             var server = (RtmpConnect)sender;
 
@@ -435,10 +473,10 @@ namespace RtmpSharp.Net
                     case ChannelType.Message:
                         throw new NotImplementedException();
                 }
-                
+
             }
         }
-        
+
         internal void ConnectToClient(string app, string path, ushort self_id, ChannelType channel_type)
         {
             StreamConnectState state;
@@ -454,7 +492,7 @@ namespace RtmpSharp.Net
             }
 
             routedClients.Add(new Tuple<ushort, ushort, ChannelType>(self_id, client_id, channel_type));
-            
+
         }
 
         internal void SendMetadata(string app, string path, IStreamConnect self, bool flvHeader = false)
@@ -507,7 +545,7 @@ namespace RtmpSharp.Net
             var uri = new Uri("http://127.0.0.1/" + path);
             var key = new Tuple<string, string>(app, uri.AbsolutePath);
             if (clientRoute.ContainsKey(key)) return false;
-            var ret = publishParameterAuth(app, HttpUtility.ParseQueryString(uri.Query));
+            var ret = _publishParameterAuth(app, HttpUtility.ParseQueryString(uri.Query));
             if (ret) clientRoute.Add(key, clientId);
             return ret;
         }
@@ -521,15 +559,15 @@ namespace RtmpSharp.Net
                 if (connects.TryGetValue(clientId, out state))
                 {
                     IStreamConnect connect = state.Connect;
-                    connect.ChannelDataReceived -= sendDataHandler;
+                    connect.ChannelDataReceived -= _sendDataHandler;
 
                     var clients = routedClients.FindAll(t => t.Item2 == clientId);
                     foreach (var i in clients)
                     {
-                        Close(i.Item1);
+                        CloseClient(i.Item1);
                     }
                     routedClients.RemoveAll(t => t.Item2 == clientId);
-                    
+
                 }
                 clientRoute.Remove(key);
                 return true;
@@ -540,17 +578,30 @@ namespace RtmpSharp.Net
         internal bool RegisterPlay(string app, string path, int clientId)
         {
             var uri = new Uri("http://127.0.0.1/" + path);
-            return playParameterAuth(app, HttpUtility.ParseQueryString(uri.Query));
+            return _playParameterAuth(app, HttpUtility.ParseQueryString(uri.Query));
         }
 
         public delegate bool ParameterAuthCallback(string app, NameValueCollection collection);
-        private ParameterAuthCallback publishParameterAuth = (a, n) => true;
-        private ParameterAuthCallback playParameterAuth = (a, n) => true;
+        private ParameterAuthCallback _publishParameterAuth = (a, n) => true;
+        private ParameterAuthCallback _playParameterAuth = (a, n) => true;
 
         internal bool AuthApp(string app, ushort client_id)
         {
             if (registeredApps.IndexOf(app) == -1) return false;
             return true;
+        }
+
+        public void Dispose()
+        {
+            try
+            {
+                if (Started)
+                {
+                    _clearConnections();
+                    listener.Close();
+                }
+            }
+            catch { }
         }
 
         #region handshake
@@ -570,18 +621,6 @@ namespace RtmpSharp.Net
             // in C1/S1, MUST be zero. in C2/S2, time at which C1/S1 was read.
             public uint Time2;
             public byte[] Random;
-
-            public Handshake Clone()
-            {
-                return new Handshake()
-                {
-                    Version = Version,
-                    Time = Time,
-                    Time2 = Time2,
-                    Random = Random
-                };
-            }
-
             public static async Task<Handshake> ReadAsync(Stream stream, bool readVersion, CancellationToken cancellationToken)
             {
                 var size = HandshakeSize + (readVersion ? 1 : 0);
