@@ -4,7 +4,9 @@ using RtmpSharp.Messaging;
 using RtmpSharp.Messaging.Events;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Runtime.Serialization;
@@ -83,12 +85,12 @@ namespace RtmpSharp.Net
         }
 
 
-        public bool ReadOnce()
+        public void ReadOnce()
         {
             var header = ReadHeader();
             if (header == null)
             {
-                return false;
+                return;
             }
             rtmpHeaders[header.StreamId] = header;
 
@@ -107,20 +109,29 @@ namespace RtmpSharp.Net
             if (packet.IsComplete)
             {
                 rtmpPackets.Remove(header.StreamId);
-
-                var @event = ParsePacket(packet);
-                OnEventReceived(new EventReceivedEventArgs(@event));
+                RtmpEvent @event = null;
+                try
+                {
+                    @event = ParsePacket(packet);
+                    OnEventReceived(new EventReceivedEventArgs(@event));
+                }
+                catch (ProtocolViolationException)
+                {
+                    Debug.WriteLine($"unhandled packet type: {packet.Header.MessageType}");
+                    return;
+                }
 
                 // process some kinds of packets
-                var chunkSizeMessage = @event as ChunkSize;
-                if (chunkSizeMessage != null)
+                if (@event is ChunkSize chunkSizeMessage)
+                {
                     readChunkSize = chunkSizeMessage.Size;
-
-                var abortMessage = @event as Abort;
-                if (abortMessage != null)
+                }
+                else if (@event is Abort abortMessage)
+                {
                     rtmpPackets.Remove(abortMessage.StreamId);
+                }
             }
-            return true;
+            return;
         }
 
         public void ReadLoop()
@@ -407,8 +418,7 @@ namespace RtmpSharp.Net
                     break;
             }
 
-            // skip messages we don't understand
-            return null;
+            throw new ProtocolViolationException();
         }
 
         static RtmpEvent ReadCommandOrData(AmfReader r, Command command, RtmpHeader header = null)

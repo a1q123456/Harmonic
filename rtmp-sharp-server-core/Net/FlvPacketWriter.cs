@@ -46,16 +46,14 @@ namespace RtmpSharp.Net
                 Disconnected(this, e);
         }
 
-        public bool WriteOnce()
+        public void WriteOnce()
         {
             if (packetAvailableEvent.WaitOne(1))
             {
                 RtmpPacket packet;
                 while (queuedPackets.TryDequeue(out packet))
                     WritePacket(packet);
-                return true;
             }
-            return false;
         }
 
         public void WriteLoop()

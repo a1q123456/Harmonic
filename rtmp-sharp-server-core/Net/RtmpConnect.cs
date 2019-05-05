@@ -75,14 +75,14 @@ namespace RtmpSharp.Net
             OnDisconnected(args);
         }
 
-        public bool WriteOnce()
+        public void WriteOnce()
         {
-            return writer.WriteOnce();
+            writer.WriteOnce();
         }
 
-        public bool ReadOnce()
+        public void ReadOnce()
         {
-            return reader.ReadOnce();
+            reader.ReadOnce();
         }
 
         public Task WriteOnceAsync(CancellationToken ct = default(CancellationToken))
@@ -148,16 +148,19 @@ namespace RtmpSharp.Net
 #endif
                     break;
 
-                case MessageType.CommandAmf3:
                 case MessageType.DataAmf0:
+                case MessageType.CommandAmf3:
                 case MessageType.CommandAmf0:
                     var command = (Command)e.Event;
                     var call = command.MethodCall;
                     var param = call.Parameters.Length == 1 ? call.Parameters[0] : call.Parameters;
+                    if (e.Event.MessageType == MessageType.DataAmf0)
+                    {
+                        Console.WriteLine("data");
+                    }
                     switch (call.Name)
                     {
                         case "connect":
-                            Console.WriteLine("Connect");
                             StreamId = server.RequestStreamId();
                             HandleConnectInvokeAsync(command);
                             HasConnected = true;
@@ -177,42 +180,32 @@ namespace RtmpSharp.Net
                             // TODO
                             break;
                         case "releaseStream":
-                            Console.WriteLine("ReleaseStream");
                             // TODO
                             break;
                         case "publish":
-                            Console.WriteLine("publish");
-                            HandlePublish(command);
+                            HandlePublishAsync(command);
                             break;
                         case "unpublish":
-                            HandleUnpublish(command);
                             break;
                         case "FCpublish":
                         case "FCPublish":
-                            Console.WriteLine("FCPublish");
                             // TODO
                             break;
                         case "FCUnpublish":
                         case "FCunPublish":
-                            Console.WriteLine("FCUnpublish");
                             HandleUnpublish(command);
                             break;
                         case "createStream":
                             SetResultValInvoke(StreamId, command.InvokeId);
-                            Console.WriteLine("create stream");
                             // TODO
                             break;
                         case "play":
-                            Console.WriteLine("play");
-                            // TODO
-                            HandlePlay(command);
+                            HandlePlayAsync(command);
                             break;
                         case "deleteStream":
-                            Console.WriteLine("deleteStream");
                             // TODO
                             break;
                         case "@setDataFrame":
-                            Console.WriteLine("SetDataFrame");
                             SetDataFrame(command);
                             // TODO
                             break;
@@ -255,10 +248,10 @@ namespace RtmpSharp.Net
             }
         }
 
-        private void HandlePlay(Command command)
+        private async Task HandlePlayAsync(Command command)
         {
             string path = (string)command.MethodCall.Parameters[0];
-            if (!server.RegisterPlay(app, path, ClientId))
+            if (!server.RegisterPlay(app, path, ClientId).Result)
             {
                 OnDisconnected(new ExceptionalEventArgs("play parameter auth failed"));
                 return;
@@ -376,10 +369,10 @@ namespace RtmpSharp.Net
             FlvMetaData = (NotifyAmf0)command;
         }
 
-        void HandlePublish(Command command)
+        async Task HandlePublishAsync(Command command)
         {
             string path = (string)command.MethodCall.Parameters[0];
-            if (!server.RegisterPublish(app, path, ClientId))
+            if (!server.RegisterPublish(app, path, ClientId).Result)
             {
                 OnDisconnected(new ExceptionalEventArgs("Server publish error"));
                 return;

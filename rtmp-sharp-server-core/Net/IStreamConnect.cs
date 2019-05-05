@@ -23,8 +23,8 @@ namespace RtmpSharp.Net
 
         void SendAmf0Data(RtmpEvent e);
 
-        bool WriteOnce();
-        bool ReadOnce();
+        void WriteOnce();
+        void ReadOnce();
         Task PingAsync(int pingTimeout);
         void OnDisconnected(ExceptionalEventArgs exceptionalEventArgs);
         void SendRawData(byte[] data);

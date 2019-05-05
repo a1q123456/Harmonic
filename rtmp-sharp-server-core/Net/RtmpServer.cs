@@ -540,12 +540,12 @@ namespace RtmpSharp.Net
             }
         }
 
-        internal bool RegisterPublish(string app, string path, ushort clientId)
+        internal async Task<bool> RegisterPublish(string app, string path, ushort clientId)
         {
             var uri = new Uri("http://127.0.0.1/" + path);
             var key = new Tuple<string, string>(app, uri.AbsolutePath);
             if (clientRoute.ContainsKey(key)) return false;
-            var ret = _publishParameterAuth(app, HttpUtility.ParseQueryString(uri.Query));
+            var ret = await _publishParameterAuth(app, HttpUtility.ParseQueryString(uri.Query));
             if (ret) clientRoute.Add(key, clientId);
             return ret;
         }
@@ -575,15 +575,15 @@ namespace RtmpSharp.Net
             return false;
         }
 
-        internal bool RegisterPlay(string app, string path, int clientId)
+        internal async Task<bool> RegisterPlay(string app, string path, int clientId)
         {
             var uri = new Uri("http://127.0.0.1/" + path);
-            return _playParameterAuth(app, HttpUtility.ParseQueryString(uri.Query));
+            return await _playParameterAuth(app, HttpUtility.ParseQueryString(uri.Query));
         }
 
-        public delegate bool ParameterAuthCallback(string app, NameValueCollection collection);
-        private ParameterAuthCallback _publishParameterAuth = (a, n) => true;
-        private ParameterAuthCallback _playParameterAuth = (a, n) => true;
+        public delegate Task<bool> ParameterAuthCallback(string app, NameValueCollection collection);
+        private ParameterAuthCallback _publishParameterAuth = async (a, n) => true;
+        private ParameterAuthCallback _playParameterAuth = async (a, n) => true;
 
         internal bool AuthApp(string app, ushort client_id)
         {
