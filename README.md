@@ -8,7 +8,26 @@ using RtmpSharp.Net;
 
 RtmpServer server = new RtmpServer(new RtmpSharp.IO.SerializationContext());
 server.RegisterApp("app");
-server.Start();
+var tsk = server.StartAsync();
+tsk.Wait();
+```
+
+or using `CancellationTokenSource`
+
+```csharp
+using RtmpSharp.Net;
+
+RtmpServer server = new RtmpServer(new RtmpSharp.IO.SerializationContext());
+server.RegisterApp("app");
+using (var cts = new CancellationTokenSource())
+{
+    server.StartAsync(cts.Token);
+
+    // DO SOMETHING...
+
+    cts.Cancel();
+}
+
 ```
 
 to start websocket server, you need to set bindWebsocketPort parameter
