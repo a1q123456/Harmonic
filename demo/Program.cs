@@ -17,7 +17,6 @@ namespace demo
             using (var cts = new CancellationTokenSource())
             {
                 var tsk = server.StartAsync(cts.Token);
-                cts.CancelAfter(TimeSpan.FromSeconds(4));
                 tsk.Wait();
             }
         }

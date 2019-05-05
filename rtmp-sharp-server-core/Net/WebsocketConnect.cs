@@ -122,9 +122,9 @@ namespace RtmpSharp.Net
             return callbackManager.Create(timestamp);
         }
 
-        public bool ReadOnce()
+        public void ReadOnce()
         {
-            return reader.ReadOnce();
+            reader.ReadOnce();
         }
 
         public Task ReadOnceAsync(CancellationToken ct = default(CancellationToken))
@@ -144,10 +144,10 @@ namespace RtmpSharp.Net
             writer.Queue(e, 3, 1337);
         }
 
-        public bool WriteOnce()
+        public void WriteOnce()
         {
             if (IsDisconnected) throw new IOException("Websocket already closed");
-            return writer.WriteOnce();
+            writer.WriteOnce();
         }
 
         public void SendRawData(byte[] data)

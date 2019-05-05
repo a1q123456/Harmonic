@@ -50,16 +50,14 @@ namespace RtmpSharp.Net
                 Disconnected(this, e);
         }
 
-        public bool WriteOnce()
+        public void WriteOnce()
         {
             if (Interlocked.Exchange(ref packetAvailable, 0) == 1)
             {
                 RtmpPacket packet;
                 while (queuedPackets.TryDequeue(out packet))
                     WritePacket(packet);
-                return true;
             }
-            return false;
         }
 
         public async Task<bool> WriteOnceAsync(CancellationToken ct = default(CancellationToken))
