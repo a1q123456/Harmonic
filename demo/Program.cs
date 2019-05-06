@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using RtmpSharp.Controller;
 
 namespace demo
 {
@@ -13,7 +14,7 @@ namespace demo
         static void Main(string[] args)
         {
             RtmpServer server = new RtmpServer(new RtmpSharp.IO.SerializationContext());
-            //server.RegisterController("app");
+            server.RegisterController<LivingController>();
             using (var cts = new CancellationTokenSource())
             {
                 var tsk = server.StartAsync(cts.Token);

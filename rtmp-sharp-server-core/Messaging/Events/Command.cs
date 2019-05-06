@@ -2,13 +2,13 @@
 
 namespace RtmpSharp.Messaging.Events
 {
-    enum CallStatus
+    public enum CallStatus
     {
         Request,
         Result,
     }
 
-    class Method
+    public class Method
     {
         public CallStatus CallStatus { get; internal set; }
         public string Name { get; internal set; }
@@ -23,7 +23,7 @@ namespace RtmpSharp.Messaging.Events
         }
     }
 
-    class Command : RtmpEvent
+    public class Command : RtmpEvent
     {
         public Method MethodCall { get; internal set; }
         public byte[] Buffer { get; internal set; }
@@ -38,7 +38,7 @@ namespace RtmpSharp.Messaging.Events
         protected Invoke(MessageType messageType) : base(messageType) { }
     }
 
-    abstract class Notify : Command
+    public abstract class Notify : Command
     {
         protected Notify(MessageType messageType) : base(messageType) { }
     }
@@ -58,7 +58,7 @@ namespace RtmpSharp.Messaging.Events
         public InvokeAmf0() : base(Net.MessageType.CommandAmf0) { }
     }
 
-    class NotifyAmf0 : Notify
+    public class NotifyAmf0 : Notify
     {
         public NotifyAmf0() : base(Net.MessageType.DataAmf0) { }
     }

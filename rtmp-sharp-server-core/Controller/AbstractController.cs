@@ -1,9 +1,12 @@
+using RtmpSharp.Messaging.Events;
+using RtmpSharp.Net;
 
 namespace RtmpSharp.Controller
 {
     public abstract class AbstractController
     {
-        public abstract void OnVideo(byte[] data);
-        public abstract void OnAudio(byte[] data);
+        protected IStreamSession Session { get; set; } = null;
+        public virtual void OnVideo(VideoData data) { }
+        public virtual void OnAudio(AudioData data) { }
     }
 }

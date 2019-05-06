@@ -2,7 +2,7 @@
 
 namespace RtmpSharp.Messaging.Events
 {
-    abstract class ByteData : RtmpEvent
+    public abstract class ByteData : RtmpEvent
     {
         public byte[] Data { get; }
 
@@ -12,14 +12,14 @@ namespace RtmpSharp.Messaging.Events
         }
     }
 
-    class AudioData : ByteData
+    public class AudioData : ByteData
     {
         public AudioData(byte[] data) : base(data, Net.MessageType.Audio)
         {
         }
     }
 
-    class VideoData : ByteData
+    public class VideoData : ByteData
     {
         public VideoData(byte[] data) : base(data, Net.MessageType.Video)
         {
