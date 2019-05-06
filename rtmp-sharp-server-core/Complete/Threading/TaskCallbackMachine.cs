@@ -6,11 +6,11 @@ using System.Threading.Tasks;
 // astralfoxy:complete/threading/taskcallbackmanager.cs
 namespace Complete.Threading
 {
-    class TaskCallbackManager<K, V>
+    class TaskCallbackMachine<K, V>
     {
         readonly ConcurrentDictionary<K, TaskCompletionSource<V>> callbacks;
 
-        public TaskCallbackManager()
+        public TaskCallbackMachine()
         {
             callbacks = new ConcurrentDictionary<K, TaskCompletionSource<V>>();
         }

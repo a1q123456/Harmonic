@@ -13,7 +13,7 @@ namespace demo
         static void Main(string[] args)
         {
             RtmpServer server = new RtmpServer(new RtmpSharp.IO.SerializationContext());
-            server.RegisterApp("app");
+            //server.RegisterController("app");
             using (var cts = new CancellationTokenSource())
             {
                 var tsk = server.StartAsync(cts.Token);
