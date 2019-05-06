@@ -16,6 +16,7 @@ using Fleck;
 using System.Security.Cryptography.X509Certificates;
 using System.Net.Security;
 using System.Security.Authentication;
+using RtmpSharp.Controller;
 
 namespace RtmpSharp.Net
 {
@@ -31,7 +32,15 @@ namespace RtmpSharp.Net
 
         Dictionary<Tuple<string, string>, ushort> clientRoute = new Dictionary<Tuple<string, string>, ushort>();
         List<Tuple<ushort, ushort, ChannelType>> routedClients = new List<Tuple<ushort, ushort, ChannelType>>();
-        List<string> registeredApps = new List<string>();
+        Dictionary<string, Type> registeredApps = new Dictionary<string, Type>();
+
+        internal IReadOnlyDictionary<string, Type> RegisteredApps 
+        {
+            get
+            {
+                return registeredApps;
+            }
+        }
         List<ushort> allocated_stream_id = new List<ushort>();
         List<ushort> allocated_client_id = new List<ushort>();
 
@@ -47,7 +56,7 @@ namespace RtmpSharp.Net
         List<KeyValuePair<ushort, StreamConnectState>> prepare_to_add = new List<KeyValuePair<ushort, StreamConnectState>>();
         List<ushort> prepare_to_remove = new List<ushort>();
 
-        class StreamConnectState { public IStreamConnect Connect; public DateTime LastPing; public Task ReaderTask; public Task WriterTask; }
+        class StreamConnectState { public IStreamSession Connect; public DateTime LastPing; public Task ReaderTask; public Task WriterTask; }
 
         public RtmpServer(
             SerializationContext context,
@@ -79,7 +88,7 @@ namespace RtmpSharp.Net
                         var path = socket.ConnectionInfo.Path.Split('/');
                         if (path.Length != 3) socket.Close();
                         ushort client_id = _getNewClientId();
-                        IStreamConnect connect = new WebsocketConnect(socket, context, object_encoding);
+                        IStreamSession connect = new WebsocketSession(socket, context, object_encoding);
                         lock (connects)
                         {
                             connects.Add(client_id, new StreamConnectState()
@@ -125,7 +134,7 @@ namespace RtmpSharp.Net
                         ct.ThrowIfCancellationRequested();
                         StreamConnectState state = current.Value;
                         ushort client_id = current.Key;
-                        IStreamConnect connect = state.Connect;
+                        IStreamSession connect = state.Connect;
                         if (connect.IsDisconnected)
                         {
                             CloseClient(client_id);
@@ -203,7 +212,7 @@ namespace RtmpSharp.Net
             }
             Started = true;
             var ioThread = new Thread(() => _ioLoop(ct))
-            { 
+            {
                 IsBackground = true
             };
             var ret = new TaskCompletionSource<int>();
@@ -258,7 +267,7 @@ namespace RtmpSharp.Net
             {
                 StreamConnectState state = current.Value;
                 ushort client_id = current.Key;
-                IStreamConnect connect = state.Connect;
+                IStreamSession connect = state.Connect;
                 if (connect.IsDisconnected)
                 {
                     continue;
@@ -394,7 +403,7 @@ namespace RtmpSharp.Net
             }
 
             ushort client_id = _getNewClientId();
-            var connect = new RtmpConnect(client_socket, stream, this, client_id, context, objectEncoding, true);
+            var connect = new RtmpSession(client_socket, stream, this, client_id, context, objectEncoding, true);
             connect.ChannelDataReceived += _sendDataHandler;
 
             prepare_to_add.Add(new KeyValuePair<ushort, StreamConnectState>(client_id, new StreamConnectState()
@@ -408,12 +417,19 @@ namespace RtmpSharp.Net
             return client_id;
         }
 
-        public void RegisterApp(string app_name)
+        public void RegisterController<T>() where T : AbstractController
         {
             lock (registeredApps)
             {
-                if (registeredApps.IndexOf(app_name) != -1) throw new InvalidOperationException("app exists");
-                registeredApps.Add(app_name);
+                var typeT = typeof(T);
+                var controllerName = typeT.Name;
+                if (controllerName.EndsWith("Controller"))
+                {
+                    controllerName = controllerName.Substring(0, controllerName.LastIndexOf("Controller"));
+                }
+
+                if (registeredApps.ContainsKey(controllerName)) throw new InvalidOperationException("controller exists");
+                registeredApps.Add(controllerName, typeT);
             }
         }
 
@@ -424,7 +440,7 @@ namespace RtmpSharp.Net
 
             StreamConnectState state;
             connects.TryGetValue(client_id, out state);
-            IStreamConnect connect = state.Connect;
+            IStreamSession connect = state.Connect;
 
             prepare_to_remove.Add(client_id);
 
@@ -445,12 +461,12 @@ namespace RtmpSharp.Net
 
         private void _sendDataHandler(object sender, ChannelDataReceivedEventArgs e)
         {
-            var server = (RtmpConnect)sender;
+            var server = (RtmpSession)sender;
 
             var server_clients = routedClients.FindAll((t) => t.Item2 == server.ClientId);
             foreach (var i in server_clients)
             {
-                IStreamConnect client;
+                IStreamSession client;
                 StreamConnectState client_state = null;
                 if (e.type != i.Item3)
                 {
@@ -460,12 +476,8 @@ namespace RtmpSharp.Net
 
                 switch (i.Item3)
                 {
-                    case ChannelType.Audio:
-                        if (client_state == null) continue;
-                        client = client_state.Connect;
-                        client.SendAmf0Data(e.e);
-                        break;
                     case ChannelType.Video:
+                    case ChannelType.Audio:
                         if (client_state == null) continue;
                         client = client_state.Connect;
                         client.SendAmf0Data(e.e);
@@ -486,7 +498,7 @@ namespace RtmpSharp.Net
             if (!clientRoute.TryGetValue(key, out client_id)) throw new KeyNotFoundException("Request Path Not Found");
             if (!connects.TryGetValue(client_id, out state))
             {
-                IStreamConnect connect = state.Connect;
+                IStreamSession connect = state.Connect;
                 clientRoute.Remove(key);
                 throw new KeyNotFoundException("Request Client Not Exists");
             }
@@ -495,11 +507,11 @@ namespace RtmpSharp.Net
 
         }
 
-        internal void SendMetadata(string app, string path, IStreamConnect self, bool flvHeader = false)
+        internal void SendMetadata(string app, string path, IStreamSession self, bool flvHeader = false)
         {
             ushort client_id;
             StreamConnectState state;
-            IStreamConnect connect;
+            IStreamSession connect;
             var uri = new Uri("http://127.0.0.1/" + path);
             var key = new Tuple<string, string>(app, uri.AbsolutePath);
             if (!clientRoute.TryGetValue(key, out client_id)) throw new KeyNotFoundException("Request Path Not Found");
@@ -558,7 +570,7 @@ namespace RtmpSharp.Net
             {
                 if (connects.TryGetValue(clientId, out state))
                 {
-                    IStreamConnect connect = state.Connect;
+                    IStreamSession connect = state.Connect;
                     connect.ChannelDataReceived -= _sendDataHandler;
 
                     var clients = routedClients.FindAll(t => t.Item2 == clientId);
@@ -587,8 +599,7 @@ namespace RtmpSharp.Net
 
         internal bool AuthApp(string app, ushort client_id)
         {
-            if (registeredApps.IndexOf(app) == -1) return false;
-            return true;
+            return registeredApps.ContainsKey(app);
         }
 
         public void Dispose()

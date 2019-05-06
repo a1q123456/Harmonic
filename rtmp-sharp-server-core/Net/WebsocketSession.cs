@@ -14,7 +14,7 @@ using RtmpSharp.IO;
 
 namespace RtmpSharp.Net
 {
-    class WebsocketConnect : IStreamConnect, IDisposable
+    class WebsocketSession : IStreamSession, IDisposable
     {
         public NotifyAmf0 FlvMetaData
         {
@@ -39,7 +39,7 @@ namespace RtmpSharp.Net
 
         private SendPingDelegate sendPing;
         private DateTime connectTime;
-        private TaskCallbackManager<int, object> callbackManager = new TaskCallbackManager<int, object>();
+        private TaskCallbackMachine<int, object> callbackManager = new TaskCallbackMachine<int, object>();
         private Queue<RtmpEvent> writeQueue = new Queue<RtmpEvent>();
         private AutoResetEvent packetAvailableEvent = new AutoResetEvent(false);
         private FlvPacketWriter writer;
@@ -67,7 +67,7 @@ namespace RtmpSharp.Net
 
         private volatile int disconnectsFired = 0;
 
-        public WebsocketConnect(IWebSocketConnection connection, IO.SerializationContext context, IO.ObjectEncoding encoding)
+        public WebsocketSession(IWebSocketConnection connection, IO.SerializationContext context, IO.ObjectEncoding encoding)
         {
             this.connection = connection;
             IsPlaying = true;

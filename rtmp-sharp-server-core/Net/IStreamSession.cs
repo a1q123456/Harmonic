@@ -10,7 +10,7 @@ using System.Threading;
 
 namespace RtmpSharp.Net
 {
-    interface IStreamConnect
+    interface IStreamSession
     {
         bool IsDisconnected { get; }
         ushort StreamId { get; }
