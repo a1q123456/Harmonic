@@ -10,7 +10,7 @@ using System.Threading;
 
 namespace RtmpSharp.Net
 {
-    interface IStreamSession
+    public interface IStreamSession
     {
         bool IsDisconnected { get; }
         ushort StreamId { get; }
@@ -18,11 +18,12 @@ namespace RtmpSharp.Net
         bool IsPlaying { get; }
         NotifyAmf0 FlvMetaData { get; }
         event ChannelDataReceivedEventHandler ChannelDataReceived;
-        VideoData AvCConfigureRecord { get; }
-        AudioData AACConfigureRecord { get; }
-
+        VideoData AVCConfigureRecord { get; set; }
+        AudioData AACConfigureRecord { get; set; }
+        Dictionary<string, dynamic> SessionStorage { get; }
+        Queue<AudioData> AudioBuffer { get; }
+        Queue<VideoData> VideoBuffer { get; }
         void SendAmf0Data(RtmpEvent e);
-
         void WriteOnce();
         void ReadOnce();
         Task PingAsync(int pingTimeout);

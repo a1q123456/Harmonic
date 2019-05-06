@@ -1,6 +1,5 @@
 ﻿using Complete;
 using Complete.Threading;
-using RtmpSharp.Controller;
 using RtmpSharp.IO;
 using RtmpSharp.Messaging;
 using RtmpSharp.Messaging.Events;
@@ -17,7 +16,7 @@ using System.Threading.Tasks;
 
 namespace RtmpSharp.Net
 {
-    class RtmpSession : IDisposable, IStreamSession
+    class RtmpConnect : IDisposable, IStreamConnect
     {
         public VideoData CurrentVideoData { get; private set; }
         public AudioData CurrentAudioData { get; private set; }
@@ -30,8 +29,7 @@ namespace RtmpSharp.Net
         private DateTime connectTime;
         public bool IsDisconnected => disconnectsFired != 0;
         volatile int disconnectsFired = 0;
-        readonly TaskCallbackMachine<int, object> callbackManager;
-        readonly TaskCallbackMachine<int, object> pingManager;
+        readonly TaskCallbackManager<int, object> callbackManager;
         public RtmpPacketWriter writer = null;
         public RtmpPacketReader reader = null;
         ObjectEncoding objectEncoding;
@@ -39,19 +37,19 @@ namespace RtmpSharp.Net
         Socket clientSocket;
         public ushort StreamId { get; private set; } = 0;
         public ushort ClientId { get; private set; } = 0;
-        private string _app;
+        private string app;
         public NotifyAmf0 FlvMetaData { get; private set; }
         public bool IsPublishing { get; private set; } = false;
         public bool IsPlaying { get; private set; } = false;
         public bool AudioSended { get; internal set; }
-
+        public VideoData AvCConfigureRecord { get; private set; } = null;
+        public AudioData AACConfigureRecord { get; private set; } = null;
+        private bool is_not_set_video_config = true;
+        private bool is_not_set_auido_config = true;
         private const int CONTROL_CSID = 2;
         private Random random = new Random();
-        private AbstractController _controller = null;
-        private Type _controllerType = null;
-        public Dictionary<string, dynamic> SessionStorage { get; private set; } = new Dictionary<string, dynamic>();
 
-        public RtmpSession(Socket client_socket, Stream stream, RtmpServer server, ushort client_id, SerializationContext context, ObjectEncoding objectEncoding = ObjectEncoding.Amf0, bool asyncMode = false)
+        public RtmpConnect(Socket client_socket, Stream stream, RtmpServer server, ushort client_id, SerializationContext context, ObjectEncoding objectEncoding = ObjectEncoding.Amf0, bool asyncMode = false)
         {
             ClientId = client_id;
             clientSocket = client_socket;
@@ -62,12 +60,11 @@ namespace RtmpSharp.Net
             reader.EventReceived += EventReceivedCallback;
             reader.Disconnected += OnPacketProcessorDisconnected;
             writer.Disconnected += OnPacketProcessorDisconnected;
-            callbackManager = new TaskCallbackMachine<int, object>();
-            pingManager = new TaskCallbackMachine<int, object>();
+            callbackManager = new TaskCallbackManager<int, object>();
         }
-
+        
         public event ChannelDataReceivedEventHandler ChannelDataReceived;
-
+        
         public void Close()
         {
             OnDisconnected(new ExceptionalEventArgs("disconnected"));
@@ -78,14 +75,14 @@ namespace RtmpSharp.Net
             OnDisconnected(args);
         }
 
-        public void WriteOnce()
+        public bool WriteOnce()
         {
-            writer.WriteOnce();
+            return writer.WriteOnce();
         }
 
-        public void ReadOnce()
+        public bool ReadOnce()
         {
-            reader.ReadOnce();
+            return reader.ReadOnce();
         }
 
         public Task WriteOnceAsync(CancellationToken ct = default(CancellationToken))
@@ -97,6 +94,7 @@ namespace RtmpSharp.Net
         {
             return reader.ReadOnceAsync(ct);
         }
+
 
         Task<object> QueueCommandAsTask(Command command, int streamId, int messageStreamId, bool requireConnected = true)
         {
@@ -112,7 +110,7 @@ namespace RtmpSharp.Net
         {
             if (Interlocked.Increment(ref disconnectsFired) > 1)
                 return;
-
+            
             HasConnected = false;
             WrapCallback(() => Disconnected?.Invoke(this, e));
             WrapCallback(() => callbackManager.SetExceptionForAll(new ClientDisconnectedException(e.Description, e.Exception)));
@@ -134,98 +132,120 @@ namespace RtmpSharp.Net
                     else if (m.EventType == UserControlMessageType.SetBufferLength)
                     {
                         Console.WriteLine("Set Buffer Length");
+                        // TODO
                     }
                     else if (m.EventType == UserControlMessageType.PingResponse)
                     {
                         Console.WriteLine("Ping Response");
                         var message = m as UserControlMessage;
-                        pingManager.SetResult(message.Values[0], null);
+                        callbackManager.SetResult(message.Values[0], null);
                     }
                     break;
-                case MessageType.DataAmf3:
-                    break;
-                case MessageType.DataAmf0:
-                    {
-                        var command = (Command)e.Event;
-                        switch (command.MethodCall.Name)
-                        {
-                            case "@setDataFrame":
-                                SetDataFrame(command);
-                                break;
-                        }
-                    }
-                    break;
-                case MessageType.CommandAmf3:
-                case MessageType.CommandAmf0:
-                    {
-                        var command = (Command)e.Event;
-                        var call = command.MethodCall;
-                        var param = call.Parameters.Length == 1 ? call.Parameters[0] : call.Parameters;
-                        switch (call.Name)
-                        {
-                            case "connect":
-                                StreamId = server.RequestStreamId();
-                                HandleConnectInvokeAsync(command);
-                                HasConnected = true;
-                                server.RegisteredApps.TryGetValue(_app, out _controllerType);
-                                if (!_controllerType.IsAbstract)
-                                {
-                                    _controller = Activator.CreateInstance(_controllerType) as AbstractController;
-                                }
-                                else
-                                {
-                                    throw new InvalidOperationException();
-                                }
-                                break;
-                            case "_result":
-                                // unwrap Flex class, if present
-                                var ack = param as AcknowledgeMessage;
-                                callbackManager.SetResult(command.InvokeId, ack != null ? ack.Body : param);
-                                break;
 
-                            case "_error":
-                                // unwrap Flex class, if present
-                                var error = param as ErrorMessage;
-                                callbackManager.SetException(command.InvokeId, error != null ? new InvocationException(error) : new InvocationException());
-                                break;
-                            default:
-                                if (_controller == null)
-                                {
-                                    throw new InvalidOperationException();
-                                }
-                                var methodName = call.Name;
-                                var method = _controllerType.GetMethod(methodName);
-                                if (method != null)
-                                {
-                                    var ret = method.Invoke(_controller, command.MethodCall.Parameters);
-                                    if (ret is Task tsk)
-                                    {
-                                        tsk.ContinueWith((t, obj) =>
-                                        {
-                                            Console.WriteLine($"Exception: {t.Exception.GetType().ToString()}, CallStack: {t.Exception.StackTrace}");
-                                            ReturnResultInvoke(null, command.InvokeId, $"{t.Exception.GetType().ToString()}\t{t.Exception.Message}", true, false);
-                                        }, TaskContinuationOptions.OnlyOnFaulted);
-                                    }
-                                }
+                case MessageType.DataAmf3:
 #if DEBUG
-                                else
-                                {
-                                    System.Diagnostics.Debug.Print($"unknown rtmp command: {call.Name}");
-                                    System.Diagnostics.Debugger.Break();
-                                }
+                    System.Diagnostics.Debugger.Break();
 #endif
-                                break;
-                        }
+                    break;
+
+                case MessageType.CommandAmf3:
+                case MessageType.DataAmf0:
+                case MessageType.CommandAmf0:
+                    var command = (Command)e.Event;
+                    var call = command.MethodCall;
+                    var param = call.Parameters.Length == 1 ? call.Parameters[0] : call.Parameters;
+                    switch (call.Name)
+                    {
+                        case "connect":
+                            Console.WriteLine("Connect");
+                            StreamId = server.RequestStreamId();
+                            HandleConnectInvokeAsync(command);
+                            HasConnected = true;
+                            break;
+                        case "_result":
+                            // unwrap Flex class, if present
+                            var ack = param as AcknowledgeMessage;
+                            callbackManager.SetResult(command.InvokeId, ack != null ? ack.Body : param);
+                            break;
+
+                        case "_error":
+                            // unwrap Flex class, if present
+                            var error = param as ErrorMessage;
+                            callbackManager.SetException(command.InvokeId, error != null ? new InvocationException(error) : new InvocationException());
+                            break;
+                        case "receiveAudio":
+                            // TODO
+                            break;
+                        case "releaseStream":
+                            Console.WriteLine("ReleaseStream");
+                            // TODO
+                            break;
+                        case "publish":
+                            Console.WriteLine("publish");
+                            HandlePublish(command);
+                            break;
+                        case "unpublish":
+                            HandleUnpublish(command);
+                            break;
+                        case "FCpublish":
+                        case "FCPublish":
+                            Console.WriteLine("FCPublish");
+                            // TODO
+                            break;
+                        case "FCUnpublish":
+                        case "FCunPublish":
+                            Console.WriteLine("FCUnpublish");
+                            HandleUnpublish(command);
+                            break;
+                        case "createStream":
+                            SetResultValInvoke(StreamId, command.InvokeId);
+                            Console.WriteLine("create stream");
+                            // TODO
+                            break;
+                        case "play":
+                            Console.WriteLine("play");
+                            // TODO
+                            HandlePlay(command);
+                            break;
+                        case "deleteStream":
+                            Console.WriteLine("deleteStream");
+                            // TODO
+                            break;
+                        case "@setDataFrame":
+                            Console.WriteLine("SetDataFrame");
+                            SetDataFrame(command);
+                            // TODO
+                            break;
+                        default:
+#if DEBUG
+                            System.Diagnostics.Debug.Print($"unknown rtmp command: {call.Name}");
+                            System.Diagnostics.Debugger.Break();
+#endif
+                            break;
                     }
-                    break;
-                case MessageType.Video:
-                    _controller?.OnVideo(e.Event as VideoData);
-                    break;
-                case MessageType.Audio:
-                    _controller?.OnAudio(e.Event as AudioData);
                     break;
                 case MessageType.WindowAcknowledgementSize:
                     var msg = (WindowAcknowledgementSize)e.Event;
+                    break;
+                case MessageType.Video:
+                    var video_data = e.Event as VideoData;
+                    if (is_not_set_video_config && video_data.Data.Length >= 2 && video_data.Data[1] == 0)
+                    {
+                        is_not_set_video_config = false;
+                        AvCConfigureRecord = video_data;
+                    }
+                    ChannelDataReceived?.Invoke(this, new ChannelDataReceivedEventArgs(ChannelType.Video, e.Event));
+                    
+                    break;
+                case MessageType.Audio:
+                    var audio_data = e.Event as AudioData;
+                    if (is_not_set_auido_config && audio_data.Data.Length >= 2 && audio_data.Data[1] == 0)
+                    {
+                        is_not_set_auido_config = false;
+                        AACConfigureRecord = audio_data;
+                    }
+                    ChannelDataReceived?.Invoke(this, new ChannelDataReceivedEventArgs(ChannelType.Audio, e.Event));
+                    
                     break;
                 case MessageType.Acknowledgement:
                     break;
@@ -235,18 +255,17 @@ namespace RtmpSharp.Net
             }
         }
 
-        private async Task HandlePlayAsync(Command command)
+        private void HandlePlay(Command command)
         {
             string path = (string)command.MethodCall.Parameters[0];
-            if (!await server.RegisterPlay(_app, path, ClientId))
+            if (!server.RegisterPlay(app, path, ClientId))
             {
                 OnDisconnected(new ExceptionalEventArgs("play parameter auth failed"));
                 return;
             }
-            
             WriteProtocolControlMessage(new UserControlMessage(UserControlMessageType.StreamIsRecorded, new int[] { StreamId }));
             WriteProtocolControlMessage(new UserControlMessage(UserControlMessageType.StreamBegin, new int[] { StreamId }));
-
+            
             var status_reset = new AsObject
             {
                 {"level", "status" },
@@ -271,6 +290,7 @@ namespace RtmpSharp.Net
                 {"description", "Started playing." },
                 {"details", path }
             };
+
             var call_on_status_start = new InvokeAmf0
             {
                 MethodCall = new Method("onStatus", new object[] { status_start }),
@@ -283,15 +303,15 @@ namespace RtmpSharp.Net
             writer.Queue(call_on_status_start, StreamId, random.Next());
             try
             {
-                server.SendMetadata(_app, path, this);
-                server.ConnectToClient(_app, path, ClientId, ChannelType.Video);
-                server.ConnectToClient(_app, path, ClientId, ChannelType.Audio);
+                server.SendMetadata(app, path, this);
+                server.ConnectToClient(app, path, ClientId, ChannelType.Video);
+                server.ConnectToClient(app, path, ClientId, ChannelType.Audio);
             }
             catch (Exception e)
             { OnDisconnected(new ExceptionalEventArgs("Not Found", e)); }
             IsPlaying = true;
         }
-
+        
         public Task<T> InvokeAsync<T>(string method, object argument)
         {
             return InvokeAsync<T>(method, new[] { argument });
@@ -356,10 +376,10 @@ namespace RtmpSharp.Net
             FlvMetaData = (NotifyAmf0)command;
         }
 
-        async Task HandlePublishAsync(Command command)
+        void HandlePublish(Command command)
         {
             string path = (string)command.MethodCall.Parameters[0];
-            if (!await server.RegisterPublish(_app, path, ClientId))
+            if (!server.RegisterPublish(app, path, ClientId))
             {
                 OnDisconnected(new ExceptionalEventArgs("Server publish error"));
                 return;
@@ -405,6 +425,7 @@ namespace RtmpSharp.Net
             result.MethodCall.CallStatus = CallStatus.Result;
             result.MethodCall.IsSuccess = success;
             writer.Queue(result, StreamId, random.Next());
+            Console.WriteLine("_result");
         }
 
         void HandleUnpublish(Command command)
@@ -424,7 +445,7 @@ namespace RtmpSharp.Net
                 OnDisconnected(new ExceptionalEventArgs("app value cannot be null"));
                 return;
             }
-            _app = app.ToString();
+            this.app = app.ToString();
             if (!server.AuthApp(app.ToString(), ClientId))
             {
                 code = "NetConnection.Connect.Error";
@@ -457,19 +478,21 @@ namespace RtmpSharp.Net
 
         public Task PingAsync(int PingTimeout)
         {
-            Console.WriteLine("Server Ping Request");
-            var timestamp = (int)((DateTime.UtcNow - connectTime).TotalSeconds);
-            var ping = new UserControlMessage(UserControlMessageType.PingRequest, new int[] { timestamp });
-            WriteProtocolControlMessage(ping);
-            var ret = pingManager.Create(timestamp);
-            return ret;
+            //Console.WriteLine("Server Ping Request");
+            //var timestamp = (int)((DateTime.UtcNow -  connectTime).TotalSeconds);
+            //var ping = new UserControlMessage(UserControlMessageType.PingRequest, new int[] { timestamp });
+            //WriteProtocolControlMessage(ping);
+            //var ret = callbackManager.Create(timestamp);
+
+            //return ret;
+            return null;
         }
 
         public void SendRawData(byte[] data)
         {
             writer.writer.WriteBytes(data);
         }
-
+        
         void WriteProtocolControlMessage(RtmpEvent @event)
         {
             writer.Queue(@event, CONTROL_CSID, 0);
