@@ -30,11 +30,19 @@ namespace RtmpSharp.Net
 
         // TODO: add rtmps support
 
-        Dictionary<Tuple<string, string>, ushort> clientRoute = new Dictionary<Tuple<string, string>, ushort>();
-        List<Tuple<ushort, ushort, ChannelType>> routedClients = new List<Tuple<ushort, ushort, ChannelType>>();
+        Dictionary<string, ushort> _pathToPusherClientId = new Dictionary<string, ushort>();
+
+        struct CrossClientConnection
+        {
+            public ushort PusherClientId { get; set; }
+            public ushort PlayerClientId { get; set; }
+            public ChannelType ChannelType { get; set; }
+        }
+
+        List<CrossClientConnection> _crossClientConnections = new List<CrossClientConnection>();
         Dictionary<string, Type> registeredApps = new Dictionary<string, Type>();
 
-        internal IReadOnlyDictionary<string, Type> RegisteredApps 
+        internal IReadOnlyDictionary<string, Type> RegisteredApps
         {
             get
             {
@@ -447,15 +455,15 @@ namespace RtmpSharp.Net
             if (connect.IsPublishing) UnRegisterPublish(client_id);
             if (connect.IsPlaying)
             {
-                var client_channels = routedClients.FindAll((t) => (t.Item1 == client_id || t.Item2 == client_id));
-                routedClients.RemoveAll((t) => (t.Item1 == client_id));
+                var client_channels = _crossClientConnections.FindAll(con => (con.PusherClientId == client_id || con.PlayerClientId == client_id));
+                _crossClientConnections.RemoveAll(t => (t.PlayerClientId == client_id));
                 foreach (var i in client_channels)
                 {
-                    routedClients.Remove(i);
+                    _crossClientConnections.Remove(i);
                 }
 
             }
-            connect.OnDisconnected(new ExceptionalEventArgs("disconnected"));
+            connect.Disconnect(new ExceptionalEventArgs("disconnected"));
 
         }
 
@@ -463,18 +471,18 @@ namespace RtmpSharp.Net
         {
             var server = (RtmpSession)sender;
 
-            var server_clients = routedClients.FindAll((t) => t.Item2 == server.ClientId);
+            var server_clients = _crossClientConnections.FindAll((t) => t.PusherClientId == server.ClientId);
             foreach (var i in server_clients)
             {
                 IStreamSession client;
                 StreamConnectState client_state = null;
-                if (e.type != i.Item3)
+                if (e.type != i.ChannelType)
                 {
                     continue;
                 }
-                connects.TryGetValue(i.Item1, out client_state);
+                connects.TryGetValue(i.PlayerClientId, out client_state);
 
-                switch (i.Item3)
+                switch (i.ChannelType)
                 {
                     case ChannelType.Video:
                     case ChannelType.Audio:
@@ -489,21 +497,24 @@ namespace RtmpSharp.Net
             }
         }
 
-        internal void ConnectToClient(string app, string path, ushort self_id, ChannelType channel_type)
+        internal void ConnectToClient(string app, string path, ushort playerClientId, ChannelType channelType)
         {
             StreamConnectState state;
-            ushort client_id;
-            var uri = new Uri("http://127.0.0.1/" + path);
-            var key = new Tuple<string, string>(app, uri.AbsolutePath);
-            if (!clientRoute.TryGetValue(key, out client_id)) throw new KeyNotFoundException("Request Path Not Found");
-            if (!connects.TryGetValue(client_id, out state))
+            ushort pusherClientId;
+            if (!_pathToPusherClientId.TryGetValue(path, out pusherClientId)) throw new KeyNotFoundException("Request Path Not Found");
+            if (!connects.TryGetValue(pusherClientId, out state))
             {
                 IStreamSession connect = state.Connect;
-                clientRoute.Remove(key);
+                _pathToPusherClientId.Remove(path);
                 throw new KeyNotFoundException("Request Client Not Exists");
             }
 
-            routedClients.Add(new Tuple<ushort, ushort, ChannelType>(self_id, client_id, channel_type));
+            _crossClientConnections.Add(new CrossClientConnection()
+            {
+                PlayerClientId = playerClientId,
+                PusherClientId = pusherClientId,
+                ChannelType = channelType
+            });
 
         }
 
@@ -512,12 +523,10 @@ namespace RtmpSharp.Net
             ushort client_id;
             StreamConnectState state;
             IStreamSession connect;
-            var uri = new Uri("http://127.0.0.1/" + path);
-            var key = new Tuple<string, string>(app, uri.AbsolutePath);
-            if (!clientRoute.TryGetValue(key, out client_id)) throw new KeyNotFoundException("Request Path Not Found");
+            if (!_pathToPusherClientId.TryGetValue(path, out client_id)) throw new KeyNotFoundException("Request Path Not Found");
             if (!connects.TryGetValue(client_id, out state))
             {
-                clientRoute.Remove(key);
+                _pathToPusherClientId.Remove(path);
                 throw new KeyNotFoundException("Request Client Not Exists");
             }
             connect = state.Connect;
@@ -554,43 +563,35 @@ namespace RtmpSharp.Net
 
         internal async Task<bool> RegisterPublish(string app, string path, ushort clientId)
         {
-            var uri = new Uri("http://127.0.0.1/" + path);
-            var key = new Tuple<string, string>(app, uri.AbsolutePath);
-            if (clientRoute.ContainsKey(key)) return false;
-            var ret = await _publishParameterAuth(app, HttpUtility.ParseQueryString(uri.Query));
-            if (ret) clientRoute.Add(key, clientId);
+            //var uri = new Uri("http://127.0.0.1/" + path);
+            if (_pathToPusherClientId.ContainsKey(path)) return false;
+            var ret = await _publishParameterAuth(app, HttpUtility.ParseQueryString(path));
+            if (ret) _pathToPusherClientId.Add(path, clientId);
             return ret;
         }
 
         internal bool UnRegisterPublish(ushort clientId)
         {
-            var key = clientRoute.First(x => x.Value == clientId).Key;
+            var key = _pathToPusherClientId.First(x => x.Value == clientId).Key;
             StreamConnectState state;
-            if (clientRoute.ContainsKey(key))
+            if (_pathToPusherClientId.ContainsKey(key))
             {
                 if (connects.TryGetValue(clientId, out state))
                 {
                     IStreamSession connect = state.Connect;
                     connect.ChannelDataReceived -= _sendDataHandler;
 
-                    var clients = routedClients.FindAll(t => t.Item2 == clientId);
+                    var clients = _crossClientConnections.FindAll(t => t.PusherClientId == clientId);
                     foreach (var i in clients)
                     {
-                        CloseClient(i.Item1);
+                        CloseClient(i.PlayerClientId);
                     }
-                    routedClients.RemoveAll(t => t.Item2 == clientId);
-
+                    _crossClientConnections.RemoveAll(t => t.PusherClientId == clientId);
                 }
-                clientRoute.Remove(key);
+                _pathToPusherClientId.Remove(key);
                 return true;
             }
             return false;
-        }
-
-        internal async Task<bool> RegisterPlay(string app, string path, int clientId)
-        {
-            var uri = new Uri("http://127.0.0.1/" + path);
-            return await _playParameterAuth(app, HttpUtility.ParseQueryString(uri.Query));
         }
 
         public delegate Task<bool> ParameterAuthCallback(string app, NameValueCollection collection);

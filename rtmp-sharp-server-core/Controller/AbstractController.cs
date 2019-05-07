@@ -6,7 +6,8 @@ namespace RtmpSharp.Controller
     public abstract class AbstractController
     {
         protected IStreamSession Session { get; set; } = null;
-        public virtual void OnVideo(VideoData data) { }
-        public virtual void OnAudio(AudioData data) { }
+        internal virtual void OnVideo(VideoData data) { }
+        internal virtual void OnAudio(AudioData data) { }
+        internal virtual void EnsureSessionStorage() {}
     }
 }
