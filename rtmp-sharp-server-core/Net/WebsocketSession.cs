@@ -49,21 +49,7 @@ namespace RtmpSharp.Net
 
         public bool HasConnected { get; private set; }
 
-        public VideoData AvCConfigureRecord
-        {
-            get
-            {
-                throw new NotSupportedException();
-            }
-        }
-
-        public AudioData AACConfigureRecord
-        {
-            get
-            {
-                throw new NotSupportedException();
-            }
-        }
+        public dynamic SessionStorage { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 
         private volatile int disconnectsFired = 0;
 

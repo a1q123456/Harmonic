@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -35,7 +36,6 @@ namespace RtmpSharp.Net
         public RtmpPacketWriter writer = null;
         public RtmpPacketReader reader = null;
         ObjectEncoding objectEncoding;
-        RtmpServer server;
         Socket clientSocket;
         public ushort StreamId { get; private set; } = 0;
         public ushort ClientId { get; private set; } = 0;
@@ -49,13 +49,14 @@ namespace RtmpSharp.Net
         private Random random = new Random();
         private AbstractController _controller = null;
         private Type _controllerType = null;
-        public Dictionary<string, dynamic> SessionStorage { get; private set; } = new Dictionary<string, dynamic>();
+        public dynamic SessionStorage { get; set; } = null;
+        public RtmpServer Server { get; private set; } = null;
 
         public RtmpSession(Socket client_socket, Stream stream, RtmpServer server, ushort client_id, SerializationContext context, ObjectEncoding objectEncoding = ObjectEncoding.Amf0, bool asyncMode = false)
         {
             ClientId = client_id;
             clientSocket = client_socket;
-            this.server = server;
+            Server = server;
             this.objectEncoding = objectEncoding;
             writer = new RtmpPacketWriter(new AmfWriter(stream, context, ObjectEncoding.Amf0, asyncMode), ObjectEncoding.Amf0);
             reader = new RtmpPacketReader(new AmfReader(stream, context, asyncMode));
@@ -70,12 +71,12 @@ namespace RtmpSharp.Net
 
         public void Close()
         {
-            OnDisconnected(new ExceptionalEventArgs("disconnected"));
+            Disconnect(new ExceptionalEventArgs("disconnected"));
         }
 
         void OnPacketProcessorDisconnected(object sender, ExceptionalEventArgs args)
         {
-            OnDisconnected(args);
+            Disconnect(args);
         }
 
         public void WriteOnce()
@@ -108,7 +109,7 @@ namespace RtmpSharp.Net
             return task;
         }
 
-        public void OnDisconnected(ExceptionalEventArgs e)
+        public void Disconnect(ExceptionalEventArgs e)
         {
             if (Interlocked.Increment(ref disconnectsFired) > 1)
                 return;
@@ -147,11 +148,22 @@ namespace RtmpSharp.Net
                 case MessageType.DataAmf0:
                     {
                         var command = (Command)e.Event;
-                        switch (command.MethodCall.Name)
+                        if (_controller == null || _controllerType == null)
                         {
-                            case "@setDataFrame":
-                                SetDataFrame(command);
-                                break;
+                            throw new EntryPointNotFoundException();
+                        }
+                        var method = _controllerType.GetMethod(command.MethodCall.Name);
+                        if (method == null)
+                        {
+                            throw new EntryPointNotFoundException();
+                        }
+                        var ret = method.Invoke(_controller, new object[] { command });
+                        if (ret is Task tsk)
+                        {
+                            tsk.ContinueWith(t =>
+                            {
+                                ReturnResultInvoke(null, command.InvokeId, t.Exception.Message, true, false);
+                            }, TaskContinuationOptions.OnlyOnFaulted);
                         }
                     }
                     break;
@@ -164,10 +176,10 @@ namespace RtmpSharp.Net
                         switch (call.Name)
                         {
                             case "connect":
-                                StreamId = server.RequestStreamId();
-                                HandleConnectInvokeAsync(command);
+                                StreamId = Server.RequestStreamId();
+                                HandleConnectInvoke(command);
                                 HasConnected = true;
-                                server.RegisteredApps.TryGetValue(_app, out _controllerType);
+                                Server.RegisteredApps.TryGetValue(_app, out _controllerType);
                                 if (!_controllerType.IsAbstract)
                                 {
                                     _controller = Activator.CreateInstance(_controllerType) as AbstractController;
@@ -189,14 +201,15 @@ namespace RtmpSharp.Net
                                 callbackManager.SetException(command.InvokeId, error != null ? new InvocationException(error) : new InvocationException());
                                 break;
                             default:
-                                if (_controller == null)
+                                if (_controller == null || _controllerType == null)
                                 {
-                                    throw new InvalidOperationException();
+                                    throw new EntryPointNotFoundException();
                                 }
                                 var methodName = call.Name;
                                 var method = _controllerType.GetMethod(methodName);
                                 if (method != null)
                                 {
+                                    _controller?.EnsureSessionStorage();
                                     var ret = method.Invoke(_controller, command.MethodCall.Parameters);
                                     if (ret is Task tsk)
                                     {
@@ -205,6 +218,10 @@ namespace RtmpSharp.Net
                                             Console.WriteLine($"Exception: {t.Exception.GetType().ToString()}, CallStack: {t.Exception.StackTrace}");
                                             ReturnResultInvoke(null, command.InvokeId, $"{t.Exception.GetType().ToString()}\t{t.Exception.Message}", true, false);
                                         }, TaskContinuationOptions.OnlyOnFaulted);
+                                        tsk.ContinueWith((t, obj) =>
+                                        {
+                                            SetResultValInvoke(obj, command.InvokeId);
+                                        }, TaskContinuationOptions.OnlyOnRanToCompletion);
                                     }
                                 }
 #if DEBUG
@@ -219,9 +236,11 @@ namespace RtmpSharp.Net
                     }
                     break;
                 case MessageType.Video:
+                    _controller?.EnsureSessionStorage();
                     _controller?.OnVideo(e.Event as VideoData);
                     break;
                 case MessageType.Audio:
+                    _controller?.EnsureSessionStorage();
                     _controller?.OnAudio(e.Event as AudioData);
                     break;
                 case MessageType.WindowAcknowledgementSize:
@@ -234,64 +253,6 @@ namespace RtmpSharp.Net
                     break;
             }
         }
-
-        private async Task HandlePlayAsync(Command command)
-        {
-            string path = (string)command.MethodCall.Parameters[0];
-            if (!await server.RegisterPlay(_app, path, ClientId))
-            {
-                OnDisconnected(new ExceptionalEventArgs("play parameter auth failed"));
-                return;
-            }
-            
-            WriteProtocolControlMessage(new UserControlMessage(UserControlMessageType.StreamIsRecorded, new int[] { StreamId }));
-            WriteProtocolControlMessage(new UserControlMessage(UserControlMessageType.StreamBegin, new int[] { StreamId }));
-
-            var status_reset = new AsObject
-            {
-                {"level", "status" },
-                {"code", "NetStream.Play.Reset" },
-                {"description", "Resetting and playing stream." },
-                {"details", path }
-            };
-
-            var call_on_status_reset = new InvokeAmf0
-            {
-                MethodCall = new Method("onStatus", new object[] { status_reset }),
-                InvokeId = 0,
-                ConnectionParameters = null,
-            };
-            call_on_status_reset.MethodCall.CallStatus = CallStatus.Request;
-            call_on_status_reset.MethodCall.IsSuccess = true;
-
-            var status_start = new AsObject
-            {
-                {"level", "status" },
-                {"code", "NetStream.Play.Start" },
-                {"description", "Started playing." },
-                {"details", path }
-            };
-            var call_on_status_start = new InvokeAmf0
-            {
-                MethodCall = new Method("onStatus", new object[] { status_start }),
-                InvokeId = 0,
-                ConnectionParameters = null,
-            };
-            call_on_status_start.MethodCall.CallStatus = CallStatus.Request;
-            call_on_status_start.MethodCall.IsSuccess = true;
-            writer.Queue(call_on_status_reset, StreamId, random.Next());
-            writer.Queue(call_on_status_start, StreamId, random.Next());
-            try
-            {
-                server.SendMetadata(_app, path, this);
-                server.ConnectToClient(_app, path, ClientId, ChannelType.Video);
-                server.ConnectToClient(_app, path, ClientId, ChannelType.Audio);
-            }
-            catch (Exception e)
-            { OnDisconnected(new ExceptionalEventArgs("Not Found", e)); }
-            IsPlaying = true;
-        }
-
         public Task<T> InvokeAsync<T>(string method, object argument)
         {
             return InvokeAsync<T>(method, new[] { argument });
@@ -346,7 +307,7 @@ namespace RtmpSharp.Net
             return (T)MiniTypeConverter.ConvertTo(result, typeof(T));
         }
 
-        void SetDataFrame(Command command)
+        void @setDataFrame(Command command)
         {
             if ((string)command.ConnectionParameters != "onMetaData")
             {
@@ -359,9 +320,9 @@ namespace RtmpSharp.Net
         async Task HandlePublishAsync(Command command)
         {
             string path = (string)command.MethodCall.Parameters[0];
-            if (!await server.RegisterPublish(_app, path, ClientId))
+            if (!await Server.RegisterPublish(_app, path, ClientId))
             {
-                OnDisconnected(new ExceptionalEventArgs("Server publish error"));
+                Disconnect(new ExceptionalEventArgs("Server publish error"));
                 return;
             }
             var status = new AsObject
@@ -389,6 +350,19 @@ namespace RtmpSharp.Net
             IsPublishing = true;
         }
 
+        public void NotifyStatus(AsObject status)
+        {
+            var onStatusCommand = new InvokeAmf0
+            {
+                MethodCall = new Method("onStatus", new object[] { status }),
+                InvokeId = 0,
+                ConnectionParameters = null,
+            };
+            onStatusCommand.MethodCall.CallStatus = CallStatus.Request;
+            onStatusCommand.MethodCall.IsSuccess = true;
+            writer.Queue(onStatusCommand, StreamId, random.Next());
+        }
+
         void SetResultValInvoke(object param, int transcationId)
         {
             ReturnResultInvoke(null, transcationId, param);
@@ -410,10 +384,10 @@ namespace RtmpSharp.Net
         void HandleUnpublish(Command command)
         {
             IsPublishing = false;
-            server.UnRegisterPublish(ClientId);
+            Server.UnRegisterPublish(ClientId);
         }
 
-        void HandleConnectInvokeAsync(Command command)
+        void HandleConnectInvoke(Command command)
         {
             string code;
             string description;
@@ -421,11 +395,11 @@ namespace RtmpSharp.Net
             var app = ((AsObject)command.ConnectionParameters)["app"];
             if (app == null)
             {
-                OnDisconnected(new ExceptionalEventArgs("app value cannot be null"));
+                Disconnect(new ExceptionalEventArgs("app value cannot be null"));
                 return;
             }
             _app = app.ToString();
-            if (!server.AuthApp(app.ToString(), ClientId))
+            if (!Server.AuthApp(app.ToString(), ClientId))
             {
                 code = "NetConnection.Connect.Error";
                 description = "Connection Failure.";
@@ -450,7 +424,7 @@ namespace RtmpSharp.Net
                 }, command.InvokeId, param, false, connect_result);
             if (!connect_result)
             {
-                OnDisconnected(new ExceptionalEventArgs("Auth Failure"));
+                Disconnect(new ExceptionalEventArgs("Auth Failure"));
                 return;
             }
         }
@@ -470,7 +444,7 @@ namespace RtmpSharp.Net
             writer.writer.WriteBytes(data);
         }
 
-        void WriteProtocolControlMessage(RtmpEvent @event)
+        public void WriteProtocolControlMessage(RtmpEvent @event)
         {
             writer.Queue(@event, CONTROL_CSID, 0);
         }

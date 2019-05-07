@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Complete;
 using RtmpSharp.Messaging.Events;
 using System.Threading;
+using RtmpSharp.IO;
 
 namespace RtmpSharp.Net
 {
@@ -17,19 +18,19 @@ namespace RtmpSharp.Net
         bool IsPublishing { get; }
         bool IsPlaying { get; }
         NotifyAmf0 FlvMetaData { get; }
+        ushort ClientId { get; }
         event ChannelDataReceivedEventHandler ChannelDataReceived;
-        VideoData AVCConfigureRecord { get; set; }
-        AudioData AACConfigureRecord { get; set; }
-        Dictionary<string, dynamic> SessionStorage { get; }
-        Queue<AudioData> AudioBuffer { get; }
-        Queue<VideoData> VideoBuffer { get; }
+        dynamic SessionStorage { get; set; }
         void SendAmf0Data(RtmpEvent e);
         void WriteOnce();
         void ReadOnce();
         Task PingAsync(int pingTimeout);
-        void OnDisconnected(ExceptionalEventArgs exceptionalEventArgs);
+        void Disconnect(ExceptionalEventArgs exceptionalEventArgs);
         void SendRawData(byte[] data);
         Task ReadOnceAsync(CancellationToken ct);
         Task WriteOnceAsync(CancellationToken ct);
+        void WriteProtocolControlMessage(RtmpEvent @event);
+        Task<T> InvokeAsync<T>(string endpoint, string destination, string method, object[] arguments);
+        void NotifyStatus(AsObject status);
     }
 }
