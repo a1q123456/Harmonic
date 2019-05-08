@@ -89,14 +89,23 @@ namespace RtmpSharp.Net
             reader.ReadOnce();
         }
 
-        public Task WriteOnceAsync(CancellationToken ct = default(CancellationToken))
+        public Task WriteOnceAsync(CancellationToken ct = default)
         {
             return writer.WriteOnceAsync(ct);
         }
 
-        public Task ReadOnceAsync(CancellationToken ct = default(CancellationToken))
+        public Task StartReadAsync(CancellationToken ct = default)
         {
-            return reader.ReadOnceAsync(ct);
+            var tsk = reader.ReadOnceAsync(ct);
+            tsk.ContinueWith(t =>
+            {
+                StartReadAsync(ct);
+            }, TaskContinuationOptions.OnlyOnRanToCompletion);
+            tsk.ContinueWith((t, o) =>
+            {
+                Close();
+            }, TaskContinuationOptions.OnlyOnFaulted);
+            return tsk;
         }
 
         Task<object> QueueCommandAsTask(Command command, int streamId, int messageStreamId, bool requireConnected = true)

@@ -24,7 +24,7 @@ namespace RtmpSharp.Net
     {
         public int ReceiveTimeout { get; set; } = 10000;
         public int SendTimeout { get; set; } = 10000;
-        public int PingPeriod { get; set; } = 10;
+        public int PingInterval { get; set; } = 10;
         public int PingTimeout { get; set; } = 10;
         public bool Started { get; private set; } = false;
 
@@ -61,7 +61,7 @@ namespace RtmpSharp.Net
         private readonly int PROTOCOL_MIN_CSID = 3;
         private readonly int PROTOCOL_MAX_CSID = 65599;
         Dictionary<ushort, StreamConnectState> connects = new Dictionary<ushort, StreamConnectState>();
-        List<KeyValuePair<ushort, StreamConnectState>> prepare_to_add = new List<KeyValuePair<ushort, StreamConnectState>>();
+        List<KeyValuePair<ushort, StreamConnectState>> prepareToAdd = new List<KeyValuePair<ushort, StreamConnectState>>();
         List<ushort> prepare_to_remove = new List<ushort>();
 
         class StreamConnectState { public IStreamSession Connect; public DateTime LastPing; public Task ReaderTask; public Task WriterTask; }
@@ -70,8 +70,6 @@ namespace RtmpSharp.Net
             SerializationContext context,
             X509Certificate2 cert = null,
             ObjectEncoding object_encoding = ObjectEncoding.Amf0,
-            ParameterAuthCallback publishParameterAuth = null,
-            ParameterAuthCallback playParameterAuth = null,
             string bindIp = "0.0.0.0",
             int bindRtmpPort = 1935,
             int bindWebsocketPort = -1
@@ -121,9 +119,6 @@ namespace RtmpSharp.Net
                 });
             }
 
-            if (publishParameterAuth != null) this._publishParameterAuth = publishParameterAuth;
-            if (playParameterAuth != null) this._playParameterAuth = playParameterAuth;
-
             listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             listener.NoDelay = true;
             IPEndPoint localEndPoint = new IPEndPoint(IPAddress.Parse(bindIp), bindRtmpPort);
@@ -131,7 +126,7 @@ namespace RtmpSharp.Net
             listener.Listen(10);
         }
 
-        private void _ioLoop(CancellationToken ct)
+        private void StartIOLoop(CancellationToken ct)
         {
             try
             {
@@ -158,7 +153,7 @@ namespace RtmpSharp.Net
                             {
                                 throw state.WriterTask.Exception;
                             }
-                            if (state.LastPing == null || DateTime.UtcNow - state.LastPing >= new TimeSpan(0, 0, PingPeriod))
+                            if (state.LastPing == null || DateTime.UtcNow - state.LastPing >= TimeSpan.FromSeconds(PingInterval))
                             {
                                 connect.PingAsync(PingTimeout);
                                 state.LastPing = DateTime.UtcNow;
@@ -167,7 +162,7 @@ namespace RtmpSharp.Net
 
                             if (state.ReaderTask == null || state.ReaderTask.IsCompleted)
                             {
-                                state.ReaderTask = connect.ReadOnceAsync(ct);
+                                state.ReaderTask = connect.StartReadAsync(ct);
                             }
                             if (state.ReaderTask.IsCanceled || state.ReaderTask.IsFaulted)
                             {
@@ -181,21 +176,21 @@ namespace RtmpSharp.Net
                             continue;
                         }
                     }
-                    var prepare_add_length = prepare_to_add.Count;
+                    var prepare_add_length = prepareToAdd.Count;
                     if (prepare_add_length != 0)
                     {
                         for (int i = 0; i < prepare_add_length; i++)
                         {
-                            var current = prepare_to_add[0];
+                            var current = prepareToAdd[0];
                             connects.Add(current.Key, current.Value);
-                            prepare_to_add.RemoveAt(0);
+                            prepareToAdd.RemoveAt(0);
                         }
                     }
 
-                    var prepare_remove_length = prepare_to_remove.Count;
-                    if (prepare_remove_length != 0)
+                    var prepareRemoveLength = prepare_to_remove.Count;
+                    if (prepareRemoveLength != 0)
                     {
-                        for (int i = 0; i < prepare_remove_length; i++)
+                        for (int i = 0; i < prepareRemoveLength; i++)
                         {
                             var current = prepare_to_remove[0];
                             connects.TryGetValue(current, out var connection);
@@ -212,14 +207,14 @@ namespace RtmpSharp.Net
             }
         }
 
-        public Task StartAsync(CancellationToken ct = default(CancellationToken))
+        public Task StartAsync(CancellationToken ct = default)
         {
             if (Started)
             {
                 throw new InvalidOperationException("already started");
             }
             Started = true;
-            var ioThread = new Thread(() => _ioLoop(ct))
+            var ioThread = new Thread(() => StartIOLoop(ct))
             {
                 IsBackground = true
             };
@@ -414,7 +409,7 @@ namespace RtmpSharp.Net
             var connect = new RtmpSession(client_socket, stream, this, client_id, context, objectEncoding, true);
             connect.ChannelDataReceived += _sendDataHandler;
 
-            prepare_to_add.Add(new KeyValuePair<ushort, StreamConnectState>(client_id, new StreamConnectState()
+            prepareToAdd.Add(new KeyValuePair<ushort, StreamConnectState>(client_id, new StreamConnectState()
             {
                 Connect = connect,
                 LastPing = DateTime.UtcNow,
@@ -515,59 +510,6 @@ namespace RtmpSharp.Net
                 PusherClientId = pusherClientId,
                 ChannelType = channelType
             });
-
-        }
-
-        internal void SendMetadata(string app, string path, IStreamSession self, bool flvHeader = false)
-        {
-            ushort client_id;
-            StreamConnectState state;
-            IStreamSession connect;
-            if (!_pathToPusherClientId.TryGetValue(path, out client_id)) throw new KeyNotFoundException("Request Path Not Found");
-            if (!connects.TryGetValue(client_id, out state))
-            {
-                _pathToPusherClientId.Remove(path);
-                throw new KeyNotFoundException("Request Client Not Exists");
-            }
-            connect = state.Connect;
-            if (connect.IsPublishing)
-            {
-                var flv_metadata = (Dictionary<string, object>)connect.FlvMetaData.MethodCall.Parameters[0];
-                var has_audio = flv_metadata.ContainsKey("audiocodecid");
-                var has_video = flv_metadata.ContainsKey("videocodecid");
-                if (flvHeader)
-                {
-                    var header_buffer = Enumerable.Repeat<byte>(0x00, 13).ToArray<byte>();
-                    header_buffer[0] = 0x46;
-                    header_buffer[1] = 0x4C;
-                    header_buffer[2] = 0x56;
-                    header_buffer[3] = 0x01;
-                    byte has_audio_flag = 0x01 << 2;
-                    byte has_video_flag = 0x01;
-                    byte type_flag = 0x00;
-                    if (has_audio) type_flag |= has_audio_flag;
-                    if (has_video) type_flag |= has_video_flag;
-                    header_buffer[4] = type_flag;
-                    var data_offset = BitConverter.GetBytes((uint)9);
-                    header_buffer[5] = data_offset[3];
-                    header_buffer[6] = data_offset[2];
-                    header_buffer[7] = data_offset[1];
-                    header_buffer[8] = data_offset[0];
-                    self.SendRawData(header_buffer);
-                }
-                self.SendAmf0Data(connect.FlvMetaData);
-                if (has_audio) self.SendAmf0Data(connect.AACConfigureRecord);
-                if (has_video) self.SendAmf0Data(connect.AvCConfigureRecord);
-            }
-        }
-
-        internal async Task<bool> RegisterPublish(string app, string path, ushort clientId)
-        {
-            //var uri = new Uri("http://127.0.0.1/" + path);
-            if (_pathToPusherClientId.ContainsKey(path)) return false;
-            var ret = await _publishParameterAuth(app, HttpUtility.ParseQueryString(path));
-            if (ret) _pathToPusherClientId.Add(path, clientId);
-            return ret;
         }
 
         internal bool UnRegisterPublish(ushort clientId)
@@ -594,11 +536,7 @@ namespace RtmpSharp.Net
             return false;
         }
 
-        public delegate Task<bool> ParameterAuthCallback(string app, NameValueCollection collection);
-        private ParameterAuthCallback _publishParameterAuth = async (a, n) => true;
-        private ParameterAuthCallback _playParameterAuth = async (a, n) => true;
-
-        internal bool AuthApp(string app, ushort client_id)
+        internal bool AuthApp(string app)
         {
             return registeredApps.ContainsKey(app);
         }
@@ -642,7 +580,7 @@ namespace RtmpSharp.Net
                 {
                     return new Handshake()
                     {
-                        Version = readVersion ? reader.ReadByte() : default(byte),
+                        Version = readVersion ? reader.ReadByte() : default,
                         Time = reader.ReadUInt32(),
                         Time2 = reader.ReadUInt32(),
                         Random = reader.ReadBytes(HandshakeRandomSize)
