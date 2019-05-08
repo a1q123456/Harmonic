@@ -113,12 +113,12 @@ namespace RtmpSharp.Net
             reader.ReadOnce();
         }
 
-        public Task ReadOnceAsync(CancellationToken ct = default(CancellationToken))
+        public Task StartReadAsync(CancellationToken ct = default)
         {
             return null;
         }
 
-        public Task WriteOnceAsync(CancellationToken ct = default(CancellationToken))
+        public Task WriteOnceAsync(CancellationToken ct = default)
         {
             return null;
         }

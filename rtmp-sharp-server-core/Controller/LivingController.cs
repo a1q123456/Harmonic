@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Authentication;
 using System.Threading.Tasks;
 using Complete;
 using RtmpSharp.IO;
 using RtmpSharp.Messaging.Events;
+using RtmpSharp.Net;
 
 namespace RtmpSharp.Controller
 {
@@ -18,11 +20,19 @@ namespace RtmpSharp.Controller
             public Queue<VideoData> VideoBuffer { get; set; } = null;
             public Dictionary<string, ushort> PathToPusherClientId { get; set; } = new Dictionary<string, ushort>();
             public bool IsPublishing { get; set; }
-            public event EventHandler AudioReceived { get; set; };
-            public event EventHandler VideoReceived { get; set; };
+            public event EventHandler AudioReceived;
+            public event EventHandler VideoReceived;
             public long BufferedFrames { get; set; } = 1;
             public IStreamSession ConnectedSession { get; set; } = null;
             public NotifyAmf0 FlvMetaData { get; set; } = null;
+            public void TriggerAudioReceived(object s, EventArgs e)
+            {
+                AudioReceived?.Invoke(s, e);
+            }
+            public void TriggerVideoReceived(object s, EventArgs e)
+            {
+                VideoReceived?.Invoke(s, e);
+            }
         }
 
         private SessionStorage _sessionStorage = null;
@@ -46,13 +56,13 @@ namespace RtmpSharp.Controller
             _sessionStorage.FlvMetaData = (NotifyAmf0)command;
         }
         
-        public Task publish(Command command)
+        public void publish(Command command)
         {
             _sessionStorage.AudioBuffer = new Queue<AudioData>();
-            _sessionStorage.VideoBuffer = new Queue<VideoBuffer>();
+            _sessionStorage.VideoBuffer = new Queue<VideoData>();
         }
         
-        public Task play(Command command)
+        public async Task play(Command command)
         {
             string path = (string)command.MethodCall.Parameters[0];
             if (!await _registerPlay(path, Session.ClientId))
@@ -84,13 +94,18 @@ namespace RtmpSharp.Controller
             SendMetadata(path);
             _sessionStorage.AudioBuffer = new Queue<AudioData>(_sessionStorage.ConnectedSession.SessionStorage.AudioBuffer);
             _sessionStorage.VideoBuffer = new Queue<VideoData>(_sessionStorage.ConnectedSession.SessionStorage.VideoBuffer);
-            _sessionStorage.ConnectedSession.SessionStorage.AudioReceived += (s, e) =>
+            var publisherSessionStorage = _sessionStorage.ConnectedSession.SessionStorage as SessionStorage;
+            if (publisherSessionStorage == null)
             {
-                _sessionStorage.AudioBuffer.Enqueue(_sessionStorage.ConnectedSession.SessionStorage.AudioBuffer.Last());
+                throw new InvalidOperationException();
             }
-            _sessionStorage.ConnectedSession.SessionStorage.VideoReceived += (s, e) =>
+            publisherSessionStorage.AudioReceived += (s, e) =>
             {
-                _sessionStorage.VideoBuffer.Enqueue(_sessionStorage.ConnectedSession.SessionStorage.VideoBuffer.Last());
+                _sessionStorage.AudioBuffer.Enqueue(publisherSessionStorage.AudioBuffer.Peek());
+            };
+            publisherSessionStorage.VideoReceived += (s, e) =>
+            {
+                _sessionStorage.VideoBuffer.Enqueue(publisherSessionStorage.VideoBuffer.Peek());
             };
             Session.Server.IOLoop.AddCallback(() =>
             {
@@ -104,11 +119,11 @@ namespace RtmpSharp.Controller
             }, IOLoopCallbackOptions.EveryLoop);
         }
 
-        private void SendMetadata(string path)
+        private void SendMetadata(string path, bool flvHeader = false)
         {
-            var flv_metadata = (Dictionary<string, object>)_sessionStorage.ConnectedSession.SessionStorage.FlvMetaData.MethodCall.Parameters[0];
-            var has_audio = flv_metadata.ContainsKey("audiocodecid");
-            var has_video = flv_metadata.ContainsKey("videocodecid");
+            var flvMetadata = (Dictionary<string, object>)_sessionStorage.ConnectedSession.SessionStorage.FlvMetaData.MethodCall.Parameters[0];
+            var hasAudio = flvMetadata.ContainsKey("audiocodecid");
+            var hasVideo = flvMetadata.ContainsKey("videocodecid");
             if (flvHeader)
             {
                 var headerBuffer = Enumerable.Repeat<byte>(0x00, 13).ToArray<byte>();
@@ -119,8 +134,8 @@ namespace RtmpSharp.Controller
                 byte hasAudioFlag = 0x01 << 2;
                 byte has_video_flag = 0x01;
                 byte typeFlag = 0x00;
-                if (has_audio) typeFlag |= hasAudioFlag;
-                if (has_video) typeFlag |= has_video_flag;
+                if (hasAudio) typeFlag |= hasAudioFlag;
+                if (hasVideo) typeFlag |= has_video_flag;
                 headerBuffer[4] = typeFlag;
                 var dataOffset = BitConverter.GetBytes((uint)9);
                 headerBuffer[5] = dataOffset[3];
@@ -130,8 +145,8 @@ namespace RtmpSharp.Controller
                 Session.SendRawData(headerBuffer);
             }
             Session.SendAmf0Data(_sessionStorage.ConnectedSession.SessionStorage.FlvMetaData);
-            if (has_audio) Session.SendAmf0Data(_sessionStorage.ConnectedSession.SessionStorage.AACConfigureRecord);
-            if (has_video) Session.SendAmf0Data(_sessionStorage.ConnectedSession.SessionStorage.AvCConfigureRecord);
+            if (hasAudio) Session.SendAmf0Data(_sessionStorage.ConnectedSession.SessionStorage.AACConfigureRecord);
+            if (hasVideo) Session.SendAmf0Data(_sessionStorage.ConnectedSession.SessionStorage.AvCConfigureRecord);
             
         }
 
@@ -142,9 +157,9 @@ namespace RtmpSharp.Controller
                 _sessionStorage.AACConfigureRecord = audioData;
                 return;
             }
-            _sessionStorage.AudioReceived?.Invoke(this, new EventArgs());
+            _sessionStorage.TriggerAudioReceived(this, new EventArgs());
             _sessionStorage.AudioBuffer.Enqueue(audioData);
-            while (_sessionStorage.AudioBuffer.Length > _sessionStorage.BufferedFrames)
+            while (_sessionStorage.AudioBuffer.Count > _sessionStorage.BufferedFrames)
             {
                 _sessionStorage.AudioBuffer.Dequeue();
             }
@@ -158,8 +173,8 @@ namespace RtmpSharp.Controller
                 return;
             }
             _sessionStorage.VideoBuffer.Enqueue(videoData);
-            _sessionStorage.VideoReceived?.Invoke(this, new EventArgs());
-            while (_sessionStorage.VideoBuffer.Length > _sessionStorage.BufferedFrames)
+            _sessionStorage.TriggerVideoReceived(this, new EventArgs());
+            while (_sessionStorage.VideoBuffer.Count > _sessionStorage.BufferedFrames)
             {
                 _sessionStorage.VideoBuffer.Dequeue();
             }

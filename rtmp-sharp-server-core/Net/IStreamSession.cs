@@ -27,7 +27,7 @@ namespace RtmpSharp.Net
         Task PingAsync(int pingTimeout);
         void Disconnect(ExceptionalEventArgs exceptionalEventArgs);
         void SendRawData(byte[] data);
-        Task ReadOnceAsync(CancellationToken ct);
+        Task StartReadAsync(CancellationToken ct);
         Task WriteOnceAsync(CancellationToken ct);
         void WriteProtocolControlMessage(RtmpEvent @event);
         Task<T> InvokeAsync<T>(string endpoint, string destination, string method, object[] arguments);

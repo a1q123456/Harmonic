@@ -9,6 +9,6 @@ namespace RtmpSharp.IO.AMF3
         void ReadExternal(IDataInput input);
         void WriteExternal(IDataOutput output);
         
-        Task ReadExternalAsync(IDataInput input, CancellationToken ct = default(CancellationToken));
+        Task ReadExternalAsync(IDataInput input, CancellationToken ct = default);
     }
 }

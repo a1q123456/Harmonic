@@ -59,17 +59,17 @@ namespace RtmpSharp.IO.AMF3
         public uint ReadUInt32() => reader.ReadUInt32();
         public string ReadUtf() => reader.ReadUtf();
         public string ReadUtf(int length) => reader.ReadUtf(length);
-        public async Task<bool> ReadBooleanAsync(CancellationToken ct = default(CancellationToken)) => await reader.ReadBooleanAsync(ct);
-        public async Task<byte> ReadByteAsync(CancellationToken ct = default(CancellationToken)) => await reader.ReadByteAsync(ct);
-        public async Task<byte[]> ReadBytesAsync(int count, CancellationToken ct = default(CancellationToken)) => await reader.ReadBytesAsync(count, ct);
-        public async Task<double> ReadDoubleAsync(CancellationToken ct = default(CancellationToken)) => await reader.ReadDoubleAsync(ct);
-        public async Task<float> ReadFloatAsync(CancellationToken ct = default(CancellationToken)) => await reader.ReadFloatAsync(ct);
-        public async Task<short> ReadInt16Async(CancellationToken ct = default(CancellationToken)) => await reader.ReadInt16Async(ct);
-        public async Task<ushort> ReadUInt16Async(CancellationToken ct = default(CancellationToken)) => await reader.ReadUInt16Async(ct);
-        public async Task<int> ReadUInt24Async(CancellationToken ct = default(CancellationToken)) => await reader.ReadUInt24Async(ct);
-        public async Task<int> ReadInt32Async(CancellationToken ct = default(CancellationToken)) => await reader.ReadInt32Async(ct);
-        public async Task<uint> ReadUInt32Async(CancellationToken ct = default(CancellationToken)) => await reader.ReadUInt32Async(ct);
-        public async Task<string> ReadUtfAsync(CancellationToken ct = default(CancellationToken)) => await reader.ReadUtfAsync(ct);
-        public async Task<string> ReadUtfAsync(int length, CancellationToken ct = default(CancellationToken)) => await reader.ReadUtfAsync(length, ct);
+        public async Task<bool> ReadBooleanAsync(CancellationToken ct = default) => await reader.ReadBooleanAsync(ct);
+        public async Task<byte> ReadByteAsync(CancellationToken ct = default) => await reader.ReadByteAsync(ct);
+        public async Task<byte[]> ReadBytesAsync(int count, CancellationToken ct = default) => await reader.ReadBytesAsync(count, ct);
+        public async Task<double> ReadDoubleAsync(CancellationToken ct = default) => await reader.ReadDoubleAsync(ct);
+        public async Task<float> ReadFloatAsync(CancellationToken ct = default) => await reader.ReadFloatAsync(ct);
+        public async Task<short> ReadInt16Async(CancellationToken ct = default) => await reader.ReadInt16Async(ct);
+        public async Task<ushort> ReadUInt16Async(CancellationToken ct = default) => await reader.ReadUInt16Async(ct);
+        public async Task<int> ReadUInt24Async(CancellationToken ct = default) => await reader.ReadUInt24Async(ct);
+        public async Task<int> ReadInt32Async(CancellationToken ct = default) => await reader.ReadInt32Async(ct);
+        public async Task<uint> ReadUInt32Async(CancellationToken ct = default) => await reader.ReadUInt32Async(ct);
+        public async Task<string> ReadUtfAsync(CancellationToken ct = default) => await reader.ReadUtfAsync(ct);
+        public async Task<string> ReadUtfAsync(int length, CancellationToken ct = default) => await reader.ReadUtfAsync(length, ct);
     }
 }

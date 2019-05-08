@@ -269,7 +269,7 @@ namespace RtmpSharp.IO
         }
 
 
-        public async Task StartWriteAsync(CancellationToken ct = default(CancellationToken))
+        public async Task StartWriteAsync(CancellationToken ct = default)
         {
             if (!asyncMode) throw new InvalidOperationException("can only work on async mode");
             await asyncBaseStream.WriteAsync(asyncBuffer.GetBuffer(), 0, (int)asyncBuffer.Length, ct);

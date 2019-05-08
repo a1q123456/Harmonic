@@ -47,7 +47,7 @@ namespace RtmpSharp.Net
         void OnEventReceived(EventReceivedEventArgs e) => EventReceived?.Invoke(this, e);
         void OnDisconnected(ExceptionalEventArgs e) => Disconnected?.Invoke(this, e);
 
-        public async Task ReadOnceAsync(CancellationToken ct = default(CancellationToken))
+        public async Task ReadOnceAsync(CancellationToken ct = default)
         {
             var header = await ReadHeaderAsync(ct);
             rtmpHeaders[header.StreamId] = header;
@@ -196,7 +196,7 @@ namespace RtmpSharp.Net
             }
         }
 
-        async Task<RtmpHeader> ReadHeaderAsync(CancellationToken ct = default(CancellationToken))
+        async Task<RtmpHeader> ReadHeaderAsync(CancellationToken ct = default)
         {
             var chunkBasicHeaderByte = await reader.ReadByteAsync(ct);
             var chunkStreamId = await GetChunkStreamIdAsync(chunkBasicHeaderByte, reader);

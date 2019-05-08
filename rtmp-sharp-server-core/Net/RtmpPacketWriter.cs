@@ -54,18 +54,16 @@ namespace RtmpSharp.Net
         {
             if (Interlocked.Exchange(ref packetAvailable, 0) == 1)
             {
-                RtmpPacket packet;
-                while (queuedPackets.TryDequeue(out packet))
+                while (queuedPackets.TryDequeue(out RtmpPacket packet))
                     WritePacket(packet);
             }
         }
 
-        public async Task<bool> WriteOnceAsync(CancellationToken ct = default(CancellationToken))
+        public async Task<bool> WriteOnceAsync(CancellationToken ct = default)
         {
             if (Interlocked.Exchange(ref packetAvailable, 0) == 1)
             {
-                RtmpPacket packet;
-                while (queuedPackets.TryDequeue(out packet))
+                while (queuedPackets.TryDequeue(out RtmpPacket packet))
                     await WritePacketAsync(packet, ct);
                 return true;
             }
@@ -169,7 +167,7 @@ namespace RtmpSharp.Net
 
         }
 
-        async Task WritePacketAsync(RtmpPacket packet, CancellationToken ct = default(CancellationToken))
+        async Task WritePacketAsync(RtmpPacket packet, CancellationToken ct = default)
         {
             var header = packet.Header;
             var streamId = header.StreamId;

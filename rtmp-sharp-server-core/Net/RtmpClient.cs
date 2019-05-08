@@ -524,7 +524,7 @@ namespace RtmpSharp.Net
                 {
                     return new Handshake()
                     {
-                        Version = readVersion ? reader.ReadByte() : default(byte),
+                        Version = readVersion ? reader.ReadByte() : default,
                         Time = reader.ReadUInt32(),
                         Time2 = reader.ReadUInt32(),
                         Random = reader.ReadBytes(HandshakeRandomSize)

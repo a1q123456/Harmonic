@@ -66,7 +66,7 @@ namespace Complete
             var creator = ConstructorCache.GetOrAdd(type, (object _) =>
             {
                 var constructor = type.GetConstructors().FirstOrDefault(x => x.GetParameters().Length == 0);
-                if (constructor == default(ConstructorInfo))
+                if (constructor == default)
                     throw new ArgumentException("Type does not have any accessible parameterless constructors.");
                 return CompileObjectConstructor(constructor);
             });
