@@ -108,14 +108,14 @@ namespace RtmpSharp.Net
             return tsk;
         }
 
-        Task<object> QueueCommandAsTask(Command command, int streamId, int messageStreamId, bool requireConnected = true)
+        async Task<object> CallCommandAsync(Command command, int streamId, int messageStreamId, bool requireConnected = true, CancellationToken ct = default)
         {
             if (requireConnected && IsDisconnected)
                 return CreateExceptedTask(new ClientDisconnectedException("disconnected"));
 
             var task = callbackManager.Create(command.InvokeId);
-            writer.Queue(command, streamId, random.Next());
-            return task;
+            await writer.WriteAsync(command, streamId, random.Next(), ct);
+            return await task;
         }
 
         public void Disconnect(ExceptionalEventArgs e)
@@ -139,7 +139,7 @@ namespace RtmpSharp.Net
                     if (m.EventType == UserControlMessageType.PingRequest)
                     {
                         Console.WriteLine("Client Ping Request");
-                        WriteProtocolControlMessage(new UserControlMessage(UserControlMessageType.PingResponse, m.Values));
+                        _ = WriteProtocolControlMessage(new UserControlMessage(UserControlMessageType.PingResponse, m.Values));
                     }
                     else if (m.EventType == UserControlMessageType.SetBufferLength)
                     {
@@ -171,7 +171,7 @@ namespace RtmpSharp.Net
                         {
                             tsk.ContinueWith(t =>
                             {
-                                ReturnResultInvoke(null, command.InvokeId, t.Exception.Message, true, false);
+                                ReturnResultInvokeAsync(null, command.InvokeId, t.Exception.Message, true, false);
                             }, TaskContinuationOptions.OnlyOnFaulted);
                         }
                     }
@@ -225,11 +225,11 @@ namespace RtmpSharp.Net
                                         tsk.ContinueWith((t, obj) =>
                                         {
                                             Console.WriteLine($"Exception: {t.Exception.GetType().ToString()}, CallStack: {t.Exception.StackTrace}");
-                                            ReturnResultInvoke(null, command.InvokeId, $"{t.Exception.GetType().ToString()}\t{t.Exception.Message}", true, false);
+                                            ReturnResultInvokeAsync(null, command.InvokeId, $"{t.Exception.GetType().ToString()}\t{t.Exception.Message}", true, false);
                                         }, TaskContinuationOptions.OnlyOnFaulted);
                                         tsk.ContinueWith((t, obj) =>
                                         {
-                                            SetResultValInvoke(obj, command.InvokeId);
+                                            SetResultValInvokeAsync(obj, command.InvokeId);
                                         }, TaskContinuationOptions.OnlyOnRanToCompletion);
                                     }
                                 }
@@ -269,7 +269,7 @@ namespace RtmpSharp.Net
 
         public async Task<T> InvokeAsync<T>(string method, object[] arguments)
         {
-            var result = await QueueCommandAsTask(new InvokeAmf0
+            var result = await CallCommandAsync(new InvokeAmf0
             {
                 MethodCall = new Method(method, arguments),
                 InvokeId = GetNextInvokeId()
@@ -277,13 +277,12 @@ namespace RtmpSharp.Net
             return (T)MiniTypeConverter.ConvertTo(result, typeof(T));
         }
 
-        public void SendAmf0Data(RtmpEvent e)
+        public async Task SendAmf0DataAsync(RtmpEvent e, CancellationToken ct = default)
         {
             //var timestamp = (int)(DateTime.UtcNow - connectTime).TotalMilliseconds;
             //e.Timestamp = timestamp;
-            writer.Queue(e, StreamId, random.Next());
+            await writer.WriteAsync(e, StreamId, random.Next(), ct);
         }
-
 
         public Task<T> InvokeAsync<T>(string endpoint, string destination, string method, object argument)
         {
@@ -308,7 +307,7 @@ namespace RtmpSharp.Net
                 }
             };
 
-            var result = await QueueCommandAsTask(new InvokeAmf3()
+            var result = await CallCommandAsync(new InvokeAmf3()
             {
                 InvokeId = GetNextInvokeId(),
                 MethodCall = new Method(null, new object[] { remotingMessage })
@@ -326,40 +325,7 @@ namespace RtmpSharp.Net
             FlvMetaData = (NotifyAmf0)command;
         }
 
-        async Task HandlePublishAsync(Command command)
-        {
-            string path = (string)command.MethodCall.Parameters[0];
-            if (!await Server.RegisterPublish(_app, path, ClientId))
-            {
-                Disconnect(new ExceptionalEventArgs("Server publish error"));
-                return;
-            }
-            var status = new AsObject
-            {
-                {"level", "status" },
-                {"code", "NetStream.Publish.Start" },
-                {"description", "Stream is now published." },
-                {"details", path }
-            };
-
-            var call_on_status = new InvokeAmf0
-            {
-                MethodCall = new Method("onStatus", new object[] { status }),
-                InvokeId = 0,
-                ConnectionParameters = null,
-            };
-            call_on_status.MethodCall.CallStatus = CallStatus.Request;
-            call_on_status.MethodCall.IsSuccess = true;
-
-            // result.MessageType = MessageType.UserControlMessage;
-            var stream_begin = new UserControlMessage(UserControlMessageType.StreamBegin, new int[] { StreamId });
-            WriteProtocolControlMessage(stream_begin);
-            writer.Queue(call_on_status, StreamId, random.Next());
-            SetResultValInvoke(new object(), command.InvokeId);
-            IsPublishing = true;
-        }
-
-        public void NotifyStatus(AsObject status)
+        public async Task NotifyStatusAsync(AsObject status, CancellationToken ct = default)
         {
             var onStatusCommand = new InvokeAmf0
             {
@@ -369,15 +335,15 @@ namespace RtmpSharp.Net
             };
             onStatusCommand.MethodCall.CallStatus = CallStatus.Request;
             onStatusCommand.MethodCall.IsSuccess = true;
-            writer.Queue(onStatusCommand, StreamId, random.Next());
+            await writer.WriteAsync(onStatusCommand, StreamId, random.Next(), ct);
         }
 
-        void SetResultValInvoke(object param, int transcationId)
+        async Task SetResultValInvokeAsync(object param, int transcationId, CancellationToken ct = default)
         {
-            ReturnResultInvoke(null, transcationId, param);
+            await ReturnResultInvokeAsync(null, transcationId, param, ct: ct);
         }
 
-        void ReturnResultInvoke(object connectParameters, int transcationId, object param, bool requiredConnected = true, bool success = true)
+        async Task ReturnResultInvokeAsync(object connectParameters, int transcationId, object param, bool requiredConnected = true, bool success = true, CancellationToken ct = default)
         {
             var result = new InvokeAmf0
             {
@@ -387,7 +353,7 @@ namespace RtmpSharp.Net
             };
             result.MethodCall.CallStatus = CallStatus.Result;
             result.MethodCall.IsSuccess = success;
-            writer.Queue(result, StreamId, random.Next());
+            await writer.WriteAsync(result, StreamId, random.Next(), ct);
         }
 
         void HandleUnpublish(Command command)
@@ -408,7 +374,7 @@ namespace RtmpSharp.Net
                 return;
             }
             _app = app.ToString();
-            if (!Server.AuthApp(app.ToString(), ClientId))
+            if (!Server.AuthApp(app.ToString()))
             {
                 code = "NetConnection.Connect.Error";
                 description = "Connection Failure.";
@@ -426,7 +392,7 @@ namespace RtmpSharp.Net
                 { "description", description },
                 { "level", "status" },
             };
-            ReturnResultInvoke(new AsObject {
+            ReturnResultInvokeAsync(new AsObject {
                     { "capabilities", 255.00 },
                     { "fmsVer", "FMS/4,5,1,484" },
                     { "mode", 1.0 }
@@ -453,9 +419,9 @@ namespace RtmpSharp.Net
             writer.writer.WriteBytes(data);
         }
 
-        public void WriteProtocolControlMessage(RtmpEvent @event)
+        public async Task WriteProtocolControlMessage(RtmpEvent @event, CancellationToken ct = default)
         {
-            writer.Queue(@event, CONTROL_CSID, 0);
+            await writer.WriteAsync(@event, CONTROL_CSID, 0, ct);
         }
 
         int GetNextInvokeId()
@@ -511,7 +477,6 @@ namespace RtmpSharp.Net
         {
             Dispose(true);
         }
-
 
         #endregion
     }

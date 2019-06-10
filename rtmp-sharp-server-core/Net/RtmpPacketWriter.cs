@@ -109,7 +109,7 @@ namespace RtmpSharp.Net
             return ChunkMessageHeaderType.Continuation;
         }
 
-        public void Queue(RtmpEvent message, int streamId, int messageStreamId)
+        public async Task WriteAsync(RtmpEvent message, int streamId, int messageStreamId, CancellationToken ct = default)
         {
             var header = new RtmpHeader();
             var packet = new RtmpPacket(header, message);
@@ -120,9 +120,7 @@ namespace RtmpSharp.Net
             header.MessageType = message.MessageType; 
             if (message.Header != null) 
                 header.IsTimerRelative = message.Header.IsTimerRelative;
-            queuedPackets.Enqueue(packet);
-            // packetAvailableEvent.Set();
-            Interlocked.Exchange(ref packetAvailable, 1);
+            await WritePacketAsync(packet, ct);
         }
 
         static int GetBasicHeaderLength(int streamId)
@@ -167,7 +165,7 @@ namespace RtmpSharp.Net
 
         }
 
-        async Task WritePacketAsync(RtmpPacket packet, CancellationToken ct = default)
+        private async Task WritePacketAsync(RtmpPacket packet, CancellationToken ct = default)
         {
             var header = packet.Header;
             var streamId = header.StreamId;

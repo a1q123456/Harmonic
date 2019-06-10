@@ -92,14 +92,14 @@ namespace RtmpSharp.Net
             WrapCallback(() => callbackManager.SetExceptionForAll(new ClientDisconnectedException(e.Description, e.Exception)));
         }
 
-        Task<object> QueueCommandAsTask(Command command, int streamId, int messageStreamId, bool requireConnected = true)
+        async Task<object> CallCommandAsync(Command command, int streamId, int messageStreamId, bool requireConnected = true, CancellationToken ct = default)
         {
             if (requireConnected && IsDisconnected)
                 return CreateExceptedTask(new ClientDisconnectedException("disconnected"));
 
             var task = callbackManager.Create(command.InvokeId);
-            writer.Queue(command, streamId, messageStreamId);
-            return task;
+            await writer.WriteAsync(command, streamId, messageStreamId, ct);
+            return await task;
         }
 
         public async Task ConnectAsync()
@@ -295,7 +295,7 @@ namespace RtmpSharp.Net
 
         public async Task<T> InvokeAsync<T>(string method, object[] arguments)
         {
-            var result = await QueueCommandAsTask(new InvokeAmf0
+            var result = await CallCommandAsync(new InvokeAmf0
             {
                 MethodCall = new Method(method, arguments),
                 InvokeId = GetNextInvokeId()
@@ -326,7 +326,7 @@ namespace RtmpSharp.Net
                 }
             };
 
-            var result = await QueueCommandAsTask(new InvokeAmf3()
+            var result = await CallCommandAsync(new InvokeAmf3()
             {
                 InvokeId = GetNextInvokeId(),
                 MethodCall = new Method(null, new object[] { remotingMessage })
@@ -361,7 +361,7 @@ namespace RtmpSharp.Net
                 },
                 InvokeId = GetNextInvokeId()
             };
-            return (AsObject)await QueueCommandAsTask(connect, 3, 0, requireConnected: false);
+            return (AsObject)await CallCommandAsync(connect, 3, 0, requireConnected: false);
         }
 
         public async Task<bool> SubscribeAsync(string endpoint, string destination, string subtopic, string clientId)
@@ -447,9 +447,9 @@ namespace RtmpSharp.Net
             return InvokeAsync<object>(null, message);
         }
 
-        void WriteProtocolControlMessage(RtmpEvent @event)
+        async Task WriteProtocolControlMessage(RtmpEvent @event, CancellationToken ct = default)
         {
-            writer.Queue(@event, 2, 0);
+            await writer.WriteAsync(@event, 2, 0, ct);
         }
 
         int GetNextInvokeId()
