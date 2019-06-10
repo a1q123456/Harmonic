@@ -77,47 +77,6 @@ namespace RtmpSharp.Net
         {
             this.context = context;
             objectEncoding = object_encoding;
-            if (bindWebsocketPort != -1)
-            {
-                var server = new WebSocketServer("ws://" + bindIp.ToString() + ":" + bindWebsocketPort.ToString());
-                if (cert != null)
-                {
-                    this.cert = cert;
-                    server.Certificate = cert;
-                    server.EnabledSslProtocols = SslProtocols.None;
-                }
-                server.ListenerSocket.NoDelay = true;
-                server.Start(socket =>
-                {
-                    socket.OnOpen = () =>
-                    {
-                        var path = socket.ConnectionInfo.Path.Split('/');
-                        if (path.Length != 3) socket.Close();
-                        ushort client_id = _getNewClientId();
-                        IStreamSession connect = new WebsocketSession(socket, context, object_encoding);
-                        lock (connects)
-                        {
-                            connects.Add(client_id, new StreamConnectState()
-                            {
-                                Connect = connect,
-                                LastPing = DateTime.UtcNow,
-                                ReaderTask = null,
-                                WriterTask = null
-                            });
-                        }
-                        try
-                        {
-                            SendMetadata(path[1], path[2], connect, flvHeader: true);
-
-                            ConnectToClient(path[1], path[2], client_id, ChannelType.Audio);
-                            ConnectToClient(path[1], path[2], client_id, ChannelType.Video);
-                        }
-                        catch { CloseClient(client_id); }
-
-                    };
-                    socket.OnPing = b => socket.SendPong(b);
-                });
-            }
 
             listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             listener.NoDelay = true;
@@ -342,31 +301,31 @@ namespace RtmpSharp.Net
             return _getUniqueIdOfList(allocated_client_id);
         }
 
-        private async Task<int> _handshakeAsync(Socket client_socket, CancellationToken ct)
+        private async Task<int> _handshakeAsync(Socket clientSocket, CancellationToken ct)
         {
             Stream stream;
             if (cert != null)
             {
-                var temp_stream = new SslStream(new NetworkStream(client_socket));
+                var tempStream = new SslStream(new NetworkStream(clientSocket));
                 try
                 {
                     var op = new SslServerAuthenticationOptions();
                     op.ServerCertificate = cert;
-                    await temp_stream.AuthenticateAsServerAsync(op, ct);
+                    await tempStream.AuthenticateAsServerAsync(op, ct);
                 }
                 finally
                 {
-                    temp_stream.Close();
+                    tempStream.Close();
                 }
-                stream = temp_stream;
+                stream = tempStream;
             }
             else
             {
-                stream = new NetworkStream(client_socket);
+                stream = new NetworkStream(clientSocket);
             }
             var randomBytes = new byte[HandshakeRandomSize];
             random.NextBytes(randomBytes);
-            client_socket.NoDelay = true;
+            clientSocket.NoDelay = true;
             var s0s1 = new Handshake()
             {
                 Version = 3,
@@ -405,11 +364,11 @@ namespace RtmpSharp.Net
                 }
             }
 
-            ushort client_id = _getNewClientId();
-            var connect = new RtmpSession(client_socket, stream, this, client_id, context, objectEncoding, true);
+            ushort clientId = _getNewClientId();
+            var connect = new RtmpSession(clientSocket, stream, this, clientId, context, objectEncoding, true);
             connect.ChannelDataReceived += _sendDataHandler;
 
-            prepareToAdd.Add(new KeyValuePair<ushort, StreamConnectState>(client_id, new StreamConnectState()
+            prepareToAdd.Add(new KeyValuePair<ushort, StreamConnectState>(clientId, new StreamConnectState()
             {
                 Connect = connect,
                 LastPing = DateTime.UtcNow,
@@ -417,7 +376,7 @@ namespace RtmpSharp.Net
                 WriterTask = null
             }));
 
-            return client_id;
+            return clientId;
         }
 
         public void RegisterController<T>() where T : AbstractController
@@ -434,32 +393,6 @@ namespace RtmpSharp.Net
                 if (registeredApps.ContainsKey(controllerName)) throw new InvalidOperationException("controller exists");
                 registeredApps.Add(controllerName, typeT);
             }
-        }
-
-        public void CloseClient(ushort client_id)
-        {
-            allocated_client_id.Remove(client_id);
-            allocated_stream_id.Remove(client_id);
-
-            StreamConnectState state;
-            connects.TryGetValue(client_id, out state);
-            IStreamSession connect = state.Connect;
-
-            prepare_to_remove.Add(client_id);
-
-            if (connect.IsPublishing) UnRegisterPublish(client_id);
-            if (connect.IsPlaying)
-            {
-                var client_channels = _crossClientConnections.FindAll(con => (con.PusherClientId == client_id || con.PlayerClientId == client_id));
-                _crossClientConnections.RemoveAll(t => (t.PlayerClientId == client_id));
-                foreach (var i in client_channels)
-                {
-                    _crossClientConnections.Remove(i);
-                }
-
-            }
-            connect.Disconnect(new ExceptionalEventArgs("disconnected"));
-
         }
 
         private void _sendDataHandler(object sender, ChannelDataReceivedEventArgs e)
@@ -483,7 +416,7 @@ namespace RtmpSharp.Net
                     case ChannelType.Audio:
                         if (client_state == null) continue;
                         client = client_state.Connect;
-                        client.SendAmf0Data(e.e);
+                        client.SendAmf0DataAsync(e.e);
                         break;
                     case ChannelType.Message:
                         throw new NotImplementedException();
@@ -510,30 +443,6 @@ namespace RtmpSharp.Net
                 PusherClientId = pusherClientId,
                 ChannelType = channelType
             });
-        }
-
-        internal bool UnRegisterPublish(ushort clientId)
-        {
-            var key = _pathToPusherClientId.First(x => x.Value == clientId).Key;
-            StreamConnectState state;
-            if (_pathToPusherClientId.ContainsKey(key))
-            {
-                if (connects.TryGetValue(clientId, out state))
-                {
-                    IStreamSession connect = state.Connect;
-                    connect.ChannelDataReceived -= _sendDataHandler;
-
-                    var clients = _crossClientConnections.FindAll(t => t.PusherClientId == clientId);
-                    foreach (var i in clients)
-                    {
-                        CloseClient(i.PlayerClientId);
-                    }
-                    _crossClientConnections.RemoveAll(t => t.PusherClientId == clientId);
-                }
-                _pathToPusherClientId.Remove(key);
-                return true;
-            }
-            return false;
         }
 
         internal bool AuthApp(string app)
