@@ -50,11 +50,11 @@ namespace RtmpSharp.IO
         static readonly int[] UInt29Range = new[] { 0, 536870911 };
         // [-2^28, 2^28-1]
         static readonly int[] Int29Range = new[] { -268435456, 268435455 };
-        static readonly DateTime Epoch = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc); 
+        static readonly DateTime Epoch = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
 
         static readonly AmfWriterMap Amf0Writers;
         static readonly AmfWriterMap Amf3Writers;
-        
+
         public SerializationContext SerializationContext { get; private set; }
 
         readonly BinaryWriter underlying;
@@ -66,6 +66,7 @@ namespace RtmpSharp.IO
         private bool asyncMode;
         private Stream asyncBaseStream;
         private MemoryStream asyncBuffer;
+        private Queue<byte[]> chunkQueue = new Queue<byte[]>();
 
         static AmfWriter()
         {
@@ -78,7 +79,7 @@ namespace RtmpSharp.IO
                 typeof(Int32),
                 typeof(UInt32)
             };
-            
+
             var bigOrFloatingTypes = new[]
             {
                 typeof(Int64),
@@ -268,12 +269,22 @@ namespace RtmpSharp.IO
             underlying.Write(bytes, index, count);
         }
 
+        public async void StartWrite(CancellationToken ct = default)
+        {
+            while (chunkQueue.Any())
+            {
+                var buffer = chunkQueue.Dequeue();
+                await asyncBaseStream.WriteAsync(buffer, 0, buffer.Length, ct);
+                ct.ThrowIfCancellationRequested();
+            }
+            await Task.Yield();
+            StartWrite(ct);
+        }
 
-        public async Task StartWriteAsync(CancellationToken ct = default)
+        public void QueueChunk(CancellationToken ct = default)
         {
             if (!asyncMode) throw new InvalidOperationException("can only work on async mode");
-            await asyncBaseStream.WriteAsync(asyncBuffer.GetBuffer(), 0, (int)asyncBuffer.Length, ct);
-            ct.ThrowIfCancellationRequested();
+            chunkQueue.Enqueue(asyncBuffer.GetBuffer());
             asyncBuffer.SetLength(0);
             asyncBuffer.Seek(0, SeekOrigin.Begin);
         }
@@ -516,7 +527,7 @@ namespace RtmpSharp.IO
         }
 
         #endregion
-        
+
 
         #region Both
 
@@ -984,7 +995,7 @@ namespace RtmpSharp.IO
         }
 
         #endregion
-        
+
 
         #region amf3
 
@@ -1156,7 +1167,7 @@ namespace RtmpSharp.IO
 
             var list = enumerable.ToList();
             AddAmf3Reference(list);
-            
+
             // number of dense items.
             WriteAmf3InlineHeader(list.Count);
 
@@ -1197,7 +1208,7 @@ namespace RtmpSharp.IO
                 return;
 
             AddAmf3Reference(dictionary);
-            
+
             // number of dense items - zero for an associative array.
             WriteAmf3InlineHeader(0);
 

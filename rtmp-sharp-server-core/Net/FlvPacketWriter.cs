@@ -203,7 +203,7 @@ namespace RtmpSharp.Net
             // write the method name or result type (first section)
             if (methodCall.Name == "@setDataFrame")
             {
-                writer.WriteAmfItem(encoding, command.ConnectionParameters);
+                writer.WriteAmfItem(encoding, command.CommandObject);
             }
             
             // write arguments

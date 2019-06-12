@@ -427,12 +427,12 @@ namespace RtmpSharp.Net
             object temp = r.ReadAmf0Item();
             if (header != null && methodName == "@setDataFrame")
             {
-                command.ConnectionParameters = temp;
+                command.CommandObject = temp;
             }
             else
             {
                 command.InvokeId = Convert.ToInt32(temp);
-                command.ConnectionParameters = r.ReadAmf0Item();
+                command.CommandObject = r.ReadAmf0Item();
             }
             
 

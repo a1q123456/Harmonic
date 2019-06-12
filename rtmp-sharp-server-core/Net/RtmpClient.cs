@@ -222,7 +222,7 @@ namespace RtmpSharp.Net
                 case MessageType.UserControlMessage:
                     var m = (UserControlMessage)e.Event;
                     if (m.EventType == UserControlMessageType.PingRequest)
-                        WriteProtocolControlMessage(new UserControlMessage(UserControlMessageType.PingResponse, m.Values));
+                        _ = WriteProtocolControlMessage(new UserControlMessage(UserControlMessageType.PingResponse, m.Values));
                     break;
 
                 case MessageType.DataAmf3:
@@ -345,7 +345,7 @@ namespace RtmpSharp.Net
             var connect = new InvokeAmf0
             {
                 MethodCall = new Method("connect", new object[0]),
-                ConnectionParameters = new AsObject
+                CommandObject = new AsObject
                 {
                     { "pageUrl",           pageUrl                },
                     { "objectEncoding",    (double)objectEncoding },
@@ -428,12 +428,12 @@ namespace RtmpSharp.Net
 
         public void SetBufferLength(int length)
         {
-            WriteProtocolControlMessage(new UserControlMessage(UserControlMessageType.SetBufferLength, new int[] { length }));
+            _ = WriteProtocolControlMessage(new UserControlMessage(UserControlMessageType.SetBufferLength, new int[] { length }));
         }
 
         public void SetChunkSize(int size)
         {
-            WriteProtocolControlMessage(new ChunkSize(size));
+            _ = WriteProtocolControlMessage(new ChunkSize(size));
         }
 
         public Task PingAsync()

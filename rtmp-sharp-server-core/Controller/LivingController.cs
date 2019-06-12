@@ -5,13 +5,14 @@ using System.Security.Authentication;
 using System.Threading.Tasks;
 using Complete;
 using RtmpSharp.IO;
+using RtmpSharp.Messaging;
 using RtmpSharp.Messaging.Events;
 using RtmpSharp.Net;
 using RtmpSharp.Service;
 
 namespace RtmpSharp.Controller
 {
-    public class LivingController : AbstractController
+    public class LivingController : AbstractController, IDisposable
     {
         class SessionStorage
         {
@@ -44,14 +45,14 @@ namespace RtmpSharp.Controller
             _publisherSessionService = publisherSessionService;
         }
         
-        private async Task<bool> _registerPlay(string path, ushort clientId)
+        protected async Task<bool> _registerPlay(string path, ushort clientId)
         {
             return true;
         }
         
         public void @setDataFrame(Command command)
         {
-            if ((string)command.ConnectionParameters != "onMetaData")
+            if ((string)command.CommandObject != "onMetaData")
             {
                 Console.WriteLine("Can only set metadata");
                 throw new InvalidOperationException("Can only set metadata");
@@ -59,31 +60,30 @@ namespace RtmpSharp.Controller
             _sessionStorage.FlvMetaData = (NotifyAmf0)command;
         }
         
-        public void publish(Command command)
+        public void publish(string publishingName, string publishingType)
         {
-            if (command.MethodCall.Parameters[0] is string path)
+            _sessionStorage.AudioBuffer = new Queue<AudioData>();
+            _sessionStorage.VideoBuffer = new Queue<VideoData>();
+            _publisherSessionService.RegisterPublisher(Session.ConnectionInformation.TcUrl, Session);
+            Session.Disconnected += (s, e) =>
             {
-                _sessionStorage.AudioBuffer = new Queue<AudioData>();
-                _sessionStorage.VideoBuffer = new Queue<VideoData>();
-                _publisherSessionService.RegisterPublisher(path, Session);
-                Session.Disconnected += (s, e) =>
-                {
-                    _publisherSessionService.RemovePublisher(Session);
-                };
+                _publisherSessionService.RemovePublisher(Session);
+            };
+        }
+
+        public void Dispose()
+        {
+            if (Session != null)
+            {
+                _publisherSessionService.RemovePublisher(Session);
             }
-            throw new InvalidOperationException();
-        }
-
-        public void closeStream(Command command)
-        {
-            _publisherSessionService.RemovePublisher(Session);
-        }
-
-        public void deleteStream(Command command)
-        {
-            _publisherSessionService.RemovePublisher(Session);
         }
         
+        public async Task<ushort> createStream()
+        {
+            return Session.StreamId;
+        }
+
         public async Task play(Command command)
         {
             string path = (string)command.MethodCall.Parameters[0];
@@ -92,16 +92,16 @@ namespace RtmpSharp.Controller
                 throw new UnauthorizedAccessException();
             }
 
-            Session.WriteProtocolControlMessage(new UserControlMessage(UserControlMessageType.StreamBegin, new int[] { Session.StreamId }));
+            await Session.WriteProtocolControlMessageAsync(new UserControlMessage(UserControlMessageType.StreamBegin, new int[] { Session.StreamId }));
 
-            Session.NotifyStatusAsync(new AsObject
+            await Session.NotifyStatusAsync(new AsObject
             {
                 {"level", "status" },
                 {"code", "NetStream.Play.Reset" },
                 {"description", "Resetting and playing stream." },
                 {"details", path }
             });
-            Session.NotifyStatusAsync(new AsObject
+            await Session.NotifyStatusAsync(new AsObject
             {
                 {"level", "status" },
                 {"code", "NetStream.Play.Start" },
@@ -134,14 +134,16 @@ namespace RtmpSharp.Controller
 
         private async void ServePlay()
         {
-            // TODO
             if (!_sessionStorage.AudioBuffer.Any() || _sessionStorage.VideoBuffer.Any())
             {
-                Session.WriteProtocolControlMessage(new UserControlMessage(UserControlMessageType.StreamDry, new int[] { Session.StreamId }));
-                return;
+                await Session.WriteProtocolControlMessageAsync(new UserControlMessage(UserControlMessageType.StreamDry, new int[] { Session.StreamId }));
+                await Task.Delay(10);
             }
-            await Session.SendAmf0DataAsync(_sessionStorage.AudioBuffer.Dequeue());
-            await Session.SendAmf0DataAsync(_sessionStorage.VideoBuffer.Dequeue());
+            else
+            {
+                await Session.SendAmf0DataAsync(_sessionStorage.AudioBuffer.Dequeue());
+                await Session.SendAmf0DataAsync(_sessionStorage.VideoBuffer.Dequeue());
+            }
             ServePlay();
         }
 

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 // astralfoxy:complete/threading/taskcallbackmanager.cs
@@ -15,9 +16,13 @@ namespace Complete.Threading
             callbacks = new ConcurrentDictionary<K, TaskCompletionSource<V>>();
         }
 
-        public Task<V> Create(K key)
+        public Task<V> Create(K key, CancellationToken ct = default)
         {
             var taskCompletionSource = callbacks.GetOrAdd(key, k => new TaskCompletionSource<V>());
+            ct.Register(() =>
+            {
+                taskCompletionSource.TrySetCanceled();
+            });
             return taskCompletionSource.Task;
         }
 
@@ -31,7 +36,9 @@ namespace Complete.Threading
         {
             TaskCompletionSource<V> callback;
             if (callbacks.TryRemove(key, out callback))
-                callback.TrySetResult(result);
+            {
+                callback.SetResult(result);
+            }
         }
 
         public void SetException(K key, Exception exception)
