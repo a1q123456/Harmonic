@@ -28,7 +28,7 @@ namespace RtmpSharp.Messaging.Events
         public Method MethodCall { get; internal set; }
         public byte[] Buffer { get; internal set; }
         public int InvokeId { get; internal set; }
-        public object ConnectionParameters { get; internal set; }
+        public object CommandObject { get; internal set; }
 
         public Command(MessageType messageType) : base(messageType) { }
     }

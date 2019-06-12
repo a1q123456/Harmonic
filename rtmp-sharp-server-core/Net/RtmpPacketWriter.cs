@@ -27,7 +27,7 @@ namespace RtmpSharp.Net
 
         // defined by the spec
         const int DefaultChunkSize = 128;
-        int writeChunkSize = DefaultChunkSize;
+        public int writeChunkSize = DefaultChunkSize;
         private int packetAvailable = 0;
 
         public RtmpPacketWriter(AmfWriter writer, ObjectEncoding objectEncoding)
@@ -103,7 +103,7 @@ namespace RtmpSharp.Net
             if (header.PacketLength != previousHeader.PacketLength || header.MessageType != previousHeader.MessageType)
                 return ChunkMessageHeaderType.SameSource;
 
-            if (header.Timestamp != previousHeader.Timestamp)  
+            if (header.Timestamp != previousHeader.Timestamp)
                 return ChunkMessageHeaderType.TimestampAdjustment;
 
             return ChunkMessageHeaderType.Continuation;
@@ -117,8 +117,8 @@ namespace RtmpSharp.Net
             header.StreamId = streamId;
             header.Timestamp = message.Timestamp;
             header.MessageStreamId = messageStreamId;
-            header.MessageType = message.MessageType; 
-            if (message.Header != null) 
+            header.MessageType = message.MessageType;
+            if (message.Header != null)
                 header.IsTimerRelative = message.Header.IsTimerRelative;
             await WritePacketAsync(packet, ct);
         }
@@ -189,13 +189,14 @@ namespace RtmpSharp.Net
 
                 var bytesToWrite = i + writeChunkSize > header.PacketLength ? header.PacketLength - i : writeChunkSize;
                 writer.WriteAsync(buffer, i, bytesToWrite);
+                await writer.WriteAsyncBufferToRemoteAsync(ct);
                 first = false;
             }
 
-            var chunkSizeMsg = message as ChunkSize;
-            if (chunkSizeMsg != null)
+            if (message is ChunkSize chunkSizeMsg)
+            {
                 writeChunkSize = chunkSizeMsg.Size;
-            await writer.StartWriteAsync(ct);
+            }
         }
 
         void WriteBasicHeader(ChunkMessageHeaderType messageHeaderFormat, int streamId)
@@ -242,7 +243,7 @@ namespace RtmpSharp.Net
         {
             var headerType = GetMessageHeaderType(header, previousHeader);
             WriteBasicHeader(headerType, header.StreamId);
-            
+
             var uint24Timestamp = header.Timestamp < 0xFFFFFF ? header.Timestamp : 0xFFFFFF;
             switch (headerType)
             {
@@ -394,13 +395,13 @@ namespace RtmpSharp.Net
 
             if (methodCall.Name == "@setDataFrame")
             {
-                writer.WriteAmfItem(encoding, command.ConnectionParameters);
+                writer.WriteAmfItem(encoding, command.CommandObject);
             }
 
             if (isInvoke)
             {
                 writer.WriteAmfItem(encoding, command.InvokeId);
-                writer.WriteAmfItem(encoding, command.ConnectionParameters);
+                writer.WriteAmfItem(encoding, command.CommandObject);
 
 
                 if (!methodCall.IsSuccess)

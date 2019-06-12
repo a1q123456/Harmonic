@@ -17,8 +17,12 @@ using System.Security.Cryptography.X509Certificates;
 using System.Net.Security;
 using System.Security.Authentication;
 using RtmpSharp.Controller;
+using RtmpSharp.Net;
+using Autofac;
+using RtmpSharp.Service;
+using System.Reflection;
 
-namespace RtmpSharp.Net
+namespace RtmpSharp.Hosting
 {
     public class RtmpServer : IDisposable
     {
@@ -28,18 +32,6 @@ namespace RtmpSharp.Net
         public int PingTimeout { get; set; } = 10;
         public bool Started { get; private set; } = false;
 
-        // TODO: add rtmps support
-
-        Dictionary<string, ushort> _pathToPusherClientId = new Dictionary<string, ushort>();
-
-        struct CrossClientConnection
-        {
-            public ushort PusherClientId { get; set; }
-            public ushort PlayerClientId { get; set; }
-            public ChannelType ChannelType { get; set; }
-        }
-
-        List<CrossClientConnection> _crossClientConnections = new List<CrossClientConnection>();
         Dictionary<string, Type> registeredApps = new Dictionary<string, Type>();
 
         internal IReadOnlyDictionary<string, Type> RegisteredApps
@@ -60,13 +52,11 @@ namespace RtmpSharp.Net
         private X509Certificate2 cert = null;
         private readonly int PROTOCOL_MIN_CSID = 3;
         private readonly int PROTOCOL_MAX_CSID = 65599;
-        Dictionary<ushort, StreamConnectState> connects = new Dictionary<ushort, StreamConnectState>();
-        List<KeyValuePair<ushort, StreamConnectState>> prepareToAdd = new List<KeyValuePair<ushort, StreamConnectState>>();
-        List<ushort> prepare_to_remove = new List<ushort>();
-
-        class StreamConnectState { public IStreamSession Connect; public DateTime LastPing; public Task ReaderTask; public Task WriterTask; }
-
+        internal Dictionary<ushort, IStreamSession> connectedSessions = new Dictionary<ushort, IStreamSession>();
+        private Supervisor supervisor = null;
+        public IContainer ServiceContainer { get; private set; } = null;
         public RtmpServer(
+            IStartup serverStartUp,
             SerializationContext context,
             X509Certificate2 cert = null,
             ObjectEncoding object_encoding = ObjectEncoding.Amf0,
@@ -83,87 +73,13 @@ namespace RtmpSharp.Net
             IPEndPoint localEndPoint = new IPEndPoint(IPAddress.Parse(bindIp), bindRtmpPort);
             listener.Bind(localEndPoint);
             listener.Listen(10);
-        }
-
-        private void StartIOLoop(CancellationToken ct)
-        {
-            try
-            {
-                while (Started)
-                {
-                    foreach (var current in connects)
-                    {
-                        ct.ThrowIfCancellationRequested();
-                        StreamConnectState state = current.Value;
-                        ushort client_id = current.Key;
-                        IStreamSession connect = state.Connect;
-                        if (connect.IsDisconnected)
-                        {
-                            CloseClient(client_id);
-                            continue;
-                        }
-                        try
-                        {
-                            if (state.WriterTask == null || state.WriterTask.IsCompleted)
-                            {
-                                state.WriterTask = connect.WriteOnceAsync(ct);
-                            }
-                            if (state.WriterTask.IsCanceled || state.WriterTask.IsFaulted)
-                            {
-                                throw state.WriterTask.Exception;
-                            }
-                            if (state.LastPing == null || DateTime.UtcNow - state.LastPing >= TimeSpan.FromSeconds(PingInterval))
-                            {
-                                connect.PingAsync(PingTimeout);
-                                state.LastPing = DateTime.UtcNow;
-                            }
-
-
-                            if (state.ReaderTask == null || state.ReaderTask.IsCompleted)
-                            {
-                                state.ReaderTask = connect.StartReadAsync(ct);
-                            }
-                            if (state.ReaderTask.IsCanceled || state.ReaderTask.IsFaulted)
-                            {
-                                throw state.ReaderTask.Exception;
-                            }
-
-                        }
-                        catch
-                        {
-                            CloseClient(client_id);
-                            continue;
-                        }
-                    }
-                    var prepare_add_length = prepareToAdd.Count;
-                    if (prepare_add_length != 0)
-                    {
-                        for (int i = 0; i < prepare_add_length; i++)
-                        {
-                            var current = prepareToAdd[0];
-                            connects.Add(current.Key, current.Value);
-                            prepareToAdd.RemoveAt(0);
-                        }
-                    }
-
-                    var prepareRemoveLength = prepare_to_remove.Count;
-                    if (prepareRemoveLength != 0)
-                    {
-                        for (int i = 0; i < prepareRemoveLength; i++)
-                        {
-                            var current = prepare_to_remove[0];
-                            connects.TryGetValue(current, out var connection);
-                            connects.Remove(current);
-                            prepare_to_remove.RemoveAt(0);
-
-                        }
-                    }
-                }
-            }
-            catch
-            {
-
-            }
+            var builder = new ContainerBuilder();
+            serverStartUp.ConfigureServices(builder);
+            builder.RegisterAssemblyTypes(Assembly.GetExecutingAssembly())
+                .Where(t => t.Name.EndsWith("Controller"))
+                .AsSelf();
+            RegisterCommonServices(builder);
+            ServiceContainer = builder.Build();
         }
 
         public Task StartAsync(CancellationToken ct = default)
@@ -173,10 +89,6 @@ namespace RtmpSharp.Net
                 throw new InvalidOperationException("already started");
             }
             Started = true;
-            var ioThread = new Thread(() => StartIOLoop(ct))
-            {
-                IsBackground = true
-            };
             var ret = new TaskCompletionSource<int>();
             var t = new Thread(o =>
             {
@@ -190,7 +102,7 @@ namespace RtmpSharp.Net
                             Console.WriteLine("Waiting for a connection...");
                             listener.BeginAccept(new AsyncCallback(ar =>
                             {
-                                _acceptCallback(ar, ct);
+                                AcceptCallback(ar, ct);
                             }), listener);
                             while (!allDone.WaitOne(1))
                             {
@@ -210,45 +122,22 @@ namespace RtmpSharp.Net
                 catch (OperationCanceledException) { }
                 finally
                 {
-                    _clearConnections();
-                    ioThread.Join();
                     ret.SetResult(1);
                 }
             });
 
-
-            ioThread.Start();
+            supervisor = new Supervisor(this);
+            supervisor.StartAsync(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(5), ct);
             t.Start();
             return ret.Task;
         }
 
-        private void _clearConnections()
+        private void RegisterCommonServices(ContainerBuilder builder)
         {
-            Started = false;
-            foreach (var current in connects)
-            {
-                StreamConnectState state = current.Value;
-                ushort client_id = current.Key;
-                IStreamSession connect = state.Connect;
-                if (connect.IsDisconnected)
-                {
-                    continue;
-                }
-                try
-                {
-                    CloseClient(client_id);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.StackTrace);
-                }
-            }
-            connects.Clear();
-            allocated_client_id.Clear();
-            allocated_stream_id.Clear();
+            builder.Register(c => new PublisherSessionService()).AsSelf();
         }
 
-        async void _acceptCallback(IAsyncResult ar, CancellationToken ct)
+        async void AcceptCallback(IAsyncResult ar, CancellationToken ct)
         {
             Socket listener = (Socket)ar.AsyncState;
             Socket handler = listener.EndAccept(ar);
@@ -257,7 +146,7 @@ namespace RtmpSharp.Net
             allDone.Set();
             try
             {
-                await _handshakeAsync(handler, ct);
+                await HandshakeAsync(handler, ct);
             }
             catch (TimeoutException)
             {
@@ -271,7 +160,7 @@ namespace RtmpSharp.Net
             }
         }
 
-        private ushort _getUniqueIdOfList(IList<ushort> list, int min_value, int max_value)
+        private ushort GetUniqueIdOfList(IList<ushort> list, int min_value, int max_value)
         {
             ushort id;
             do
@@ -281,7 +170,7 @@ namespace RtmpSharp.Net
             return id;
         }
 
-        private ushort _getUniqueIdOfList(IList<ushort> list)
+        private ushort GetUniqueIdOfList(IList<ushort> list)
         {
             ushort id;
             do
@@ -293,15 +182,15 @@ namespace RtmpSharp.Net
 
         internal ushort RequestStreamId()
         {
-            return _getUniqueIdOfList(allocated_stream_id, PROTOCOL_MIN_CSID, PROTOCOL_MAX_CSID);
+            return GetUniqueIdOfList(allocated_stream_id, PROTOCOL_MIN_CSID, PROTOCOL_MAX_CSID);
         }
 
-        private ushort _getNewClientId()
+        private ushort GetNewClientId()
         {
-            return _getUniqueIdOfList(allocated_client_id);
+            return GetUniqueIdOfList(allocated_client_id);
         }
 
-        private async Task<int> _handshakeAsync(Socket clientSocket, CancellationToken ct)
+        private async Task<int> HandshakeAsync(Socket clientSocket, CancellationToken ct)
         {
             Stream stream;
             if (cert != null)
@@ -364,85 +253,29 @@ namespace RtmpSharp.Net
                 }
             }
 
-            ushort clientId = _getNewClientId();
-            var connect = new RtmpSession(clientSocket, stream, this, clientId, context, objectEncoding, true);
-            connect.ChannelDataReceived += _sendDataHandler;
+            ushort clientId = GetNewClientId();
+            var session = new RtmpSession(clientSocket, stream, this, clientId, context, objectEncoding, true);
 
-            prepareToAdd.Add(new KeyValuePair<ushort, StreamConnectState>(clientId, new StreamConnectState()
+            connectedSessions.Add(clientId, session);
+            session.Disconnected += (s, e) =>
             {
-                Connect = connect,
-                LastPing = DateTime.UtcNow,
-                ReaderTask = null,
-                WriterTask = null
-            }));
+                connectedSessions.Remove(clientId);
+            };
 
             return clientId;
         }
-
-        public void RegisterController<T>() where T : AbstractController
+        public void RegisterController<T>(string appName) where T : AbstractController
         {
             lock (registeredApps)
             {
-                var typeT = typeof(T);
-                var controllerName = typeT.Name;
-                if (controllerName.EndsWith("Controller"))
-                {
-                    controllerName = controllerName.Substring(0, controllerName.LastIndexOf("Controller"));
-                }
 
-                if (registeredApps.ContainsKey(controllerName)) throw new InvalidOperationException("controller exists");
-                registeredApps.Add(controllerName, typeT);
+                if (registeredApps.ContainsKey(appName)) throw new InvalidOperationException("app exists");
+                registeredApps.Add(appName, typeof(T));
             }
         }
-
-        private void _sendDataHandler(object sender, ChannelDataReceivedEventArgs e)
+        public void RegisterController<T>() where T : AbstractController
         {
-            var server = (RtmpSession)sender;
-
-            var server_clients = _crossClientConnections.FindAll((t) => t.PusherClientId == server.ClientId);
-            foreach (var i in server_clients)
-            {
-                IStreamSession client;
-                StreamConnectState client_state = null;
-                if (e.type != i.ChannelType)
-                {
-                    continue;
-                }
-                connects.TryGetValue(i.PlayerClientId, out client_state);
-
-                switch (i.ChannelType)
-                {
-                    case ChannelType.Video:
-                    case ChannelType.Audio:
-                        if (client_state == null) continue;
-                        client = client_state.Connect;
-                        client.SendAmf0DataAsync(e.e);
-                        break;
-                    case ChannelType.Message:
-                        throw new NotImplementedException();
-                }
-
-            }
-        }
-
-        internal void ConnectToClient(string app, string path, ushort playerClientId, ChannelType channelType)
-        {
-            StreamConnectState state;
-            ushort pusherClientId;
-            if (!_pathToPusherClientId.TryGetValue(path, out pusherClientId)) throw new KeyNotFoundException("Request Path Not Found");
-            if (!connects.TryGetValue(pusherClientId, out state))
-            {
-                IStreamSession connect = state.Connect;
-                _pathToPusherClientId.Remove(path);
-                throw new KeyNotFoundException("Request Client Not Exists");
-            }
-
-            _crossClientConnections.Add(new CrossClientConnection()
-            {
-                PlayerClientId = playerClientId,
-                PusherClientId = pusherClientId,
-                ChannelType = channelType
-            });
+            RegisterController<T>(typeof(T).Name.Replace("Controller", "").ToLower());
         }
 
         internal bool AuthApp(string app)
@@ -456,9 +289,9 @@ namespace RtmpSharp.Net
             {
                 if (Started)
                 {
-                    _clearConnections();
                     listener.Close();
                 }
+                ServiceContainer?.Dispose();
             }
             catch { }
         }
@@ -514,8 +347,6 @@ namespace RtmpSharp.Net
                 }
             }
         }
-
-
 
         #endregion
     }
