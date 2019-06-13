@@ -1,3 +1,5 @@
+master is not a stable branch, you may want to see the latest [tag](https://github.com/a1q123456/rtmp-sharp-server/tree/v0.0.1)
+
 # rtmp-sharp-with-server
 forked from [rtmp-sharp](https://github.com/imiuka/rtmp-sharp)
 
