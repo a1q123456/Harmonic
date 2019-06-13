@@ -15,6 +15,8 @@ using System.Xml.Linq;
 using System.Timers;
 using System.ComponentModel;
 using System.Threading;
+using System.Collections.Concurrent;
+using RtmpSharp.Net;
 
 namespace RtmpSharp.IO.Extensions
 {
@@ -66,8 +68,8 @@ namespace RtmpSharp.IO
         private bool asyncMode;
         private Stream asyncBaseStream;
         private MemoryStream asyncBuffer;
-        private Queue<byte[]> chunkQueue = new Queue<byte[]>();
-
+        private ConcurrentQueue<byte[]> chunkQueue = new ConcurrentQueue<byte[]>();
+        private SemaphoreSlim signal = new SemaphoreSlim(0);
         static AmfWriter()
         {
             var smallIntTypes = new[]
@@ -269,24 +271,23 @@ namespace RtmpSharp.IO
             underlying.Write(bytes, index, count);
         }
 
-        public async void StartWrite(CancellationToken ct = default)
+        public async Task WriteOnceAsync(CancellationToken ct = default)
         {
-            while (chunkQueue.Any())
+            await signal.WaitAsync();
+            while (chunkQueue.TryDequeue(out var buffer))
             {
-                var buffer = chunkQueue.Dequeue();
                 await asyncBaseStream.WriteAsync(buffer, 0, buffer.Length, ct);
                 ct.ThrowIfCancellationRequested();
             }
-            await Task.Yield();
-            StartWrite(ct);
         }
 
-        public void QueueChunk(CancellationToken ct = default)
+        public void QueueChunk()
         {
             if (!asyncMode) throw new InvalidOperationException("can only work on async mode");
-            chunkQueue.Enqueue(asyncBuffer.GetBuffer());
+            chunkQueue.Enqueue(asyncBuffer.ToArray());
             asyncBuffer.SetLength(0);
             asyncBuffer.Seek(0, SeekOrigin.Begin);
+            signal.Release();
         }
 
         public void WriteAsync(byte[] bytes, int index, int count)

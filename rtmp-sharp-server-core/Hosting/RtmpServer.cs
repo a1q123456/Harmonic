@@ -54,7 +54,9 @@ namespace RtmpSharp.Hosting
         private readonly int PROTOCOL_MAX_CSID = 65599;
         internal Dictionary<ushort, IStreamSession> connectedSessions = new Dictionary<ushort, IStreamSession>();
         private Supervisor supervisor = null;
-        public IContainer ServiceContainer { get; private set; } = null;
+        internal IContainer ServiceContainer { get; set; } = null;
+        public ILifetimeScope ServerLifetime { get; set; } = null;
+        internal List<Type> SessionScopedServices { get; set; } = null;
         public RtmpServer(
             IStartup serverStartUp,
             SerializationContext context,
@@ -75,11 +77,10 @@ namespace RtmpSharp.Hosting
             listener.Listen(10);
             var builder = new ContainerBuilder();
             serverStartUp.ConfigureServices(builder);
-            builder.RegisterAssemblyTypes(Assembly.GetExecutingAssembly())
-                .Where(t => t.Name.EndsWith("Controller"))
-                .AsSelf();
+            SessionScopedServices = new List<Type>(serverStartUp.SessionScopedServices);
             RegisterCommonServices(builder);
             ServiceContainer = builder.Build();
+            ServerLifetime = ServiceContainer.BeginLifetimeScope();
         }
 
         public Task StartAsync(CancellationToken ct = default)
@@ -134,7 +135,10 @@ namespace RtmpSharp.Hosting
 
         private void RegisterCommonServices(ContainerBuilder builder)
         {
-            builder.Register(c => new PublisherSessionService()).AsSelf();
+            builder.Register(c => new PublisherSessionService())
+                .AsSelf()
+                .InstancePerLifetimeScope();
+
         }
 
         async void AcceptCallback(IAsyncResult ar, CancellationToken ct)
@@ -291,6 +295,7 @@ namespace RtmpSharp.Hosting
                 {
                     listener.Close();
                 }
+                ServerLifetime.Dispose();
                 ServiceContainer?.Dispose();
             }
             catch { }

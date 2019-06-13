@@ -18,22 +18,15 @@ namespace RtmpSharp.Net
         ConnectionInformation ConnectionInformation { get; }
         bool IsDisconnected { get; }
         ushort StreamId { get; }
-        bool IsPublishing { get; }
-        bool IsPlaying { get; }
-        NotifyAmf0 FlvMetaData { get; }
         ushort ClientId { get; }
         dynamic SessionStorage { get; set; }
         RtmpServer Server { get; }
-        Task SendAmf0DataAsync(RtmpEvent e, CancellationToken ct = default);
-        void WriteOnce();
-        void ReadOnce();
+        void SendAmf0Data(RtmpEvent e);
         Task PingAsync(CancellationToken ct = default);
         void Disconnect(ExceptionalEventArgs exceptionalEventArgs);
         void SendRawData(byte[] data);
-        Task StartReadAsync(CancellationToken ct = default);
-        Task WriteOnceAsync(CancellationToken ct = default);
-        Task WriteProtocolControlMessageAsync(RtmpEvent @event, CancellationToken ct = default);
+        void WriteProtocolControlMessage(RtmpEvent @event);
         Task<T> InvokeAsync<T>(string endpoint, string destination, string method, object[] arguments);
-        Task NotifyStatusAsync(AsObject status, CancellationToken ct = default);
+        void NotifyStatus(AsObject status);
     }
 }

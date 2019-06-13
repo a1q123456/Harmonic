@@ -21,8 +21,6 @@ namespace RtmpSharp.Net
 
         internal readonly AmfWriter writer;
         readonly Dictionary<int, RtmpHeader> rtmpHeaders;
-        readonly ConcurrentQueue<RtmpPacket> queuedPackets;
-        readonly AutoResetEvent packetAvailableEvent;
         readonly ObjectEncoding objectEncoding;
 
         // defined by the spec
@@ -36,8 +34,6 @@ namespace RtmpSharp.Net
             this.writer = writer;
 
             rtmpHeaders = new Dictionary<int, RtmpHeader>();
-            queuedPackets = new ConcurrentQueue<RtmpPacket>();
-            packetAvailableEvent = new AutoResetEvent(false);
 
             Continue = true;
         }
@@ -50,49 +46,9 @@ namespace RtmpSharp.Net
                 Disconnected(this, e);
         }
 
-        public void WriteOnce()
+        public async Task WriteOnceAsync(CancellationToken ct = default)
         {
-            if (Interlocked.Exchange(ref packetAvailable, 0) == 1)
-            {
-                while (queuedPackets.TryDequeue(out RtmpPacket packet))
-                    WritePacket(packet);
-            }
-        }
-
-        public async Task<bool> WriteOnceAsync(CancellationToken ct = default)
-        {
-            if (Interlocked.Exchange(ref packetAvailable, 0) == 1)
-            {
-                while (queuedPackets.TryDequeue(out RtmpPacket packet))
-                    await WritePacketAsync(packet, ct);
-                return true;
-            }
-            return false;
-        }
-
-        public void WriteLoop()
-        {
-            try
-            {
-                while (Continue)
-                {
-                    WriteOnce();
-                }
-            }
-            catch (Exception ex)
-            {
-#if DEBUG
-                System.Diagnostics.Debug.Print("Exception: {0} at {1}", ex, ex.StackTrace);
-                if (ex.InnerException != null)
-                {
-                    var inner = ex.InnerException;
-                    System.Diagnostics.Debug.Print("InnerException: {0} at {1}", inner, inner.StackTrace);
-                }
-#endif
-
-                OnDisconnected(new ExceptionalEventArgs("rtmp-packet-writer", ex));
-                throw;
-            }
+            await writer.WriteOnceAsync(ct);
         }
 
         static ChunkMessageHeaderType GetMessageHeaderType(RtmpHeader header, RtmpHeader previousHeader)
@@ -109,7 +65,7 @@ namespace RtmpSharp.Net
             return ChunkMessageHeaderType.Continuation;
         }
 
-        public async Task WriteAsync(RtmpEvent message, int streamId, int messageStreamId, CancellationToken ct = default)
+        public void WriteMessage(RtmpEvent message, int streamId, int messageStreamId)
         {
             var header = new RtmpHeader();
             var packet = new RtmpPacket(header, message);
@@ -120,7 +76,7 @@ namespace RtmpSharp.Net
             header.MessageType = message.MessageType;
             if (message.Header != null)
                 header.IsTimerRelative = message.Header.IsTimerRelative;
-            await WritePacketAsync(packet, ct);
+            WritePacket(packet);
         }
 
         static int GetBasicHeaderLength(int streamId)
@@ -132,40 +88,7 @@ namespace RtmpSharp.Net
             return 1;
         }
 
-        void WritePacket(RtmpPacket packet)
-        {
-            var header = packet.Header;
-            var streamId = header.StreamId;
-            var message = packet.Body;
-
-            var buffer = GetMessageBytes(header, message);
-            header.PacketLength = buffer.Length;
-
-            RtmpHeader previousHeader;
-            rtmpHeaders.TryGetValue(streamId, out previousHeader);
-
-            rtmpHeaders[streamId] = header;
-
-            WriteMessageHeader(header, previousHeader);
-
-            var first = true;
-            for (var i = 0; i < header.PacketLength; i += writeChunkSize)
-            {
-                if (!first)
-                    WriteBasicHeader(ChunkMessageHeaderType.Continuation, header.StreamId);
-
-                var bytesToWrite = i + writeChunkSize > header.PacketLength ? header.PacketLength - i : writeChunkSize;
-                writer.Write(buffer, i, bytesToWrite);
-                first = false;
-            }
-
-            var chunkSizeMsg = message as ChunkSize;
-            if (chunkSizeMsg != null)
-                writeChunkSize = chunkSizeMsg.Size;
-
-        }
-
-        private async Task WritePacketAsync(RtmpPacket packet, CancellationToken ct = default)
+        private void WritePacket(RtmpPacket packet)
         {
             var header = packet.Header;
             var streamId = header.StreamId;
@@ -189,7 +112,7 @@ namespace RtmpSharp.Net
 
                 var bytesToWrite = i + writeChunkSize > header.PacketLength ? header.PacketLength - i : writeChunkSize;
                 writer.WriteAsync(buffer, i, bytesToWrite);
-                await writer.WriteAsyncBufferToRemoteAsync(ct);
+                writer.QueueChunk();
                 first = false;
             }
 
