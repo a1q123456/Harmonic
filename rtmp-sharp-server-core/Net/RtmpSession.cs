@@ -7,7 +7,9 @@ using RtmpSharp.IO;
 using RtmpSharp.Messaging;
 using RtmpSharp.Messaging.Events;
 using RtmpSharp.Messaging.Messages;
+using RtmpSharp.Rpc;
 using System;
+using System.Reflection;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
@@ -41,19 +43,15 @@ namespace RtmpSharp.Net
         Socket clientSocket;
         public ushort StreamId { get; private set; } = 0;
         public ushort ClientId { get; private set; } = 0;
-        public NotifyAmf0 FlvMetaData { get; private set; }
-        public bool IsPublishing { get; private set; } = false;
-        public bool IsPlaying { get; private set; } = false;
-        public bool AudioSended { get; internal set; }
-
         private const int CONTROL_CSID = 2;
         private Random random = new Random();
         private AbstractController _controller = null;
         private Type _controllerType = null;
         public dynamic SessionStorage { get; set; } = null;
         public RtmpServer Server { get; private set; } = null;
-
+        private ILifetimeScope SessionLifetime { get; set; } = null;
         public ConnectionInformation ConnectionInformation { get; private set; } = null;
+
 
         public RtmpSession(Socket client_socket, Stream stream, RtmpServer server, ushort client_id, SerializationContext context, ObjectEncoding objectEncoding = ObjectEncoding.Amf0, bool asyncMode = false)
         {
@@ -69,6 +67,8 @@ namespace RtmpSharp.Net
             callbackManager = new TaskCallbackMachine<int, object>();
             pingManager = new TaskCallbackMachine<int, object>();
             StartReadAsync();
+            StartWriteAsync();
+            SessionLifetime = Server.ServiceContainer.BeginLifetimeScope();
         }
         public void Close()
         {
@@ -80,21 +80,28 @@ namespace RtmpSharp.Net
             Disconnect(args);
         }
 
-        public void WriteOnce()
-        {
-            writer.WriteOnce();
-        }
-
-        public void ReadOnce()
-        {
-            reader.ReadOnce();
-        }
-
         public Task WriteOnceAsync(CancellationToken ct = default)
         {
             return writer.WriteOnceAsync(ct);
         }
+        public Task StartWriteAsync(CancellationToken ct = default)
+        {
+            var tsk = writer.WriteOnceAsync(ct);
+            tsk.ContinueWith(t =>
+            {
+                StartWriteAsync(ct);
+            }, TaskContinuationOptions.OnlyOnRanToCompletion);
+            tsk.ContinueWith(t =>
+            {
+                foreach (var excep in t.Exception.InnerExceptions)
+                {
+                    Console.WriteLine(excep.ToString());
+                }
 
+                Close();
+            }, TaskContinuationOptions.NotOnRanToCompletion);
+            return tsk;
+        }
         public Task StartReadAsync(CancellationToken ct = default)
         {
             var tsk = reader.ReadOnceAsync(ct);
@@ -108,19 +115,19 @@ namespace RtmpSharp.Net
                 {
                     Console.WriteLine(excep.ToString());
                 }
-                
+
                 Close();
             }, TaskContinuationOptions.NotOnRanToCompletion);
             return tsk;
         }
 
-        async Task<object> CallCommandAsync(Command command, int streamId, int messageStreamId, bool requireConnected = true, CancellationToken ct = default)
+        async Task<object> CallCommandAsync(Command command, int streamId, bool requireConnected = true, CancellationToken ct = default)
         {
             if (requireConnected && IsDisconnected)
                 return CreateExceptedTask(new ClientDisconnectedException("disconnected"));
 
-            var task = callbackManager.Create(command.InvokeId);
-            await writer.WriteAsync(command, streamId, random.Next(), ct);
+            var task = callbackManager.Create(command.InvokeId, ct);
+            writer.WriteMessage(command, streamId, random.Next());
             return await task;
         }
 
@@ -145,7 +152,7 @@ namespace RtmpSharp.Net
                     if (m.EventType == UserControlMessageType.PingRequest)
                     {
                         Console.WriteLine("Client Ping Request");
-                        _ = WriteProtocolControlMessageAsync(new UserControlMessage(UserControlMessageType.PingResponse, m.Values));
+                        WriteProtocolControlMessage(new UserControlMessage(UserControlMessageType.PingResponse, m.Values));
                     }
                     else if (m.EventType == UserControlMessageType.SetBufferLength)
                     {
@@ -167,17 +174,18 @@ namespace RtmpSharp.Net
                         {
                             throw new EntryPointNotFoundException();
                         }
-                        var method = _controllerType.GetMethod(command.MethodCall.Name);
-                        if (method == null)
+                        var targetMethod = FindMethod(command).FirstOrDefault();
+
+                        if (targetMethod == default)
                         {
                             throw new EntryPointNotFoundException();
                         }
-                        var ret = method.Invoke(_controller, new object[] { command });
+                        var ret = targetMethod.Invoke(_controller, new object[] { command });
                         if (ret is Task tsk)
                         {
                             tsk.ContinueWith(t =>
                             {
-                                _ = ReturnResultInvokeAsync(null, command.InvokeId, t.Exception.Message, true, false);
+                                ReturnResultInvoke(null, command.InvokeId, t.Exception.Message, true, false);
                             }, TaskContinuationOptions.OnlyOnFaulted);
                         }
                     }
@@ -199,10 +207,30 @@ namespace RtmpSharp.Net
                                     Console.WriteLine("app not found");
                                     throw new EntryPointNotFoundException($"request app {ConnectionInformation.App} not found");
                                 }
-                                
+
                                 if (!_controllerType.IsAbstract)
                                 {
-                                    _controller = Server.ServiceContainer.Resolve(_controllerType) as AbstractController;
+                                    var ctors = _controllerType.GetConstructors();
+                                    if (ctors.Length != 1)
+                                    {
+                                        throw new InvalidOperationException();
+                                    }
+                                    var parametersInfo = ctors.First().GetParameters();
+                                    var parameters = new List<object>();
+                                    foreach (var parameterInfo in parametersInfo)
+                                    {
+                                        ILifetimeScope scope = null;
+                                        if (Server.SessionScopedServices.Contains(parameterInfo.ParameterType))
+                                        {
+                                            scope = SessionLifetime;
+                                        }
+                                        else
+                                        {
+                                            scope = Server.ServerLifetime;
+                                        }
+                                        parameters.Add(scope.Resolve(parameterInfo.ParameterType));
+                                    }
+                                    _controller = Activator.CreateInstance(_controllerType, parameters.ToArray()) as AbstractController;
                                     _controller.Session = this;
                                 }
                                 else
@@ -233,28 +261,47 @@ namespace RtmpSharp.Net
                                     throw new EntryPointNotFoundException();
                                 }
                                 var methodName = call.Name;
-                                var method = _controllerType.GetMethod(methodName);
+                                var method = ChooseMethodByParameter(command, FindMethod(command));
+                                Console.WriteLine($"Invoke method {methodName}");
                                 if (method != null)
                                 {
                                     _controller?.EnsureSessionStorage();
-                                    var ret = method.Invoke(_controller, command.MethodCall.Parameters);
+                                    var parameters = command.MethodCall.Parameters.ToList();
+                                    if (parameters.Count < method.GetParameters().Length)
+                                    {
+                                        var pad = new object[method.GetParameters().Length - parameters.Count];
+                                        Array.Fill(pad, Type.Missing);
+                                        parameters.AddRange(pad);
+                                    }
+                                    var ret = method.Invoke(_controller, parameters.ToArray());
                                     if (ret is Task tsk)
                                     {
                                         tsk.ContinueWith(t =>
                                         {
-                                            Console.WriteLine($"Exception: {t.Exception.GetType().ToString()}, CallStack: {t.Exception.StackTrace}");
-                                            _ = ReturnResultInvokeAsync(null, command.InvokeId, $"{t.Exception.GetType().ToString()}\t{t.Exception.Message}", true, false);
+                                            if (t.Exception is AggregateException agg)
+                                            {
+                                                foreach (var excep in t.Exception.InnerExceptions)
+                                                {
+                                                    Console.WriteLine(excep.ToString());
+                                                }
+                                            }
+                                            else
+                                            {
+                                                Console.WriteLine(t.Exception.ToString());
+                                            }
+
+                                            ReturnResultInvoke(null, command.InvokeId, $"{t.Exception.GetType().ToString()}\t{t.Exception.Message}", true, false);
                                         }, TaskContinuationOptions.OnlyOnFaulted);
                                         tsk.ContinueWith(t =>
                                         {
                                             if (t.GetType().IsGenericType && t.GetType().GetGenericTypeDefinition() == typeof(Task<>))
                                             {
                                                 var result = t.GetType().GetProperty("Result").GetValue(t);
-                                                _ = SetResultValInvokeAsync(result, command.InvokeId);
+                                                SetResultValInvokeAsync(result, command.InvokeId);
                                             }
                                             else
                                             {
-                                                _ = ReturnVoidInvokeAsync(null, command.InvokeId);
+                                                ReturnVoidInvokeAsync(null, command.InvokeId);
                                             }
                                         }, TaskContinuationOptions.OnlyOnRanToCompletion);
                                     }
@@ -299,15 +346,15 @@ namespace RtmpSharp.Net
             {
                 MethodCall = new Method(method, arguments),
                 InvokeId = GetNextInvokeId()
-            }, 3, 0);
+            }, 3);
             return (T)MiniTypeConverter.ConvertTo(result, typeof(T));
         }
 
-        public async Task SendAmf0DataAsync(RtmpEvent e, CancellationToken ct = default)
+        public void SendAmf0Data(RtmpEvent e)
         {
             //var timestamp = (int)(DateTime.UtcNow - connectTime).TotalMilliseconds;
             //e.Timestamp = timestamp;
-            await writer.WriteAsync(e, StreamId, random.Next(), ct);
+            writer.WriteMessage(e, StreamId, random.Next());
         }
 
         public Task<T> InvokeAsync<T>(string endpoint, string destination, string method, object argument)
@@ -337,10 +384,10 @@ namespace RtmpSharp.Net
             {
                 InvokeId = GetNextInvokeId(),
                 MethodCall = new Method(null, new object[] { remotingMessage })
-            }, 3, 0);
+            }, 3);
             return (T)MiniTypeConverter.ConvertTo(result, typeof(T));
         }
-        public async Task NotifyStatusAsync(AsObject status, CancellationToken ct = default)
+        public void NotifyStatus(AsObject status)
         {
             var onStatusCommand = new InvokeAmf0
             {
@@ -350,15 +397,15 @@ namespace RtmpSharp.Net
             };
             onStatusCommand.MethodCall.CallStatus = CallStatus.Request;
             onStatusCommand.MethodCall.IsSuccess = true;
-            await writer.WriteAsync(onStatusCommand, StreamId, random.Next(), ct);
+            writer.WriteMessage(onStatusCommand, StreamId, random.Next());
         }
 
-        async Task SetResultValInvokeAsync(object param, int transcationId, CancellationToken ct = default)
+        void SetResultValInvokeAsync(object param, int transcationId)
         {
-            await ReturnResultInvokeAsync(null, transcationId, param, ct: ct);
+            ReturnResultInvoke(null, transcationId, param);
         }
 
-        async Task ReturnResultInvokeAsync(object commandObject, int transcationId, object param, bool requiredConnected = true, bool success = true, CancellationToken ct = default)
+        void ReturnResultInvoke(object commandObject, int transcationId, object param, bool requiredConnected = true, bool success = true)
         {
             var result = new InvokeAmf0
             {
@@ -368,10 +415,10 @@ namespace RtmpSharp.Net
             };
             result.MethodCall.CallStatus = CallStatus.Result;
             result.MethodCall.IsSuccess = success;
-            await writer.WriteAsync(result, StreamId, random.Next(), ct);
+            writer.WriteMessage(result, StreamId, random.Next());
         }
 
-        async Task ReturnVoidInvokeAsync(object commandObject, int transcationId, bool requiredConnected = true, CancellationToken ct = default)
+        void ReturnVoidInvokeAsync(object commandObject, int transcationId, bool requiredConnected = true)
         {
             var result = new InvokeAmf0
             {
@@ -381,7 +428,7 @@ namespace RtmpSharp.Net
             };
             result.MethodCall.CallStatus = CallStatus.Result;
             result.MethodCall.IsSuccess = true;
-            await writer.WriteAsync(result, StreamId, random.Next(), ct);
+            writer.WriteMessage(result, StreamId, random.Next());
         }
 
         void HandleConnectInvoke(Command command)
@@ -440,7 +487,7 @@ namespace RtmpSharp.Net
                 { "description", description },
                 { "level", "status" },
             };
-            _ = ReturnResultInvokeAsync(new AsObject {
+            ReturnResultInvoke(new AsObject {
                     { "capabilities", 255.00 },
                     { "fmsVer", "FMS/4,5,1,484" },
                     { "mode", 1.0 }
@@ -458,7 +505,7 @@ namespace RtmpSharp.Net
             var timestamp = (int)((DateTime.UtcNow - connectTime).TotalSeconds);
             var ping = new UserControlMessage(UserControlMessageType.PingRequest, new int[] { timestamp });
             var ret = pingManager.Create(timestamp, ct);
-            await WriteProtocolControlMessageAsync(ping, ct);
+            WriteProtocolControlMessage(ping);
             await ret;
             Console.WriteLine("Client Pong Response");
         }
@@ -468,9 +515,9 @@ namespace RtmpSharp.Net
             writer.writer.WriteBytes(data);
         }
 
-        public async Task WriteProtocolControlMessageAsync(RtmpEvent @event, CancellationToken ct = default)
+        public void WriteProtocolControlMessage(RtmpEvent @event)
         {
-            await writer.WriteAsync(@event, CONTROL_CSID, 0, ct);
+            writer.WriteMessage(@event, CONTROL_CSID, 0);
         }
 
         int GetNextInvokeId()
@@ -504,6 +551,98 @@ namespace RtmpSharp.Net
             return source.Task;
         }
 
+        MethodInfo ChooseMethodByParameter(Command command, List<MethodInfo> methods)
+        {
+            foreach (var method in methods)
+            {
+                var typeList = command.MethodCall.Parameters.Select(p => p.GetType()).ToArray();
+                var targetMethod = _controllerType.GetMethod(method.Name, typeList);
+                if (targetMethod != null)
+                {
+                    if (targetMethod.GetCustomAttribute(typeof(RpcMethodAttribute)) is RpcMethodAttribute rpcMethodAttr)
+                    {
+                        if (rpcMethodAttr.Name == command.MethodCall.Name)
+                        {
+                            return targetMethod;
+                        }
+                    }
+                }
+                else
+                {
+                    var parameters = method.GetParameters();
+                    var requiredParameters = parameters.Where(p => !p.IsOptional).ToArray();
+                    if (requiredParameters.Length <= command.MethodCall.Parameters.Length)
+                    {
+                        for (int i = 0; i < parameters.Length; i++)
+                        {
+                            if (i < requiredParameters.Length)
+                            {
+                                if (parameters[i].ParameterType != command.MethodCall.Parameters[i].GetType())
+                                {
+                                    break;
+                                }
+                            }
+                            else
+                            {
+                                if (i < command.MethodCall.Parameters.Length)
+                                {
+                                    if (parameters[i].ParameterType.IsGenericType && parameters[i].ParameterType.GetGenericTypeDefinition() == typeof(Nullable<>))
+                                    {
+                                        var underlying = Nullable.GetUnderlyingType(parameters[i].ParameterType);
+                                        if (underlying != command.MethodCall.Parameters[i].GetType())
+                                        {
+                                            break;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        if (parameters[i].ParameterType != command.MethodCall.Parameters[i].GetType())
+                                        {
+                                            break;
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    return method;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        List<MethodInfo> FindMethod(Command command)
+        {
+            var ret = new List<MethodInfo>();
+            var methods = _controllerType.GetMethods();
+            foreach (var method in methods)
+            {
+                if (method.IsPublic && !method.ContainsGenericParameters)
+                {
+                    var attributes = method.GetCustomAttributes(true);
+                    foreach (var attr in attributes)
+                    {
+                        if (attr is RpcMethodAttribute rpcMethodAttr)
+                        {
+                            if (rpcMethodAttr.Name == command.MethodCall.Name)
+                            {
+                                ret.Add(method);
+                            }
+                            else if (rpcMethodAttr.Name == null && method.Name == command.MethodCall.Name)
+                            {
+                                ret.Add(method);
+                            }
+                        }
+                    }
+                }
+            }
+            return ret;
+        }
+
         #region IDisposable Support
         private bool disposedValue = false; // 要检测冗余调用
 
@@ -517,6 +656,7 @@ namespace RtmpSharp.Net
                     {
                         dispController?.Dispose();
                     }
+                    SessionLifetime.Dispose();
                     clientSocket.Close();
                     reader.reader.Dispose();
                 }

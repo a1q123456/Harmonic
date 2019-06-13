@@ -66,6 +66,7 @@ namespace RtmpSharp.Net
                             {
                                 sessionState.CancellationTokenSource.Dispose();
                                 sessionState.CancellationTokenSource = null;
+                                sessionState.LastPing = DateTime.Now;
                             }, TaskContinuationOptions.OnlyOnRanToCompletion);
                             pingTask.ContinueWith(tsk =>
                             {
