@@ -19,22 +19,24 @@ namespace RtmpSharp.Net
 
         public event EventHandler<ExceptionalEventArgs> Disconnected;
 
-        internal readonly AmfWriter writer;
         readonly Dictionary<int, RtmpHeader> rtmpHeaders;
         readonly ObjectEncoding objectEncoding;
+        Stream stream = null;
 
         // defined by the spec
         const int DefaultChunkSize = 128;
         public int writeChunkSize = DefaultChunkSize;
         private int packetAvailable = 0;
+        private SerializationContext context = null;
+        private ConcurrentQueue<byte[]> chunkQueue = new ConcurrentQueue<byte[]>();
+        private SemaphoreSlim signal = new SemaphoreSlim(0);
 
-        public RtmpPacketWriter(AmfWriter writer, ObjectEncoding objectEncoding)
+        public RtmpPacketWriter(Stream stream, SerializationContext context, ObjectEncoding objectEncoding)
         {
             this.objectEncoding = objectEncoding;
-            this.writer = writer;
-
+            this.stream = stream;
+            this.context = context;
             rtmpHeaders = new Dictionary<int, RtmpHeader>();
-
             Continue = true;
         }
 
@@ -48,7 +50,18 @@ namespace RtmpSharp.Net
 
         public async Task WriteOnceAsync(CancellationToken ct = default)
         {
-            await writer.WriteOnceAsync(ct);
+            await signal.WaitAsync();
+            if (chunkQueue.TryDequeue(out var buffer))
+            {
+                await stream.WriteAsync(buffer, 0, buffer.Length, ct);
+                ct.ThrowIfCancellationRequested();
+            }
+        }
+
+        internal void QueueChunk(byte[] buffer)
+        {
+            chunkQueue.Enqueue(buffer);
+            signal.Release();
         }
 
         static ChunkMessageHeaderType GetMessageHeaderType(RtmpHeader header, RtmpHeader previousHeader)
@@ -102,17 +115,30 @@ namespace RtmpSharp.Net
 
             rtmpHeaders[streamId] = header;
 
-            WriteMessageHeaderAsync(header, previousHeader);
 
             var first = true;
             for (var i = 0; i < header.PacketLength; i += writeChunkSize)
             {
-                if (!first)
-                    WriteBasicHeaderAsync(ChunkMessageHeaderType.Continuation, header.StreamId);
+                byte[] headerBuffer = null;
+                using (var writer = new AmfWriter(context, objectEncoding))
+                {
+                    if (first)
+                    {
+                        WriteMessageHeader(writer, header, previousHeader);
+                    }
+                    else
+                    {
+                        WriteChunkHeader(writer, ChunkMessageHeaderType.Continuation, header.StreamId);
+                    }
+                    headerBuffer = writer.GetBytes();
+                }
 
                 var bytesToWrite = i + writeChunkSize > header.PacketLength ? header.PacketLength - i : writeChunkSize;
-                writer.WriteAsync(buffer, i, bytesToWrite);
-                writer.QueueChunk();
+                var chunkBuffer = new byte[headerBuffer.Length + bytesToWrite];
+                Buffer.BlockCopy(headerBuffer, 0, chunkBuffer, 0, headerBuffer.Length);
+                Buffer.BlockCopy(buffer, i, chunkBuffer, headerBuffer.Length, bytesToWrite);
+
+                QueueChunk(chunkBuffer);
                 first = false;
             }
 
@@ -122,7 +148,7 @@ namespace RtmpSharp.Net
             }
         }
 
-        void WriteBasicHeader(ChunkMessageHeaderType messageHeaderFormat, int streamId)
+        void WriteChunkHeader(AmfWriter writer, ChunkMessageHeaderType messageHeaderFormat, int streamId)
         {
             var fmt = (byte)messageHeaderFormat;
             if (streamId <= 63)
@@ -142,30 +168,10 @@ namespace RtmpSharp.Net
             }
         }
 
-        void WriteBasicHeaderAsync(ChunkMessageHeaderType messageHeaderFormat, int streamId)
-        {
-            var fmt = (byte)messageHeaderFormat;
-            if (streamId <= 63)
-            {
-                writer.WriteByteAsync((byte)((fmt << 6) + streamId));
-            }
-            else if (streamId <= 320)
-            {
-                writer.WriteByteAsync((byte)(fmt << 6));
-                writer.WriteByteAsync((byte)(streamId - 64));
-            }
-            else
-            {
-                writer.WriteByteAsync((byte)((fmt << 6) | 1));
-                writer.WriteByteAsync((byte)((streamId - 64) & 0xff));
-                writer.WriteByteAsync((byte)((streamId - 64) >> 8));
-            }
-        }
-
-        void WriteMessageHeader(RtmpHeader header, RtmpHeader previousHeader)
+        void WriteMessageHeader(AmfWriter writer, RtmpHeader header, RtmpHeader previousHeader)
         {
             var headerType = GetMessageHeaderType(header, previousHeader);
-            WriteBasicHeader(headerType, header.StreamId);
+            WriteChunkHeader(writer, headerType, header.StreamId);
 
             var uint24Timestamp = header.Timestamp < 0xFFFFFF ? header.Timestamp : 0xFFFFFF;
             switch (headerType)
@@ -194,45 +200,12 @@ namespace RtmpSharp.Net
                 writer.WriteInt32(header.Timestamp);
         }
 
-        void WriteMessageHeaderAsync(RtmpHeader header, RtmpHeader previousHeader)
-        {
-            var headerType = GetMessageHeaderType(header, previousHeader);
-            WriteBasicHeaderAsync(headerType, header.StreamId);
-
-            var uint24Timestamp = header.Timestamp < 0xFFFFFF ? header.Timestamp : 0xFFFFFF;
-            switch (headerType)
-            {
-                case ChunkMessageHeaderType.New:
-                    writer.WriteUInt24Async(uint24Timestamp);
-                    writer.WriteUInt24Async(header.PacketLength);
-                    writer.WriteByteAsync((byte)header.MessageType);
-                    writer.WriteReverseIntAsync(header.MessageStreamId);
-                    break;
-                case ChunkMessageHeaderType.SameSource:
-                    writer.WriteUInt24Async(uint24Timestamp);
-                    writer.WriteUInt24Async(header.PacketLength);
-                    writer.WriteByteAsync((byte)header.MessageType);
-                    break;
-                case ChunkMessageHeaderType.TimestampAdjustment:
-                    writer.WriteUInt24Async(uint24Timestamp);
-                    break;
-                case ChunkMessageHeaderType.Continuation:
-                    break;
-                default:
-                    throw new ArgumentException("headerType");
-            }
-
-            if (uint24Timestamp >= 0xFFFFFF)
-                writer.WriteInt32Async(header.Timestamp);
-        }
-
         byte[] GetMessageBytes(RtmpEvent message, Action<AmfWriter, RtmpEvent> handler)
         {
-            using (var stream = new MemoryStream())
-            using (var messageWriter = new AmfWriter(stream, writer.SerializationContext, objectEncoding))
+            using (var messageWriter = new AmfWriter(context, objectEncoding))
             {
                 handler(messageWriter, message);
-                return stream.ToArray();
+                return messageWriter.GetBytes();
             }
         }
         byte[] GetMessageBytes(RtmpHeader header, RtmpEvent message)

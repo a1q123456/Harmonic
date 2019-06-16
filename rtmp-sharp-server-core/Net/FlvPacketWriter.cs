@@ -163,11 +163,10 @@ namespace RtmpSharp.Net
 
         byte[] GetMessageBytes(RtmpEvent message, Action<AmfWriter, RtmpEvent> handler)
         {
-            using (var stream = new MemoryStream())
-            using (var messageWriter = new AmfWriter(stream, writer.SerializationContext, objectEncoding))
+            using (var messageWriter = new AmfWriter(writer.SerializationContext, objectEncoding))
             {
                 handler(messageWriter, message);
-                return stream.ToArray();
+                return messageWriter.GetBytes();
             }
         }
 

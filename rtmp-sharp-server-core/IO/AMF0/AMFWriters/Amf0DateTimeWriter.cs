@@ -10,11 +10,5 @@ namespace RtmpSharp.IO.AMF0.AMFWriters
             writer.WriteMarker(Amf0TypeMarkers.Date);
             writer.WriteAmf0DateTime((DateTime)obj);
         }
-
-        public void WriteDataAsync(AmfWriter writer, object obj)
-        {
-            writer.WriteMarkerAsync(Amf0TypeMarkers.Date);
-            writer.WriteAmf0DateTimeAsync((DateTime)obj);
-        }
     }
 }

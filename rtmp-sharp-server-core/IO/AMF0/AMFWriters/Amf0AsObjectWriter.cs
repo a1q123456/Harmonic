@@ -10,10 +10,5 @@ namespace RtmpSharp.IO.AMF0.AMFWriters
         {
             writer.WriteAmf0AsObject(obj as AsObject);
         }
-
-        public void WriteDataAsync(AmfWriter writer, object obj)
-        {
-            writer.WriteAmf0AsObjectAsync(obj as AsObject);
-        }
     }
 }

@@ -15,7 +15,7 @@ namespace demo
         static void Main(string[] args)
         {
             RtmpServer server = new RtmpServer(new Startup(), new RtmpSharp.IO.SerializationContext());
-            server.RegisterController<LivingController>("living");
+            server.RegisterController<LivingController>();
             var tsk = server.StartAsync();
             tsk.Wait();
         }
