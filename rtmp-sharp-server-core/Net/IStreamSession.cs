@@ -15,6 +15,7 @@ namespace RtmpSharp.Net
     public interface IStreamSession
     {
         event EventHandler Disconnected;
+        int BufferMilliseconds { get; }
         ConnectionInformation ConnectionInformation { get; }
         bool IsDisconnected { get; }
         ushort StreamId { get; }

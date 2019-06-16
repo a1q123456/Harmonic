@@ -102,7 +102,7 @@ namespace RtmpSharp.Controller
                 {"description", "Stream is now published." },
                 {"details", publishingName }
             });
-            
+
             _sessionStorage.IsPublishing = true;
             return new object();
         }
@@ -113,12 +113,6 @@ namespace RtmpSharp.Controller
             {
                 _publisherSessionService.RemovePublisher(Session);
             }
-        }
-
-        [RpcMethod(Name = "createStream")]
-        public async Task<ushort> CreateStream()
-        {
-            return Session.StreamId;
         }
 
         [RpcMethod(Name = "play")]
@@ -161,42 +155,23 @@ namespace RtmpSharp.Controller
             publisherSessionStorage.AudioReceived += (s, e) =>
             {
                 _sessionStorage.AudioBuffer.Enqueue(e.AudioData);
+                var flvMetadata = (Dictionary<string, object>)_sessionStorage.ConnectedSession.SessionStorage.FlvMetaData.MethodCall.Parameters[0];
+                var frameCount = Math.Max(1, Session.BufferMilliseconds * ((double)flvMetadata["framerate"] / 1000));
+                while (_sessionStorage.AudioBuffer.Count >= frameCount)
+                {
+                    Session.SendAmf0Data(_sessionStorage.AudioBuffer.Dequeue());
+                }
             };
             publisherSessionStorage.VideoReceived += (s, e) =>
             {
                 _sessionStorage.VideoBuffer.Enqueue(e.VideoData);
-            };
-            ServePlay();
-        }
-
-        private void ServePlay()
-        {
-            var tsk = SendAVDataOnce();
-            tsk.ContinueWith(t =>
-            {
-                ServePlay();
-            }, TaskContinuationOptions.OnlyOnRanToCompletion);
-        }
-
-        private async Task SendAVDataOnce()
-        {
-            if (!_sessionStorage.AudioBuffer.Any() && !_sessionStorage.VideoBuffer.Any())
-            {
-                Session.WriteProtocolControlMessage(new UserControlMessage(UserControlMessageType.StreamDry, new int[] { Session.StreamId }));
-                await Task.Delay(10);
-            }
-            else
-            {
-                if (_sessionStorage.AudioBuffer.Any())
-                {
-                    Session.SendAmf0Data(_sessionStorage.AudioBuffer.Dequeue());
-                }
-                if (_sessionStorage.VideoBuffer.Any())
+                var flvMetadata = (Dictionary<string, object>)_sessionStorage.ConnectedSession.SessionStorage.FlvMetaData.MethodCall.Parameters[0];
+                var frameCount = Math.Max(1, Session.BufferMilliseconds * ((double)flvMetadata["framerate"] / 1000));
+                while (_sessionStorage.VideoBuffer.Count >= frameCount)
                 {
                     Session.SendAmf0Data(_sessionStorage.VideoBuffer.Dequeue());
                 }
-            }
-            await Task.Yield();
+            };
         }
 
         private void SendMetadata(string path, bool flvHeader = false)

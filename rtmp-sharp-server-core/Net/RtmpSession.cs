@@ -51,7 +51,7 @@ namespace RtmpSharp.Net
         public RtmpServer Server { get; private set; } = null;
         private ILifetimeScope SessionLifetime { get; set; } = null;
         public ConnectionInformation ConnectionInformation { get; private set; } = null;
-
+        public int BufferMilliseconds { get; set; } = 0;
 
         public RtmpSession(Socket client_socket, Stream stream, RtmpServer server, ushort client_id, SerializationContext context, ObjectEncoding objectEncoding = ObjectEncoding.Amf0, bool asyncMode = false)
         {
@@ -156,7 +156,7 @@ namespace RtmpSharp.Net
                     }
                     else if (m.EventType == UserControlMessageType.SetBufferLength)
                     {
-                        Console.WriteLine("Set Buffer Length");
+                        BufferMilliseconds = m.Values[1];
                     }
                     else if (m.EventType == UserControlMessageType.PingResponse)
                     {
@@ -238,10 +238,14 @@ namespace RtmpSharp.Net
                                     throw new InvalidOperationException();
                                 }
                                 break;
+                            case "createStream":
+                                ReturnResultInvoke(null, command.InvokeId, StreamId);
+                                break;
                             case "deleteStream":
                                 if (_controller is IDisposable dispController)
                                 {
                                     dispController?.Dispose();
+                                    _controller = null;
                                 }
                                 break;
                             case "_result":
