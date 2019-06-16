@@ -10,11 +10,5 @@ namespace RtmpSharp.IO.AMF3.AMFWriters
             writer.WriteMarker(Amf3TypeMarkers.Integer);
             writer.WriteAmf3Int(Convert.ToInt32(obj));
         }
-
-        public void WriteDataAsync(AmfWriter writer, object obj)
-        {
-            writer.WriteMarkerAsync(Amf3TypeMarkers.Integer);
-            writer.WriteAmf3IntAsync(Convert.ToInt32(obj));
-        }
     }
 }

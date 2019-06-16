@@ -270,9 +270,12 @@ namespace RtmpSharp.Hosting
         }
         public void RegisterController<T>(string appName) where T : AbstractController
         {
+            if (appName.Contains('/'))
+            {
+                throw new ArgumentOutOfRangeException();
+            }
             lock (registeredApps)
             {
-
                 if (registeredApps.ContainsKey(appName)) throw new InvalidOperationException("app exists");
                 registeredApps.Add(appName, typeof(T));
             }
@@ -337,8 +340,7 @@ namespace RtmpSharp.Hosting
 
             public static Task WriteAsync(Stream stream, Handshake h, bool writeVersion, CancellationToken ct)
             {
-                using (var memoryStream = new MemoryStream())
-                using (var writer = new AmfWriter(memoryStream, null))
+                using (var writer = new AmfWriter(null))
                 {
                     if (writeVersion)
                         writer.WriteByte(h.Version);
@@ -347,7 +349,7 @@ namespace RtmpSharp.Hosting
                     writer.WriteUInt32(h.Time2);
                     writer.WriteBytes(h.Random);
 
-                    var buffer = memoryStream.ToArray();
+                    var buffer = writer.GetBytes();
                     return stream.WriteAsync(buffer, 0, buffer.Length, ct);
                 }
             }

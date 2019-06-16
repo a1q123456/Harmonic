@@ -20,11 +20,5 @@ namespace RtmpSharp.IO.AMF3.AMFWriters
             writer.WriteMarker(this.typeMarker);
             write(writer, obj as IList);
         }
-
-        public void WriteDataAsync(AmfWriter writer, object obj)
-        {
-            writer.WriteMarkerAsync(this.typeMarker);
-            write(writer, obj as IList);
-        }
     }
 }

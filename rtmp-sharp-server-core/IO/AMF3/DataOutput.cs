@@ -8,23 +8,23 @@ namespace RtmpSharp.IO.AMF3
     class DataOutput : IDataOutput
     {
         private AmfWriter writer;
-        private ObjectEncoding objectEncoding;
 
         public DataOutput(AmfWriter writer)
         {
             this.writer = writer;
-            this.objectEncoding = ObjectEncoding.Amf3;
+            this.ObjectEncoding = ObjectEncoding.Amf3;
         }
 
-        public ObjectEncoding ObjectEncoding
-        {
-            get { return objectEncoding; }
-            set { objectEncoding = value; }
-        }
+        public ObjectEncoding ObjectEncoding { get; set; }
         
+        public byte[] GetBytes()
+        {
+            return writer.GetBytes();
+        }
+
         public void WriteObject(object value)
         {
-            switch (objectEncoding)
+            switch (ObjectEncoding)
             {
                 case ObjectEncoding.Amf0:
                     writer.WriteAmfItem(ObjectEncoding.Amf0, value);

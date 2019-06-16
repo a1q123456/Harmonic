@@ -41,7 +41,7 @@ namespace RtmpSharp.Net
         public RtmpPacketReader reader = null;
         ObjectEncoding objectEncoding;
         Socket clientSocket;
-        public ushort StreamId { get; private set; } = 0;
+        public ushort StreamId { get; private set; } = 3;
         public ushort ClientId { get; private set; } = 0;
         private const int CONTROL_CSID = 2;
         private Random random = new Random();
@@ -59,7 +59,7 @@ namespace RtmpSharp.Net
             clientSocket = client_socket;
             Server = server;
             this.objectEncoding = objectEncoding;
-            writer = new RtmpPacketWriter(new AmfWriter(stream, context, ObjectEncoding.Amf0, asyncMode), ObjectEncoding.Amf0);
+            writer = new RtmpPacketWriter(stream, context, ObjectEncoding.Amf0);
             reader = new RtmpPacketReader(new AmfReader(stream, context, asyncMode));
             reader.EventReceived += EventReceivedCallback;
             reader.Disconnected += OnPacketProcessorDisconnected;
@@ -82,10 +82,18 @@ namespace RtmpSharp.Net
 
         public Task WriteOnceAsync(CancellationToken ct = default)
         {
+            if (disposedValue)
+            {
+                throw new ObjectDisposedException("session already disposed");
+            }
             return writer.WriteOnceAsync(ct);
         }
         public Task StartWriteAsync(CancellationToken ct = default)
         {
+            if (disposedValue)
+            {
+                throw new ObjectDisposedException("session already disposed");
+            }
             var tsk = writer.WriteOnceAsync(ct);
             tsk.ContinueWith(t =>
             {
@@ -104,6 +112,10 @@ namespace RtmpSharp.Net
         }
         public Task StartReadAsync(CancellationToken ct = default)
         {
+            if (disposedValue)
+            {
+                throw new ObjectDisposedException("session already disposed");
+            }
             var tsk = reader.ReadOnceAsync(ct);
             tsk.ContinueWith(t =>
             {
@@ -123,6 +135,10 @@ namespace RtmpSharp.Net
 
         async Task<object> CallCommandAsync(Command command, int streamId, bool requireConnected = true, CancellationToken ct = default)
         {
+            if (disposedValue)
+            {
+                throw new ObjectDisposedException("session already disposed");
+            }
             if (requireConnected && IsDisconnected)
                 return CreateExceptedTask(new ClientDisconnectedException("disconnected"));
 
@@ -199,7 +215,6 @@ namespace RtmpSharp.Net
                         switch (call.Name)
                         {
                             case "connect":
-                                StreamId = Server.RequestStreamId();
                                 HandleConnectInvoke(command);
                                 HasConnected = true;
                                 if (!Server.RegisteredApps.TryGetValue(ConnectionInformation.App, out _controllerType))
@@ -239,6 +254,7 @@ namespace RtmpSharp.Net
                                 }
                                 break;
                             case "createStream":
+                                StreamId = Server.RequestStreamId();
                                 ReturnResultInvoke(null, command.InvokeId, StreamId);
                                 break;
                             case "deleteStream":
@@ -341,11 +357,19 @@ namespace RtmpSharp.Net
         }
         public Task<T> InvokeAsync<T>(string method, object argument)
         {
+            if (disposedValue)
+            {
+                throw new ObjectDisposedException("session already disposed");
+            }
             return InvokeAsync<T>(method, new[] { argument });
         }
 
         public async Task<T> InvokeAsync<T>(string method, object[] arguments)
         {
+            if (disposedValue)
+            {
+                throw new ObjectDisposedException("session already disposed");
+            }
             var result = await CallCommandAsync(new InvokeAmf0
             {
                 MethodCall = new Method(method, arguments),
@@ -356,6 +380,10 @@ namespace RtmpSharp.Net
 
         public void SendAmf0Data(RtmpEvent e)
         {
+            if (disposedValue)
+            {
+                throw new ObjectDisposedException("session already disposed");
+            }
             //var timestamp = (int)(DateTime.UtcNow - connectTime).TotalMilliseconds;
             //e.Timestamp = timestamp;
             writer.WriteMessage(e, StreamId, random.Next());
@@ -505,6 +533,10 @@ namespace RtmpSharp.Net
 
         public async Task PingAsync(CancellationToken ct = default)
         {
+            if (disposedValue)
+            {
+                throw new ObjectDisposedException("session already disposed");
+            }
             Console.WriteLine("Server Ping Request");
             var timestamp = (int)((DateTime.UtcNow - connectTime).TotalSeconds);
             var ping = new UserControlMessage(UserControlMessageType.PingRequest, new int[] { timestamp });
@@ -516,11 +548,19 @@ namespace RtmpSharp.Net
 
         public void SendRawData(byte[] data)
         {
-            writer.writer.WriteBytes(data);
+            if (disposedValue)
+            {
+                throw new ObjectDisposedException("session already disposed");
+            }
+            writer.QueueChunk(data);
         }
 
         public void WriteProtocolControlMessage(RtmpEvent @event)
         {
+            if (disposedValue)
+            {
+                throw new ObjectDisposedException("session already disposed");
+            }
             writer.WriteMessage(@event, CONTROL_CSID, 0);
         }
 
@@ -660,9 +700,12 @@ namespace RtmpSharp.Net
                     {
                         dispController?.Dispose();
                     }
+                    
                     SessionLifetime.Dispose();
                     clientSocket.Close();
-                    reader.reader.Dispose();
+                    reader.Dispose();
+                    reader = null;
+                    writer = null;
                 }
 
                 disposedValue = true;
