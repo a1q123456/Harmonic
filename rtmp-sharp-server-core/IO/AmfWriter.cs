@@ -297,7 +297,7 @@ namespace RtmpSharp.IO
         }
 
         // writes a 32-bit signed integer to the current position in the AMF stream using variable length unsigned 29-bit integer encoding.
-        public void WriteUInt24(int value)
+        public void WriteUInt24(uint value)
         {
             if (value < UInt29Range[0] || value > UInt29Range[1])
                 throw new ArgumentOutOfRangeException(nameof(value));

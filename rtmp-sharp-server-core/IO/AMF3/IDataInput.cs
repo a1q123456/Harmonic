@@ -14,7 +14,7 @@ namespace RtmpSharp.IO.AMF3
         float ReadFloat();
         short ReadInt16();
         ushort ReadUInt16();
-        int ReadUInt24();
+        uint ReadUInt24();
         int ReadInt32();
         uint ReadUInt32();
         string ReadUtf();
@@ -27,7 +27,7 @@ namespace RtmpSharp.IO.AMF3
         Task<float> ReadFloatAsync(CancellationToken ct = default);
         Task<short> ReadInt16Async(CancellationToken ct = default);
         Task<ushort> ReadUInt16Async(CancellationToken ct = default);
-        Task<int> ReadUInt24Async(CancellationToken ct = default);
+        Task<uint> ReadUInt24Async(CancellationToken ct = default);
         Task<int> ReadInt32Async(CancellationToken ct = default);
         Task<uint> ReadUInt32Async(CancellationToken ct = default);
         Task<string> ReadUtfAsync(CancellationToken ct = default);

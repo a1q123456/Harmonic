@@ -18,16 +18,15 @@ namespace RtmpSharp.Net
         int BufferMilliseconds { get; }
         ConnectionInformation ConnectionInformation { get; }
         bool IsDisconnected { get; }
-        ushort StreamId { get; }
         ushort ClientId { get; }
         dynamic SessionStorage { get; set; }
         RtmpServer Server { get; }
-        void SendAmf0Data(RtmpEvent e);
+        void SendAmf0Data(RtmpEvent e, int messageStreamId, int chunkStreamId);
         Task PingAsync(CancellationToken ct = default);
         void Disconnect(ExceptionalEventArgs exceptionalEventArgs);
         void SendRawData(byte[] data);
         void WriteProtocolControlMessage(RtmpEvent @event);
-        Task<T> InvokeAsync<T>(string endpoint, string destination, string method, object[] arguments);
-        void NotifyStatus(AsObject status);
+        Task<T> InvokeAsync<T>(string endpoint, string destination, string method, object[] arguments, int messageStreamId, int chunkStreamId);
+        void NotifyStatus(AsObject status, int messageStreamId, int chunkStreamId);
     }
 }

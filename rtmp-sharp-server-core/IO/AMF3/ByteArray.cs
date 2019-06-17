@@ -191,7 +191,7 @@ namespace RtmpSharp.IO.AMF3
             return dataInput.ReadUInt16();
         }
 
-        public int ReadUInt24()
+        public uint ReadUInt24()
         {
             return dataInput.ReadUInt24();
         }
@@ -260,7 +260,7 @@ namespace RtmpSharp.IO.AMF3
             dataOutput.WriteUInt16(value);
         }
 
-        public void WriteUInt24(int value)
+        public void WriteUInt24(uint value)
         {
             dataOutput.WriteUInt24(value);
         }
