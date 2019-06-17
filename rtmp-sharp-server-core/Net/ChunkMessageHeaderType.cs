@@ -3,9 +3,9 @@ namespace RtmpSharp.Net
 {
     public enum ChunkMessageHeaderType : byte
     {
-        New = 0,
-        SameSource = 1,
-        TimestampAdjustment = 2,
-        Continuation = 3
+        Complete = 0,
+        SameMessageStreamId = 1,
+        OnlyTimestampNotSame = 2,
+        AllSame = 3
     }
 }

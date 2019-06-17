@@ -9,10 +9,5 @@ namespace RtmpSharp.IO.AMF3.AMFWriters
         {
             writer.WriteAmf3BoolSpecial((bool)obj);
         }
-
-        public void WriteDataAsync(AmfWriter writer, object obj)
-        {
-            writer.WriteAmf3BoolSpecialAsync((bool)obj);
-        }
     }
 }

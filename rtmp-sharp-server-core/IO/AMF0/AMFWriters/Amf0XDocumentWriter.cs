@@ -10,11 +10,5 @@ namespace RtmpSharp.IO.AMF0.AMFWriters
             writer.WriteMarker(Amf0TypeMarkers.Xml);
             writer.WriteAmf0XDocument(obj as XDocument);
         }
-
-        public void WriteDataAsync(AmfWriter writer, object obj)
-        {
-            writer.WriteMarkerAsync(Amf0TypeMarkers.Xml);
-            writer.WriteAmf0XDocumentAsync(obj as XDocument);
-        }
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Authentication;
+using System.Threading;
 using System.Threading.Tasks;
 using Complete;
 using RtmpSharp.IO;
@@ -33,7 +34,6 @@ namespace RtmpSharp.Controller
             public PublishingType PublishingType { get; set; }
             public event AudioEventHandler AudioReceived;
             public event VideoEventHandler VideoReceived;
-            public long BufferFrames { get; set; } = 1;
             public IStreamSession ConnectedSession { get; set; } = null;
             public NotifyAmf0 FlvMetaData { get; set; } = null;
             public void TriggerAudioReceived(object s, AudioEventArgs e)
@@ -48,6 +48,12 @@ namespace RtmpSharp.Controller
 
         private SessionStorage _sessionStorage = null;
         private PublisherSessionService _publisherSessionService = null;
+        private int _streamId = 0;
+        private Random _random = new Random();
+
+        private const int COMMAND_CHANNEL = 4;
+        private const int VIDEO_CHANNEL = 5;
+        private const int AUDIO_CHANNEL = 6;
 
         public LivingController(PublisherSessionService publisherSessionService)
         {
@@ -71,7 +77,7 @@ namespace RtmpSharp.Controller
         }
 
         [RpcMethod(Name = "publish")]
-        public object Publish(string publishingName, string publishingType)
+        public void Publish(string publishingName, string publishingType)
         {
             var publishingTypeMap = new Dictionary<string, PublishingType>()
             {
@@ -79,21 +85,24 @@ namespace RtmpSharp.Controller
                 { "record", PublishingType.Record },
                 { "append", PublishingType.Append }
             };
+            if (string.IsNullOrEmpty(publishingName))
+            {
+                throw new InvalidOperationException("empty publishing name");
+            }
             if (!publishingTypeMap.ContainsKey(publishingType))
             {
                 throw new InvalidOperationException($"not supported publishing type {publishingType}");
             }
+
             _sessionStorage.PublishingType = publishingTypeMap[publishingType];
 
-            _sessionStorage.AudioBuffer = new Queue<AudioData>();
-            _sessionStorage.VideoBuffer = new Queue<VideoData>();
             _publisherSessionService.RegisterPublisher(publishingName, Session);
             Session.Disconnected += (s, e) =>
             {
                 _publisherSessionService.RemovePublisher(Session);
             };
 
-            Session.WriteProtocolControlMessage(new UserControlMessage(UserControlMessageType.StreamBegin, new int[] { Session.StreamId }));
+            Session.WriteProtocolControlMessage(new UserControlMessage(UserControlMessageType.StreamBegin, new int[] { _streamId }));
 
             Session.NotifyStatus(new AsObject
             {
@@ -101,24 +110,26 @@ namespace RtmpSharp.Controller
                 {"code", "NetStream.Publish.Start" },
                 {"description", "Stream is now published." },
                 {"details", publishingName }
-            });
-            
+            }, _streamId, COMMAND_CHANNEL);
+
             _sessionStorage.IsPublishing = true;
-            return new object();
         }
 
         public void Dispose()
         {
-            if (Session != null)
+            if (Session != null && Session.SessionStorage != null)
             {
-                _publisherSessionService.RemovePublisher(Session);
+                if (Session.SessionStorage.ConnectedSession != null)
+                {
+                    var publisherSessionStorage = Session.SessionStorage.ConnectedSession.SessionStorage as SessionStorage;
+                    if (publisherSessionStorage != null)
+                    {
+                        publisherSessionStorage.VideoReceived -= BufferVideoData;
+                        publisherSessionStorage.AudioReceived -= BufferAudioData;
+                    }
+                    _publisherSessionService.RemovePublisher(Session);
+                }
             }
-        }
-
-        [RpcMethod(Name = "createStream")]
-        public async Task<ushort> CreateStream()
-        {
-            return Session.StreamId;
         }
 
         [RpcMethod(Name = "play")]
@@ -129,7 +140,8 @@ namespace RtmpSharp.Controller
                 throw new UnauthorizedAccessException();
             }
 
-            Session.WriteProtocolControlMessage(new UserControlMessage(UserControlMessageType.StreamBegin, new int[] { Session.StreamId }));
+            Session.WriteProtocolControlMessage(new UserControlMessage(UserControlMessageType.StreamIsRecorded, new int[] { _streamId }));
+
 
             Session.NotifyStatus(new AsObject
             {
@@ -137,14 +149,14 @@ namespace RtmpSharp.Controller
                 {"code", "NetStream.Play.Reset" },
                 {"description", "Resetting and playing stream." },
                 {"details", streamName }
-            });
+            }, _streamId, COMMAND_CHANNEL);
             Session.NotifyStatus(new AsObject
             {
                 {"level", "status" },
                 {"code", "NetStream.Play.Start" },
                 {"description", "Started playing." },
                 {"details", streamName }
-            });
+            }, _streamId, COMMAND_CHANNEL);
             _sessionStorage.ConnectedSession = _publisherSessionService.FindPublisher(streamName);
             if (_sessionStorage.ConnectedSession == null)
             {
@@ -156,47 +168,79 @@ namespace RtmpSharp.Controller
             {
                 throw new InvalidOperationException();
             }
-            _sessionStorage.AudioBuffer = new Queue<AudioData>(publisherSessionStorage.AudioBuffer);
-            _sessionStorage.VideoBuffer = new Queue<VideoData>(publisherSessionStorage.VideoBuffer);
-            publisherSessionStorage.AudioReceived += (s, e) =>
-            {
-                _sessionStorage.AudioBuffer.Enqueue(e.AudioData);
-            };
-            publisherSessionStorage.VideoReceived += (s, e) =>
-            {
-                _sessionStorage.VideoBuffer.Enqueue(e.VideoData);
-            };
-            ServePlay();
+            _sessionStorage.AudioBuffer = new Queue<AudioData>();
+            _sessionStorage.VideoBuffer = new Queue<VideoData>();
+            publisherSessionStorage.AudioReceived += BufferAudioData;
+            publisherSessionStorage.VideoReceived += BufferVideoData;
+            //ServePlay();
         }
+        private SemaphoreSlim audioReceived = new SemaphoreSlim(0);
+        private SemaphoreSlim videoReceived = new SemaphoreSlim(0);
 
         private void ServePlay()
         {
-            var tsk = SendAVDataOnce();
+            var tsk = SendAvData();
             tsk.ContinueWith(t =>
             {
+                if (!_sessionStorage.AudioBuffer.Any() && _sessionStorage.VideoBuffer.Any())
+                {
+                    Session.WriteProtocolControlMessage(new UserControlMessage(UserControlMessageType.StreamDry, new int[] { _streamId }));
+                }
                 ServePlay();
             }, TaskContinuationOptions.OnlyOnRanToCompletion);
         }
 
-        private async Task SendAVDataOnce()
+        private async Task SendAvData()
         {
-            if (!_sessionStorage.AudioBuffer.Any() && !_sessionStorage.VideoBuffer.Any())
+            await audioReceived.WaitAsync();
+            await videoReceived.WaitAsync();
+            Session.SendAmf0Data(_sessionStorage.AudioBuffer.Dequeue(), _streamId, AUDIO_CHANNEL);
+            Session.SendAmf0Data(_sessionStorage.VideoBuffer.Dequeue(), _streamId, VIDEO_CHANNEL);
+        }
+
+        private bool readyForPlay = false;
+        private int videoTimestamp = 0;
+        private int audioTimestamp = 0;
+        public override List<int> CreatedStreams { get; } = new List<int>();
+
+        private void BufferAudioData(object sender, AudioEventArgs e)
+        {
+            if (!readyForPlay)
             {
-                Session.WriteProtocolControlMessage(new UserControlMessage(UserControlMessageType.StreamDry, new int[] { Session.StreamId }));
-                await Task.Delay(10);
+                return;
             }
-            else
+            // audioTimestamp += e.AudioData.Timestamp;
+            // e.AudioData.Timestamp = audioTimestamp;
+            Session.SendAmf0Data(e.AudioData, _streamId, AUDIO_CHANNEL);
+
+            // _sessionStorage.AudioBuffer.Enqueue(e.AudioData);
+            // audioReceived.Release();
+        }
+        private void BufferVideoData(object sender, VideoEventArgs e)
+        {
+            if (!readyForPlay && e.VideoData.Data[0] >> 4 == 0x01)
             {
-                if (_sessionStorage.AudioBuffer.Any())
-                {
-                    Session.SendAmf0Data(_sessionStorage.AudioBuffer.Dequeue());
-                }
-                if (_sessionStorage.VideoBuffer.Any())
-                {
-                    Session.SendAmf0Data(_sessionStorage.VideoBuffer.Dequeue());
-                }
+                Session.WriteProtocolControlMessage(new UserControlMessage(UserControlMessageType.StreamBegin, new int[] { _streamId }));
+                readyForPlay = true;
             }
-            await Task.Yield();
+            if (!readyForPlay)
+            {
+                return;
+            }
+
+            // _sessionStorage.VideoBuffer.Enqueue(e.VideoData);
+            // videoReceived.Release();
+            // _sessionStorage.VideoBuffer.Enqueue(e.VideoData);
+            // var flvMetadata = (Dictionary<string, object>)_sessionStorage.ConnectedSession.SessionStorage.FlvMetaData.MethodCall.Parameters[0];
+            // var frameCount = Math.Max(1, Session.BufferMilliseconds * ((double)flvMetadata["framerate"] / 1000));
+            // while (_sessionStorage.VideoBuffer.Count >= frameCount)
+            // {
+
+            // videoTimestamp += e.VideoData.Timestamp;
+            // e.VideoData.Timestamp = videoTimestamp;
+
+            Session.SendAmf0Data(e.VideoData, _streamId, VIDEO_CHANNEL);
+            // }
         }
 
         private void SendMetadata(string path, bool flvHeader = false)
@@ -224,50 +268,57 @@ namespace RtmpSharp.Controller
                 headerBuffer[8] = dataOffset[0];
                 Session.SendRawData(headerBuffer);
             }
-            Session.SendAmf0Data(_sessionStorage.ConnectedSession.SessionStorage.FlvMetaData);
-            if (hasAudio) Session.SendAmf0Data(_sessionStorage.ConnectedSession.SessionStorage.AACConfigureRecord);
-            if (hasVideo) Session.SendAmf0Data(_sessionStorage.ConnectedSession.SessionStorage.AVCConfigureRecord);
+            Session.SendAmf0Data(_sessionStorage.ConnectedSession.SessionStorage.FlvMetaData, _streamId, COMMAND_CHANNEL);
+            if (hasAudio) Session.SendAmf0Data(_sessionStorage.ConnectedSession.SessionStorage.AACConfigureRecord, _streamId, COMMAND_CHANNEL);
+            if (hasVideo) Session.SendAmf0Data(_sessionStorage.ConnectedSession.SessionStorage.AVCConfigureRecord, _streamId, COMMAND_CHANNEL);
 
         }
 
-        internal override void OnAudio(AudioData audioData)
+        public override void OnAudio(AudioData audioData)
         {
-            if (_sessionStorage.AACConfigureRecord == null && audioData.Data.Length >= 2 && audioData.Data[1] == 0)
+            if (_sessionStorage.AACConfigureRecord == null && audioData.Data.Length >= 2)
             {
                 _sessionStorage.AACConfigureRecord = audioData;
                 return;
             }
-            _sessionStorage.AudioBuffer.Enqueue(audioData);
-            while (_sessionStorage.AudioBuffer.Count > _sessionStorage.BufferFrames)
-            {
-                _sessionStorage.AudioBuffer.Dequeue();
-            }
             _sessionStorage.TriggerAudioReceived(this, new AudioEventArgs(audioData));
         }
 
-        internal override void OnVideo(VideoData videoData)
+        public override void OnVideo(VideoData videoData)
         {
-
-            if (_sessionStorage.AVCConfigureRecord == null && videoData.Data.Length >= 2 && videoData.Data[1] == 0)
+            if (_sessionStorage.AVCConfigureRecord == null && videoData.Data.Length >= 2)
             {
                 _sessionStorage.AVCConfigureRecord = videoData;
                 return;
             }
-            _sessionStorage.VideoBuffer.Enqueue(videoData);
-            while (_sessionStorage.VideoBuffer.Count > _sessionStorage.BufferFrames)
-            {
-                _sessionStorage.VideoBuffer.Dequeue();
-            }
             _sessionStorage.TriggerVideoReceived(this, new VideoEventArgs(videoData));
         }
 
-        internal override void EnsureSessionStorage()
+        public override void EnsureSessionStorage()
         {
             if (Session.SessionStorage == null)
             {
                 Session.SessionStorage = new SessionStorage();
             }
             _sessionStorage = Session.SessionStorage;
+        }
+
+        [RpcMethod(Name = "createStream", ChannelId = COMMAND_CHANNEL)]
+        public override async Task<int> CreateStream()
+        {
+            if (_streamId != 0)
+            {
+                throw new InvalidOperationException("this controller only supprot one stream");
+            }
+            _streamId = _random.Next(1000, 4000);
+            CreatedStreams.Add(_streamId);
+            return _streamId;
+        }
+
+        public override void DeleteStream()
+        {
+            CreatedStreams.Remove(_streamId);
+            _streamId = 0;
         }
     }
 }

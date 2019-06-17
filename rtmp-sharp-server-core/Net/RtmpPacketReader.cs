@@ -19,17 +19,18 @@ namespace RtmpSharp.Net
     //  - shared objects
     //  - amf3 data messages
     //  - multimedia packets
-    public class RtmpPacketReader
+    public class RtmpPacketReader : IDisposable
     {
         public bool Continue { get; set; }
 
         public event EventHandler<EventReceivedEventArgs> EventReceived;
         public event EventHandler<ExceptionalEventArgs> Disconnected;
+        public event EventHandler<int> Aborted;
 
         internal readonly AmfReader reader;
 
-        readonly Dictionary<int, RtmpHeader> rtmpHeaders;
-        readonly Dictionary<int, RtmpPacket> rtmpPackets;
+        readonly Dictionary<int, ChunkHeader> rtmpHeaders;
+        readonly Dictionary<int, RtmpMessage> incompleteRtmpMessages;
 
         // defined by the spec
         const int DefaultChunkSize = 128;
@@ -38,8 +39,8 @@ namespace RtmpSharp.Net
         public RtmpPacketReader(AmfReader reader)
         {
             this.reader = reader;
-            this.rtmpHeaders = new Dictionary<int, RtmpHeader>();
-            this.rtmpPackets = new Dictionary<int, RtmpPacket>();
+            this.rtmpHeaders = new Dictionary<int, ChunkHeader>();
+            this.incompleteRtmpMessages = new Dictionary<int, RtmpMessage>();
 
             Continue = true;
         }
@@ -47,28 +48,37 @@ namespace RtmpSharp.Net
         void OnEventReceived(EventReceivedEventArgs e) => EventReceived?.Invoke(this, e);
         void OnDisconnected(ExceptionalEventArgs e) => Disconnected?.Invoke(this, e);
 
+        int lastChunkStreamId = -1;
         public async Task ReadOnceAsync(CancellationToken ct = default)
         {
             var header = await ReadHeaderAsync(ct);
-            rtmpHeaders[header.StreamId] = header;
-
-            RtmpPacket packet;
-            if (!rtmpPackets.TryGetValue(header.StreamId, out packet) || packet == null)
+            if (header.ChunkStreamId != lastChunkStreamId && incompleteRtmpMessages.ContainsKey(lastChunkStreamId))
             {
-                packet = new RtmpPacket(header);
-                rtmpPackets[header.StreamId] = packet;
+                Aborted?.Invoke(this, incompleteRtmpMessages[lastChunkStreamId].MessageStreamId);
+                incompleteRtmpMessages.Remove(lastChunkStreamId);
+                lastChunkStreamId = -1;
+                Console.WriteLine("incomplete packet");
+            }
+            rtmpHeaders[header.ChunkStreamId] = header;
+            lastChunkStreamId = header.ChunkStreamId;
+            RtmpMessage message;
+            if (!incompleteRtmpMessages.TryGetValue(header.ChunkStreamId, out message) || message == null)
+            {
+                message = new RtmpMessage(header.MessageType, header.MessageStreamId, header.AbsoluteTimestamp, header.PacketLength);
+                incompleteRtmpMessages[header.ChunkStreamId] = message;
             }
 
-            var remainingMessageLength = packet.Length + (header.Timestamp >= 0xFFFFFF ? 4 : 0) - packet.CurrentLength;
+            var remainingMessageLength = message.Length - message.CurrentLength;
             var bytesToRead = Math.Min(remainingMessageLength, readChunkSize);
-            var bytes = await reader.ReadBytesAsync(bytesToRead);
-            packet.AddBytes(bytes);
+            var bytes = await reader.ReadBytesAsync((int)bytesToRead);
+            message.AddBytes(bytes);
 
-            if (packet.IsComplete)
+            if (message.IsComplete)
             {
-                rtmpPackets.Remove(header.StreamId);
+                lastChunkStreamId = -1;
+                incompleteRtmpMessages.Remove(header.ChunkStreamId);
 
-                var @event = ParsePacket(packet);
+                var @event = ParseMessage(message);
                 OnEventReceived(new EventReceivedEventArgs(@event));
 
                 // process some kinds of packets
@@ -80,7 +90,7 @@ namespace RtmpSharp.Net
 
                 var abortMessage = @event as Abort;
                 if (abortMessage != null)
-                    rtmpPackets.Remove(abortMessage.StreamId);
+                    incompleteRtmpMessages.Remove(abortMessage.StreamId);
             }
         }
 
@@ -92,32 +102,32 @@ namespace RtmpSharp.Net
             {
                 return;
             }
-            rtmpHeaders[header.StreamId] = header;
+            rtmpHeaders[header.ChunkStreamId] = header;
 
-            RtmpPacket packet;
-            if (!rtmpPackets.TryGetValue(header.StreamId, out packet) || packet == null)
+            RtmpMessage message;
+            if (!incompleteRtmpMessages.TryGetValue(header.ChunkStreamId, out message) || message == null)
             {
-                packet = new RtmpPacket(header);
-                rtmpPackets[header.StreamId] = packet;
+                message = new RtmpMessage(header.MessageType, header.MessageStreamId, header.AbsoluteTimestamp, header.PacketLength);
+                incompleteRtmpMessages[header.ChunkStreamId] = message;
             }
 
-            var remainingMessageLength = packet.Length + (header.Timestamp >= 0xFFFFFF ? 4 : 0) - packet.CurrentLength;
+            var remainingMessageLength = message.Length + (header.Timestamp >= 0xFFFFFF ? 4 : 0) - message.CurrentLength;
             var bytesToRead = Math.Min(remainingMessageLength, readChunkSize);
-            var bytes = reader.ReadBytes(bytesToRead);
-            packet.AddBytes(bytes);
+            var bytes = reader.ReadBytes((int)bytesToRead);
+            message.AddBytes(bytes);
 
-            if (packet.IsComplete)
+            if (message.IsComplete)
             {
-                rtmpPackets.Remove(header.StreamId);
+                incompleteRtmpMessages.Remove(header.ChunkStreamId);
                 RtmpEvent @event = null;
                 try
                 {
-                    @event = ParsePacket(packet);
+                    @event = ParseMessage(message);
                     OnEventReceived(new EventReceivedEventArgs(@event));
                 }
                 catch (ProtocolViolationException)
                 {
-                    Debug.WriteLine($"unhandled packet type: {packet.Header.MessageType}");
+                    Debug.WriteLine($"unhandled packet type: {message.MessageType}");
                     return;
                 }
 
@@ -128,7 +138,7 @@ namespace RtmpSharp.Net
                 }
                 else if (@event is Abort abortMessage)
                 {
-                    rtmpPackets.Remove(abortMessage.StreamId);
+                    incompleteRtmpMessages.Remove(abortMessage.StreamId);
                 }
             }
             return;
@@ -196,56 +206,63 @@ namespace RtmpSharp.Net
             }
         }
 
-        async Task<RtmpHeader> ReadHeaderAsync(CancellationToken ct = default)
+        async Task<ChunkHeader> ReadHeaderAsync(CancellationToken ct = default)
         {
             var chunkBasicHeaderByte = await reader.ReadByteAsync(ct);
             var chunkStreamId = await GetChunkStreamIdAsync(chunkBasicHeaderByte, reader);
             var chunkMessageHeaderType = (ChunkMessageHeaderType)(chunkBasicHeaderByte >> 6);
+            var isTimerRelative = chunkMessageHeaderType != ChunkMessageHeaderType.Complete;
 
-            var header = new RtmpHeader()
+            var header = new ChunkHeader()
             {
-                StreamId = chunkStreamId,
-                IsTimerRelative = chunkMessageHeaderType != ChunkMessageHeaderType.New
+                ChunkStreamId = chunkStreamId
             };
 
-            RtmpHeader previousHeader;
+            ChunkHeader previousHeader;
             // don't need to clone if new header, as it contains all info
-            if (!rtmpHeaders.TryGetValue(chunkStreamId, out previousHeader) && chunkMessageHeaderType != ChunkMessageHeaderType.New)
+            if (!rtmpHeaders.TryGetValue(chunkStreamId, out previousHeader) && chunkMessageHeaderType != ChunkMessageHeaderType.Complete)
+            {
                 previousHeader = header.Clone();
+            }
 
             switch (chunkMessageHeaderType)
             {
                 // 11 bytes
-                case ChunkMessageHeaderType.New:
+                case ChunkMessageHeaderType.Complete:
                     header.Timestamp = await reader.ReadUInt24Async();
+                    header.AbsoluteTimestamp = header.Timestamp;
                     header.PacketLength = await reader.ReadUInt24Async();
-                    header.MessageType = (MessageType) await reader.ReadByteAsync();
+                    header.MessageType = (MessageType)await reader.ReadByteAsync();
                     header.MessageStreamId = await reader.ReadReverseIntAsync();
+                    header.ChunkMessageHeaderType = ChunkMessageHeaderType.Complete;
                     break;
 
                 // 7 bytes
-                case ChunkMessageHeaderType.SameSource:
+                case ChunkMessageHeaderType.SameMessageStreamId:
                     header.Timestamp = await reader.ReadUInt24Async();
                     header.PacketLength = await reader.ReadUInt24Async();
                     header.MessageType = (MessageType)await reader.ReadByteAsync();
                     header.MessageStreamId = previousHeader.MessageStreamId;
+                    header.ChunkMessageHeaderType = ChunkMessageHeaderType.SameMessageStreamId;
                     break;
 
                 // 3 bytes
-                case ChunkMessageHeaderType.TimestampAdjustment:
+                case ChunkMessageHeaderType.OnlyTimestampNotSame:
                     header.Timestamp = await reader.ReadUInt24Async();
                     header.PacketLength = previousHeader.PacketLength;
                     header.MessageType = previousHeader.MessageType;
                     header.MessageStreamId = previousHeader.MessageStreamId;
+                    header.ChunkMessageHeaderType = ChunkMessageHeaderType.OnlyTimestampNotSame;
                     break;
 
                 // 0 bytes
-                case ChunkMessageHeaderType.Continuation:
+                case ChunkMessageHeaderType.AllSame:
+                    header.AbsoluteTimestamp = previousHeader.AbsoluteTimestamp;
                     header.Timestamp = previousHeader.Timestamp;
                     header.PacketLength = previousHeader.PacketLength;
                     header.MessageType = previousHeader.MessageType;
                     header.MessageStreamId = previousHeader.MessageStreamId;
-                    header.IsTimerRelative = previousHeader.IsTimerRelative;
+                    header.ChunkMessageHeaderType = ChunkMessageHeaderType.AllSame;
                     break;
                 default:
                     throw new SerializationException("Unexpected header type: " + (int)chunkMessageHeaderType);
@@ -253,12 +270,18 @@ namespace RtmpSharp.Net
 
             // extended timestamp
             if (header.Timestamp == 0xFFFFFF)
-                header.Timestamp = await reader.ReadInt32Async();
-
+            {
+                header.Timestamp = await reader.ReadUInt32Async();
+            }
+            if (header.ChunkMessageHeaderType == ChunkMessageHeaderType.OnlyTimestampNotSame ||
+                header.ChunkMessageHeaderType == ChunkMessageHeaderType.SameMessageStreamId)
+            {
+                header.AbsoluteTimestamp = header.Timestamp + previousHeader.AbsoluteTimestamp;
+            }
             return header;
         }
 
-        RtmpHeader ReadHeader()
+        ChunkHeader ReadHeader()
         {
             if (reader.underlying.BaseStream is NetworkStream)
             {
@@ -274,37 +297,26 @@ namespace RtmpSharp.Net
                 var orig_stream = (SslStream)reader.underlying.BaseStream;
                 throw new NotImplementedException();
             }
-            if (reader.underlying.BaseStream is WebsocketStream)
-            {
-                return null;
-                //var orig_stream = (WebsocketStream)reader.underlying.BaseStream;
-
-                //if (!orig_stream.DataAvailable)
-                //{
-                //    return null;
-                //}
-            }
 
             // first byte of the chunk basic header
             var chunkBasicHeaderByte = reader.ReadByte();
             var chunkStreamId = GetChunkStreamId(chunkBasicHeaderByte, reader);
             var chunkMessageHeaderType = (ChunkMessageHeaderType)(chunkBasicHeaderByte >> 6);
-
-            var header = new RtmpHeader()
+            var isTimerRelative = chunkMessageHeaderType != ChunkMessageHeaderType.Complete;
+            var header = new ChunkHeader()
             {
-                StreamId = chunkStreamId,
-                IsTimerRelative = chunkMessageHeaderType != ChunkMessageHeaderType.New
+                ChunkStreamId = chunkStreamId,
             };
 
-            RtmpHeader previousHeader;
+            ChunkHeader previousHeader;
             // don't need to clone if new header, as it contains all info
-            if (!rtmpHeaders.TryGetValue(chunkStreamId, out previousHeader) && chunkMessageHeaderType != ChunkMessageHeaderType.New)
+            if (!rtmpHeaders.TryGetValue(chunkStreamId, out previousHeader) && chunkMessageHeaderType != ChunkMessageHeaderType.Complete)
                 previousHeader = header.Clone();
 
             switch (chunkMessageHeaderType)
             {
                 // 11 bytes
-                case ChunkMessageHeaderType.New:
+                case ChunkMessageHeaderType.Complete:
                     header.Timestamp = reader.ReadUInt24();
                     header.PacketLength = reader.ReadUInt24();
                     header.MessageType = (MessageType)reader.ReadByte();
@@ -312,7 +324,7 @@ namespace RtmpSharp.Net
                     break;
 
                 // 7 bytes
-                case ChunkMessageHeaderType.SameSource:
+                case ChunkMessageHeaderType.SameMessageStreamId:
                     header.Timestamp = reader.ReadUInt24();
                     header.PacketLength = reader.ReadUInt24();
                     header.MessageType = (MessageType)reader.ReadByte();
@@ -320,7 +332,7 @@ namespace RtmpSharp.Net
                     break;
 
                 // 3 bytes
-                case ChunkMessageHeaderType.TimestampAdjustment:
+                case ChunkMessageHeaderType.OnlyTimestampNotSame:
                     header.Timestamp = reader.ReadUInt24();
                     header.PacketLength = previousHeader.PacketLength;
                     header.MessageType = previousHeader.MessageType;
@@ -328,12 +340,11 @@ namespace RtmpSharp.Net
                     break;
 
                 // 0 bytes
-                case ChunkMessageHeaderType.Continuation:
+                case ChunkMessageHeaderType.AllSame:
                     header.Timestamp = previousHeader.Timestamp;
                     header.PacketLength = previousHeader.PacketLength;
                     header.MessageType = previousHeader.MessageType;
                     header.MessageStreamId = previousHeader.MessageStreamId;
-                    header.IsTimerRelative = previousHeader.IsTimerRelative;
                     break;
                 default:
                     throw new SerializationException("Unexpected header type: " + (int)chunkMessageHeaderType);
@@ -341,34 +352,36 @@ namespace RtmpSharp.Net
 
             // extended timestamp
             if (header.Timestamp == 0xFFFFFF)
-                header.Timestamp = reader.ReadInt32();
+            {
+                header.Timestamp = reader.ReadUInt32();
+            }
 
             return header;
         }
 
-        RtmpEvent ParsePacket(RtmpPacket packet, Func<AmfReader, RtmpEvent> handler)
+        RtmpEvent ParsePacket(RtmpMessage message, Func<AmfReader, RtmpEvent> handler)
         {
-            var memoryStream = new MemoryStream(packet.Buffer, false);
+            var memoryStream = new MemoryStream(message.Buffer, false);
             var packetReader = new AmfReader(memoryStream, reader.SerializationContext);
 
-            var header = packet.Header;
-            var message = handler(packetReader);
-            message.Header = header;
-            message.Timestamp = header.Timestamp;
-            return message;
+            var @event = handler(packetReader);
+            @event.MessageStreamId = message.MessageStreamId;
+            @event.MessageType = message.MessageType;
+            @event.Timestamp = message.Timestamp;
+            return @event;
         }
-        RtmpEvent ParsePacket(RtmpPacket packet)
+        RtmpEvent ParseMessage(RtmpMessage message)
         {
-            switch (packet.Header.MessageType)
+            switch (message.MessageType)
             {
                 case MessageType.SetChunkSize:
-                    return ParsePacket(packet, r => new ChunkSize(r.ReadInt32()));
+                    return ParsePacket(message, r => new ChunkSize(r.ReadInt32()));
                 case MessageType.AbortMessage:
-                    return ParsePacket(packet, r => new Abort(r.ReadInt32()));
+                    return ParsePacket(message, r => new Abort(r.ReadInt32()));
                 case MessageType.Acknowledgement:
-                    return ParsePacket(packet, r => new Acknowledgement(r.ReadInt32()));
+                    return ParsePacket(message, r => new Acknowledgement(r.ReadInt32()));
                 case MessageType.UserControlMessage:
-                    return ParsePacket(packet, r =>
+                    return ParsePacket(message, r =>
                     {
                         var eventType = r.ReadUInt16();
                         var values = new List<int>();
@@ -377,29 +390,25 @@ namespace RtmpSharp.Net
                         return new UserControlMessage((UserControlMessageType)eventType, values.ToArray());
                     });
                 case MessageType.WindowAcknowledgementSize:
-                    return ParsePacket(packet, r => new WindowAcknowledgementSize(r.ReadInt32()));
+                    return ParsePacket(message, r => new WindowAcknowledgementSize(r.ReadInt32()));
                 case MessageType.SetPeerBandwith:
-                    return ParsePacket(packet, r => new PeerBandwidth(r.ReadInt32(), r.ReadByte()));
+                    return ParsePacket(message, r => new PeerBandwidth(r.ReadInt32(), r.ReadByte()));
                 case MessageType.Audio:
-                    return ParsePacket(packet, r => new AudioData(packet.Buffer));
+                    return ParsePacket(message, r => new AudioData(message.Buffer));
                 case MessageType.Video:
-                    return ParsePacket(packet, r => new VideoData(packet.Buffer));
-
-
+                    return ParsePacket(message, r => new VideoData(message.Buffer));
                 case MessageType.DataAmf0:
-                    return ParsePacket(packet, r => ReadCommandOrData(r, new NotifyAmf0(), packet.Header));
+                    return ParsePacket(message, r => ReadCommandOrData(r, new NotifyAmf0(), message));
                 case MessageType.SharedObjectAmf0:
                     break;
                 case MessageType.CommandAmf0:
-                    return ParsePacket(packet, r => ReadCommandOrData(r, new InvokeAmf0()));
-
-
+                    return ParsePacket(message, r => ReadCommandOrData(r, new InvokeAmf0()));
                 case MessageType.DataAmf3:
-                    return ParsePacket(packet, r => ReadCommandOrData(r, new NotifyAmf3()));
+                    return ParsePacket(message, r => ReadCommandOrData(r, new NotifyAmf3()));
                 case MessageType.SharedObjectAmf3:
                     break;
                 case MessageType.CommandAmf3:
-                    return ParsePacket(packet, r =>
+                    return ParsePacket(message, r =>
                     {
                         // encoding? always seems to be zero
                         var unk1 = r.ReadByte();
@@ -421,11 +430,11 @@ namespace RtmpSharp.Net
             throw new ProtocolViolationException();
         }
 
-        static RtmpEvent ReadCommandOrData(AmfReader r, Command command, RtmpHeader header = null)
+        static RtmpEvent ReadCommandOrData(AmfReader r, Command command, RtmpMessage message = null)
         {
             var methodName = (string)r.ReadAmf0Item();
             object temp = r.ReadAmf0Item();
-            if (header != null && methodName == "@setDataFrame")
+            if (message != null && methodName == "@setDataFrame")
             {
                 command.CommandObject = temp;
             }
@@ -434,7 +443,7 @@ namespace RtmpSharp.Net
                 command.InvokeId = Convert.ToInt32(temp);
                 command.CommandObject = r.ReadAmf0Item();
             }
-            
+
 
             var parameters = new List<object>();
             while (r.DataAvailable)
@@ -443,5 +452,41 @@ namespace RtmpSharp.Net
             command.MethodCall = new Method(methodName, parameters.ToArray());
             return command;
         }
+
+        #region IDisposable Support
+        private bool disposedValue = false; // 要检测冗余调用
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    reader.Dispose();
+                }
+
+                // TODO: 释放未托管的资源(未托管的对象)并在以下内容中替代终结器。
+                // TODO: 将大型字段设置为 null。
+
+                disposedValue = true;
+            }
+        }
+
+        // TODO: 仅当以上 Dispose(bool disposing) 拥有用于释放未托管资源的代码时才替代终结器。
+        // ~RtmpPacketReader()
+        // {
+        //   // 请勿更改此代码。将清理代码放入以上 Dispose(bool disposing) 中。
+        //   Dispose(false);
+        // }
+
+        // 添加此代码以正确实现可处置模式。
+        public void Dispose()
+        {
+            // 请勿更改此代码。将清理代码放入以上 Dispose(bool disposing) 中。
+            Dispose(true);
+            // TODO: 如果在以上内容中替代了终结器，则取消注释以下行。
+            // GC.SuppressFinalize(this);
+        }
+        #endregion
     }
 }

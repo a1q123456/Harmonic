@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Collections.Generic;
 using RtmpSharp.Net;
@@ -13,6 +14,14 @@ namespace RtmpSharp.Service
 
         public void RegisterPublisher(string path, IStreamSession session)
         {
+            if (_pathMapToSession.ContainsKey(path))
+            {
+                throw new InvalidOperationException("request instance is publishing");
+            }
+            if (_sessionMapToPath.ContainsKey(session))
+            {
+                throw new InvalidOperationException("request session is publishing");
+            }
             _pathMapToSession.Add(path, session);
             _sessionMapToPath.Add(session, path);
         }

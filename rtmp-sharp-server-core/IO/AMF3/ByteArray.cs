@@ -52,7 +52,7 @@ namespace RtmpSharp.IO.AMF3
 
         void ReloadStreams()
         {
-            dataOutput = new DataOutput(new AmfWriter(memoryStream, serializationContext, objectEncoding));
+            dataOutput = new DataOutput(new AmfWriter(serializationContext, objectEncoding));
             dataInput = new DataInput(new AmfReader(memoryStream, serializationContext));
         }
 
@@ -72,16 +72,10 @@ namespace RtmpSharp.IO.AMF3
             }
         }
 
-        // The data array backing this ByteArray
-        public byte[] GetBuffer()
-        {
-            return memoryStream.GetBuffer();
-        }
-        
         // Returns a byte[] of the current ByteArray from start to end, without regard for the current stream position
         public byte[] ToArray()
         {
-            return memoryStream.ToArray();
+            return dataOutput.GetBytes();
         }
 
         public void Compress()
@@ -108,7 +102,7 @@ namespace RtmpSharp.IO.AMF3
                 stream.Write(buffer, 0, buffer.Length);
 
             memoryStream = ms;
-            dataOutput = new DataOutput(new AmfWriter(memoryStream, serializationContext));
+            dataOutput = new DataOutput(new AmfWriter(serializationContext));
             dataInput = new DataInput(new AmfReader(memoryStream, serializationContext));
         }
 
@@ -146,7 +140,7 @@ namespace RtmpSharp.IO.AMF3
             memoryStream.Dispose();
             memoryStream = ms;
             memoryStream.Position = 0;
-            dataOutput = new DataOutput(new AmfWriter(memoryStream, serializationContext));
+            dataOutput = new DataOutput(new AmfWriter(serializationContext));
             dataInput = new DataInput(new AmfReader(memoryStream, serializationContext));
         }
 
@@ -197,7 +191,7 @@ namespace RtmpSharp.IO.AMF3
             return dataInput.ReadUInt16();
         }
 
-        public int ReadUInt24()
+        public uint ReadUInt24()
         {
             return dataInput.ReadUInt24();
         }
@@ -266,7 +260,7 @@ namespace RtmpSharp.IO.AMF3
             dataOutput.WriteUInt16(value);
         }
 
-        public void WriteUInt24(int value)
+        public void WriteUInt24(uint value)
         {
             dataOutput.WriteUInt24(value);
         }
