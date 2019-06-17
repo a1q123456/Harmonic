@@ -286,16 +286,16 @@ namespace RtmpSharp.IO
             return (bytes[3] << 24) | (bytes[2] << 16) | (bytes[1] << 8) | bytes[0];
         }
 
-        public int ReadUInt24()
+        public uint ReadUInt24()
         {
             var bytes = ReadBytes(3);
-            return bytes[0] << 16 | bytes[1] << 8 | bytes[2];
+            return (uint)bytes[0] << 16 | (uint)bytes[1] << 8 | (uint)bytes[2];
         }
 
-        public async Task<int> ReadUInt24Async(CancellationToken ct = default)
+        public async Task<uint> ReadUInt24Async(CancellationToken ct = default)
         {
             var bytes = await ReadBytesAsync(3, ct);
-            return bytes[0] << 16 | bytes[1] << 8 | bytes[2];
+            return (uint)bytes[0] << 16 | (uint)bytes[1] << 8 | (uint)bytes[2];
         }
 
         // 64 bit IEEE-754 double precision floating point

@@ -14,7 +14,7 @@ namespace RtmpSharp.IO.AMF3
         void WriteFloat(float value);
         void WriteInt16(short value);
         void WriteUInt16(ushort value);
-        void WriteUInt24(int value);
+        void WriteUInt24(uint value);
         void WriteInt32(int value);
         void WriteUInt32(uint value);
         void WriteUtf(string value);

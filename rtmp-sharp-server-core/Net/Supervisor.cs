@@ -36,7 +36,7 @@ namespace RtmpSharp.Net
             this.pingInterval = pingInterval;
             this.responseThreshole = responseThreshole;
             thread = new Thread(ThreadEntry);
-            thread.Start();
+            //thread.Start();
         }
         private void ThreadEntry()
         {

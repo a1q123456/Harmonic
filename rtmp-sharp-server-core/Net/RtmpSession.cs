@@ -41,9 +41,7 @@ namespace RtmpSharp.Net
         public RtmpPacketReader reader = null;
         ObjectEncoding objectEncoding;
         Socket clientSocket;
-        public ushort StreamId { get; private set; } = 3;
         public ushort ClientId { get; private set; } = 0;
-        private const int CONTROL_CSID = 2;
         private Random random = new Random();
         private AbstractController _controller = null;
         private Type _controllerType = null;
@@ -52,6 +50,7 @@ namespace RtmpSharp.Net
         private ILifetimeScope SessionLifetime { get; set; } = null;
         public ConnectionInformation ConnectionInformation { get; private set; } = null;
         public int BufferMilliseconds { get; set; } = 0;
+        private const int CONTROL_CSID = 2;
 
         public RtmpSession(Socket client_socket, Stream stream, RtmpServer server, ushort client_id, SerializationContext context, ObjectEncoding objectEncoding = ObjectEncoding.Amf0, bool asyncMode = false)
         {
@@ -62,6 +61,10 @@ namespace RtmpSharp.Net
             writer = new RtmpPacketWriter(stream, context, ObjectEncoding.Amf0);
             reader = new RtmpPacketReader(new AmfReader(stream, context, asyncMode));
             reader.EventReceived += EventReceivedCallback;
+            reader.Aborted += (s, e) =>
+            {
+                WriteProtocolControlMessage(new Abort(e));
+            };
             reader.Disconnected += OnPacketProcessorDisconnected;
             writer.Disconnected += OnPacketProcessorDisconnected;
             callbackManager = new TaskCallbackMachine<int, object>();
@@ -133,7 +136,7 @@ namespace RtmpSharp.Net
             return tsk;
         }
 
-        async Task<object> CallCommandAsync(Command command, int streamId, bool requireConnected = true, CancellationToken ct = default)
+        async Task<object> CallCommandAsync(Command command, int messageStreamId, int chunkStreamId, bool requireConnected = true, CancellationToken ct = default)
         {
             if (disposedValue)
             {
@@ -143,7 +146,7 @@ namespace RtmpSharp.Net
                 return CreateExceptedTask(new ClientDisconnectedException("disconnected"));
 
             var task = callbackManager.Create(command.InvokeId, ct);
-            writer.WriteMessage(command, streamId, random.Next());
+            writer.WriteMessage(command, messageStreamId, chunkStreamId);
             return await task;
         }
 
@@ -197,11 +200,12 @@ namespace RtmpSharp.Net
                             throw new EntryPointNotFoundException();
                         }
                         var ret = targetMethod.Invoke(_controller, new object[] { command });
+                        var chunkStreamId = GetMethodChunkStreamId(targetMethod);
                         if (ret is Task tsk)
                         {
                             tsk.ContinueWith(t =>
                             {
-                                ReturnResultInvoke(null, command.InvokeId, t.Exception.Message, true, false);
+                                ReturnResultInvoke(null, command.InvokeId, t.Exception.Message, command.MessageStreamId, chunkStreamId, true, false);
                             }, TaskContinuationOptions.OnlyOnFaulted);
                         }
                     }
@@ -217,52 +221,6 @@ namespace RtmpSharp.Net
                             case "connect":
                                 HandleConnectInvoke(command);
                                 HasConnected = true;
-                                if (!Server.RegisteredApps.TryGetValue(ConnectionInformation.App, out _controllerType))
-                                {
-                                    Console.WriteLine("app not found");
-                                    throw new EntryPointNotFoundException($"request app {ConnectionInformation.App} not found");
-                                }
-
-                                if (!_controllerType.IsAbstract)
-                                {
-                                    var ctors = _controllerType.GetConstructors();
-                                    if (ctors.Length != 1)
-                                    {
-                                        throw new InvalidOperationException();
-                                    }
-                                    var parametersInfo = ctors.First().GetParameters();
-                                    var parameters = new List<object>();
-                                    foreach (var parameterInfo in parametersInfo)
-                                    {
-                                        ILifetimeScope scope = null;
-                                        if (Server.SessionScopedServices.Contains(parameterInfo.ParameterType))
-                                        {
-                                            scope = SessionLifetime;
-                                        }
-                                        else
-                                        {
-                                            scope = Server.ServerLifetime;
-                                        }
-                                        parameters.Add(scope.Resolve(parameterInfo.ParameterType));
-                                    }
-                                    _controller = Activator.CreateInstance(_controllerType, parameters.ToArray()) as AbstractController;
-                                    _controller.Session = this;
-                                }
-                                else
-                                {
-                                    throw new InvalidOperationException();
-                                }
-                                break;
-                            case "createStream":
-                                StreamId = Server.RequestStreamId();
-                                ReturnResultInvoke(null, command.InvokeId, StreamId);
-                                break;
-                            case "deleteStream":
-                                if (_controller is IDisposable dispController)
-                                {
-                                    dispController?.Dispose();
-                                    _controller = null;
-                                }
                                 break;
                             case "_result":
                                 // unwrap Flex class, if present
@@ -294,37 +252,48 @@ namespace RtmpSharp.Net
                                         parameters.AddRange(pad);
                                     }
                                     var ret = method.Invoke(_controller, parameters.ToArray());
-                                    if (ret is Task tsk)
+                                    if (command.InvokeId != 0)
                                     {
-                                        tsk.ContinueWith(t =>
+                                        var chunkStreamId = GetMethodChunkStreamId(method);
+                                        if (ret is Task tsk)
                                         {
-                                            if (t.Exception is AggregateException agg)
+                                            tsk.ContinueWith(t =>
                                             {
-                                                foreach (var excep in t.Exception.InnerExceptions)
+                                                if (t.Exception is AggregateException agg)
                                                 {
-                                                    Console.WriteLine(excep.ToString());
+                                                    foreach (var excep in t.Exception.InnerExceptions)
+                                                    {
+                                                        Console.WriteLine(excep.ToString());
+                                                    }
                                                 }
-                                            }
-                                            else
-                                            {
-                                                Console.WriteLine(t.Exception.ToString());
-                                            }
+                                                else
+                                                {
+                                                    Console.WriteLine(t.Exception.ToString());
+                                                }
 
-                                            ReturnResultInvoke(null, command.InvokeId, $"{t.Exception.GetType().ToString()}\t{t.Exception.Message}", true, false);
-                                        }, TaskContinuationOptions.OnlyOnFaulted);
-                                        tsk.ContinueWith(t =>
+                                                ReturnResultInvoke(null, command.InvokeId, $"{t.Exception.GetType().ToString()}\t{t.Exception.Message}", command.MessageStreamId, chunkStreamId, true, false);
+                                            }, TaskContinuationOptions.OnlyOnFaulted);
+
+                                            tsk.ContinueWith(t =>
+                                            {
+                                                if (t.GetType().IsGenericType && t.GetType().GetGenericTypeDefinition() == typeof(Task<>))
+                                                {
+                                                    var result = t.GetType().GetProperty("Result").GetValue(t);
+                                                    if (command.MethodCall.Name == "createStream" || command.MethodCall.Name == "deleteStream")
+                                                    {
+                                                        writer.SingleMessageStreamId = _controller.CreatedStreams.Count <= 1;
+                                                    }
+                                                    SetResultValInvoke(result, command.InvokeId, command.MessageStreamId, chunkStreamId);
+                                                }
+                                            }, TaskContinuationOptions.OnlyOnRanToCompletion);
+
+                                        }
+                                        else if (method.ReturnType != typeof(void))
                                         {
-                                            if (t.GetType().IsGenericType && t.GetType().GetGenericTypeDefinition() == typeof(Task<>))
-                                            {
-                                                var result = t.GetType().GetProperty("Result").GetValue(t);
-                                                SetResultValInvokeAsync(result, command.InvokeId);
-                                            }
-                                            else
-                                            {
-                                                ReturnVoidInvokeAsync(null, command.InvokeId);
-                                            }
-                                        }, TaskContinuationOptions.OnlyOnRanToCompletion);
+                                            SetResultValInvoke(ret, command.InvokeId, command.MessageStreamId, chunkStreamId);
+                                        }
                                     }
+
                                 }
 #if DEBUG
                                 else
@@ -355,16 +324,16 @@ namespace RtmpSharp.Net
                     break;
             }
         }
-        public Task<T> InvokeAsync<T>(string method, object argument)
+        public Task<T> InvokeAsync<T>(string method, object argument, int messageStreamId)
         {
             if (disposedValue)
             {
                 throw new ObjectDisposedException("session already disposed");
             }
-            return InvokeAsync<T>(method, new[] { argument });
+            return InvokeAsync<T>(method, new[] { argument }, messageStreamId);
         }
 
-        public async Task<T> InvokeAsync<T>(string method, object[] arguments)
+        public async Task<T> InvokeAsync<T>(string method, object[] arguments, int messageStreamId, int chunkStreamId)
         {
             if (disposedValue)
             {
@@ -374,19 +343,20 @@ namespace RtmpSharp.Net
             {
                 MethodCall = new Method(method, arguments),
                 InvokeId = GetNextInvokeId()
-            }, 3);
+            }, messageStreamId, chunkStreamId);
             return (T)MiniTypeConverter.ConvertTo(result, typeof(T));
         }
 
-        public void SendAmf0Data(RtmpEvent e)
+        public void SendAmf0Data(RtmpEvent e, int messageStreamId, int chunkStreamId)
         {
             if (disposedValue)
             {
                 throw new ObjectDisposedException("session already disposed");
             }
+
             //var timestamp = (int)(DateTime.UtcNow - connectTime).TotalMilliseconds;
             //e.Timestamp = timestamp;
-            writer.WriteMessage(e, StreamId, random.Next());
+            writer.WriteMessage(e, messageStreamId, chunkStreamId);
         }
 
         public Task<T> InvokeAsync<T>(string endpoint, string destination, string method, object argument)
@@ -394,7 +364,7 @@ namespace RtmpSharp.Net
             return InvokeAsync<T>(endpoint, destination, method, new[] { argument });
         }
 
-        public async Task<T> InvokeAsync<T>(string endpoint, string destination, string method, object[] arguments)
+        public async Task<T> InvokeAsync<T>(string endpoint, string destination, string method, object[] arguments, int messageStreamId, int chunkStreamId)
         {
             if (objectEncoding != ObjectEncoding.Amf3)
                 throw new NotSupportedException("Flex RPC requires AMF3 encoding.");
@@ -416,10 +386,10 @@ namespace RtmpSharp.Net
             {
                 InvokeId = GetNextInvokeId(),
                 MethodCall = new Method(null, new object[] { remotingMessage })
-            }, 3);
+            }, messageStreamId, chunkStreamId);
             return (T)MiniTypeConverter.ConvertTo(result, typeof(T));
         }
-        public void NotifyStatus(AsObject status)
+        public void NotifyStatus(AsObject status, int messageStreamId, int chunkStreamId)
         {
             var onStatusCommand = new InvokeAmf0
             {
@@ -429,15 +399,15 @@ namespace RtmpSharp.Net
             };
             onStatusCommand.MethodCall.CallStatus = CallStatus.Request;
             onStatusCommand.MethodCall.IsSuccess = true;
-            writer.WriteMessage(onStatusCommand, StreamId, random.Next());
+            writer.WriteMessage(onStatusCommand, messageStreamId, chunkStreamId);
         }
 
-        void SetResultValInvokeAsync(object param, int transcationId)
+        void SetResultValInvoke(object param, int transcationId, int messageStreamId, int chunkStreamId)
         {
-            ReturnResultInvoke(null, transcationId, param);
+            ReturnResultInvoke(null, transcationId, param, messageStreamId, chunkStreamId);
         }
 
-        void ReturnResultInvoke(object commandObject, int transcationId, object param, bool requiredConnected = true, bool success = true)
+        void ReturnResultInvoke(object commandObject, int transcationId, object param, int messageStreamId, int chunkStreamId, bool requiredConnected = true, bool success = true)
         {
             var result = new InvokeAmf0
             {
@@ -447,10 +417,10 @@ namespace RtmpSharp.Net
             };
             result.MethodCall.CallStatus = CallStatus.Result;
             result.MethodCall.IsSuccess = success;
-            writer.WriteMessage(result, StreamId, random.Next());
+            writer.WriteMessage(result, messageStreamId, chunkStreamId);
         }
 
-        void ReturnVoidInvokeAsync(object commandObject, int transcationId, bool requiredConnected = true)
+        void ReturnVoidInvoke(object commandObject, int transcationId, int messageStreamId, int chunkStreamId, bool requiredConnected = true)
         {
             var result = new InvokeAmf0
             {
@@ -460,9 +430,47 @@ namespace RtmpSharp.Net
             };
             result.MethodCall.CallStatus = CallStatus.Result;
             result.MethodCall.IsSuccess = true;
-            writer.WriteMessage(result, StreamId, random.Next());
+            writer.WriteMessage(result, messageStreamId, chunkStreamId);
         }
 
+        void SetupController()
+        {
+            if (!Server.RegisteredApps.TryGetValue(ConnectionInformation.App, out _controllerType))
+            {
+                Console.WriteLine("app not found");
+                throw new EntryPointNotFoundException($"request app {ConnectionInformation.App} not found");
+            }
+
+            if (!_controllerType.IsAbstract)
+            {
+                var ctors = _controllerType.GetConstructors();
+                if (ctors.Length != 1)
+                {
+                    throw new InvalidOperationException();
+                }
+                var parametersInfo = ctors.First().GetParameters();
+                var parameters = new List<object>();
+                foreach (var parameterInfo in parametersInfo)
+                {
+                    ILifetimeScope scope = null;
+                    if (Server.SessionScopedServices.Contains(parameterInfo.ParameterType))
+                    {
+                        scope = SessionLifetime;
+                    }
+                    else
+                    {
+                        scope = Server.ServerLifetime;
+                    }
+                    parameters.Add(scope.Resolve(parameterInfo.ParameterType));
+                }
+                _controller = Activator.CreateInstance(_controllerType, parameters.ToArray()) as AbstractController;
+                _controller.Session = this;
+            }
+            else
+            {
+                throw new InvalidOperationException();
+            }
+        }
         void HandleConnectInvoke(Command command)
         {
             string code;
@@ -513,17 +521,20 @@ namespace RtmpSharp.Net
                 connect_result = true;
             }
             connectTime = DateTime.UtcNow;
+            SetupController();
             AsObject param = new AsObject
             {
                 { "code", code },
                 { "description", description },
                 { "level", "status" },
             };
+            
             ReturnResultInvoke(new AsObject {
                     { "capabilities", 255.00 },
                     { "fmsVer", "FMS/4,5,1,484" },
                     { "mode", 1.0 }
-                }, command.InvokeId, param, false, connect_result);
+
+                }, command.InvokeId, param, 0, 3, false, connect_result);
             if (!connect_result)
             {
                 Disconnect(new ExceptionalEventArgs("Auth Failure"));
@@ -561,7 +572,7 @@ namespace RtmpSharp.Net
             {
                 throw new ObjectDisposedException("session already disposed");
             }
-            writer.WriteMessage(@event, CONTROL_CSID, 0);
+            writer.WriteMessage(@event, 0, CONTROL_CSID);
         }
 
         int GetNextInvokeId()
@@ -593,6 +604,15 @@ namespace RtmpSharp.Net
             var source = new TaskCompletionSource<object>();
             source.SetException(exception);
             return source.Task;
+        }
+
+        int GetMethodChunkStreamId(MethodInfo method)
+        {
+            if (method.GetCustomAttribute(typeof(RpcMethodAttribute)) is RpcMethodAttribute rpcMethodAttr)
+            {
+                return rpcMethodAttr.ChannelId;
+            }
+            throw new InvalidOperationException("this is not an rpc method");
         }
 
         MethodInfo ChooseMethodByParameter(Command command, List<MethodInfo> methods)
@@ -700,7 +720,7 @@ namespace RtmpSharp.Net
                     {
                         dispController?.Dispose();
                     }
-                    
+
                     SessionLifetime.Dispose();
                     clientSocket.Close();
                     reader.Dispose();

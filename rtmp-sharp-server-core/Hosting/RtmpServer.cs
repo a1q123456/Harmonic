@@ -50,8 +50,6 @@ namespace RtmpSharp.Hosting
         private SerializationContext context = null;
         private ObjectEncoding objectEncoding;
         private X509Certificate2 cert = null;
-        private readonly int PROTOCOL_MIN_CSID = 3;
-        private readonly int PROTOCOL_MAX_CSID = 65599;
         internal Dictionary<ushort, IStreamSession> connectedSessions = new Dictionary<ushort, IStreamSession>();
         private Supervisor supervisor = null;
         internal IContainer ServiceContainer { get; set; } = null;
@@ -186,7 +184,7 @@ namespace RtmpSharp.Hosting
 
         internal ushort RequestStreamId()
         {
-            return GetUniqueIdOfList(allocated_stream_id, PROTOCOL_MIN_CSID, PROTOCOL_MAX_CSID);
+            return GetUniqueIdOfList(allocated_stream_id, ushort.MinValue, ushort.MaxValue);
         }
 
         private ushort GetNewClientId()

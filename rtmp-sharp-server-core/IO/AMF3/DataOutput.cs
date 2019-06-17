@@ -45,7 +45,7 @@ namespace RtmpSharp.IO.AMF3
         public void WriteInt16(short value) => writer.WriteInt16(value);
         public void WriteInt32(int value) => writer.WriteInt32(value);
         public void WriteUInt16(ushort value) => writer.WriteUInt16(value);
-        public void WriteUInt24(int value) => writer.WriteUInt24(value);
+        public void WriteUInt24(uint value) => writer.WriteUInt24(value);
         public void WriteUtf(string value) => writer.WriteUtfPrefixed(value);
         public void WriteUtfBytes(string value) => writer.WriteBytes(Encoding.UTF8.GetBytes(value));
     }

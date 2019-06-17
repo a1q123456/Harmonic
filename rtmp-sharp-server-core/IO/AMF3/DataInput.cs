@@ -54,7 +54,7 @@ namespace RtmpSharp.IO.AMF3
         public float ReadFloat() => reader.ReadFloat();
         public short ReadInt16() => reader.ReadInt16();
         public ushort ReadUInt16() => reader.ReadUInt16();
-        public int ReadUInt24() => reader.ReadUInt24();
+        public uint ReadUInt24() => reader.ReadUInt24();
         public int ReadInt32() => reader.ReadInt32();
         public uint ReadUInt32() => reader.ReadUInt32();
         public string ReadUtf() => reader.ReadUtf();
@@ -66,7 +66,7 @@ namespace RtmpSharp.IO.AMF3
         public async Task<float> ReadFloatAsync(CancellationToken ct = default) => await reader.ReadFloatAsync(ct);
         public async Task<short> ReadInt16Async(CancellationToken ct = default) => await reader.ReadInt16Async(ct);
         public async Task<ushort> ReadUInt16Async(CancellationToken ct = default) => await reader.ReadUInt16Async(ct);
-        public async Task<int> ReadUInt24Async(CancellationToken ct = default) => await reader.ReadUInt24Async(ct);
+        public async Task<uint> ReadUInt24Async(CancellationToken ct = default) => await reader.ReadUInt24Async(ct);
         public async Task<int> ReadInt32Async(CancellationToken ct = default) => await reader.ReadInt32Async(ct);
         public async Task<uint> ReadUInt32Async(CancellationToken ct = default) => await reader.ReadUInt32Async(ct);
         public async Task<string> ReadUtfAsync(CancellationToken ct = default) => await reader.ReadUtfAsync(ct);
