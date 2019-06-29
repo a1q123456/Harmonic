@@ -7,7 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Xml;
 
-namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf0
+namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
 {
     public partial class Amf0BitConverter
     {
@@ -17,6 +17,8 @@ namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf0
         private static readonly int MARKER_LENGTH = 1;
         private static readonly int STRING_HEADER_LENGTH = sizeof(ushort);
         private static readonly int LONG_STRING_HEADER_LENGTH = sizeof(uint);
+        private List<object> _readReferenceTable = new List<object>();
+        private List<object> _writeReferenceTable = new List<object>();
 
         public void RegisterType<T>()
         {
@@ -32,7 +34,7 @@ namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf0
             readDataHandlers[Amf0Type.Object] = OutValueTypeEraser<Dictionary<string, object>>(TryGetObject);
             readDataHandlers[Amf0Type.Null] = OutValueTypeEraser<object>(TryGetNull);
             readDataHandlers[Amf0Type.Undefined] = OutValueTypeEraser<Undefined>(TryGetUndefined);
-            readDataHandlers[Amf0Type.Reference] = OutValueTypeEraser<ushort>(TryGetReferenceIndex);
+            readDataHandlers[Amf0Type.Reference] = OutValueTypeEraser<ushort>(TryGetReference);
             readDataHandlers[Amf0Type.EcmaArray] = OutValueTypeEraser<Dictionary<string, object>>(TryGetEcmaArray);
             readDataHandlers[Amf0Type.StrictArray] = OutValueTypeEraser<List<object>>(TryGetStrictArray);
             readDataHandlers[Amf0Type.Date] = OutValueTypeEraser<DateTime>(TryGetDate);
@@ -59,6 +61,16 @@ namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf0
             getBytesHandlers[typeof(bool)] = GetBytesWrapper<bool>(TryGetBytes);
             getBytesHandlers[typeof(object)] = GetBytesWrapper<object>(TryGetBytes);
             _getBytesHandlers = getBytesHandlers;
+        }
+
+        public void ClearReaderReference()
+        {
+            _readReferenceTable.Clear();
+        }
+
+        public void ClearWriterReference()
+        {
+            _writeReferenceTable.Clear();
         }
     }
 }

@@ -12,6 +12,15 @@ namespace Harmonic.NetWorking.Rtmp.Data
     {
         private static MemoryPool<byte> _memoryPool = MemoryPool<byte>.Shared;
 
+        public static int ToInt32(Span<byte> buffer, bool littleEndian = false)
+        {
+            if (!littleEndian)
+            {
+                buffer.Slice(0, sizeof(int)).Reverse();
+            }
+            return BitConverter.ToInt32(buffer);
+        }
+
         public static uint ToUInt32(Span<byte> buffer, bool littleEndian = false)
         {
             if (!littleEndian)
@@ -81,6 +90,20 @@ namespace Harmonic.NetWorking.Rtmp.Data
                 }
                 valueSpan.CopyTo(buffer);
             }
+            return true;
+        }
+        public static bool TryGetBytes(int value, Span<byte> buffer, bool littleEndian = false)
+        {
+            if (!BitConverter.TryWriteBytes(buffer, value))
+            {
+                return false;
+            }
+
+            if (!littleEndian)
+            {
+                buffer.Slice(0, sizeof(int)).Reverse();
+            }
+
             return true;
         }
         public static bool TryGetBytes(double value, Span<byte> buffer, bool littleEndian = false)

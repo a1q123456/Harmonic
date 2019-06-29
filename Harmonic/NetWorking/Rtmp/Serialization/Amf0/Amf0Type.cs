@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf0
+namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
 {
     public enum Amf0Type
     {

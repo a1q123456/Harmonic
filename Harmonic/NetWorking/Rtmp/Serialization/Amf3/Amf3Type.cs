@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf3
+namespace Harmonic.NetWorking.Rtmp.Serialization.Amf3
 {
     public enum Amf3Type : byte
     {
@@ -20,7 +20,7 @@ namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf3
         Xml,
         ByteArray,
         VectorInt,
-        VectorUint,
+        VectorUInt,
         VectorDouble,
         VectorObject,
         Dictionary

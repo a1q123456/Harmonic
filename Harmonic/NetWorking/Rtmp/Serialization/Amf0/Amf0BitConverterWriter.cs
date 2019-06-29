@@ -8,7 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Xml;
 
-namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf0
+namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
 {
     public partial class Amf0BitConverter
     {
@@ -272,6 +272,13 @@ namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf0
                 return false;
             }
 
+            var refIndex = _writeReferenceTable.IndexOf(value);
+
+            if (refIndex >= 0)
+            {
+                return TryGetReferenceIndexBytes((ushort)refIndex, buffer, out consumed);
+            }
+
             buffer[0] = (byte)Amf0Type.StrictArray;
             if (!RtmpBitConverter.TryGetBytes((uint)value.Count, buffer.Slice(MARKER_LENGTH)))
             {
@@ -292,6 +299,7 @@ namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf0
                 arrayBuffer = arrayBuffer.Slice(valueConsumed);
                 consumed += valueConsumed;
             }
+            _writeReferenceTable.Add(value);
             return true;
         }
 
@@ -306,6 +314,12 @@ namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf0
             if (buffer.Length < MARKER_LENGTH + sizeof(uint))
             {
                 return false;
+            }
+            var refIndex = _writeReferenceTable.IndexOf(value);
+
+            if (refIndex >= 0)
+            {
+                return TryGetReferenceIndexBytes((ushort)refIndex, buffer, out consumed);
             }
             buffer[0] = (byte)Amf0Type.EcmaArray;
             if (!RtmpBitConverter.TryGetBytes((uint)value.Count, buffer.Slice(MARKER_LENGTH)))
@@ -332,7 +346,7 @@ namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf0
                 arrayBuffer = arrayBuffer.Slice(valueConsumed);
                 consumed += keyConsumed + valueConsumed;
             }
-
+            _writeReferenceTable.Add(value);
             return true;
         }
 
@@ -347,6 +361,12 @@ namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf0
             if (value == null)
             {
                 throw new ArgumentNullException();
+            }
+            var refIndex = _writeReferenceTable.IndexOf(value);
+
+            if (refIndex >= 0)
+            {
+                return TryGetReferenceIndexBytes((ushort)refIndex, buffer, out consumed);
             }
             buffer[0] = (byte)Amf0Type.TypedObject;
             buffer = buffer.Slice(MARKER_LENGTH);
@@ -372,6 +392,7 @@ namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf0
             }
             consumed += keyConsumed;
             consumed += valueConsumed;
+            _writeReferenceTable.Add(value);
             return true;
         }
 
@@ -385,6 +406,12 @@ namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf0
             if (value == null)
             {
                 return TryGetNullBytes(buffer, out consumed);
+            }
+            var refIndex = _writeReferenceTable.IndexOf(value);
+
+            if (refIndex >= 0)
+            {
+                return TryGetReferenceIndexBytes((ushort)refIndex, buffer, out consumed);
             }
             buffer[0] = (byte)Amf0Type.Object;
             consumed = MARKER_LENGTH;
@@ -404,6 +431,7 @@ namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf0
             }
             consumed += keyConsumed;
             consumed += valueConsumed;
+            _writeReferenceTable.Add(value);
             return true;
         }
 

@@ -7,7 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Xml;
 
-namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf0
+namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
 {
     public partial class Amf0BitConverter
     {
@@ -197,6 +197,8 @@ namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf0
             value = obj;
             bytesConsumed = consumed;
 
+            _readReferenceTable.Add(value);
+
             return true;
         }
 
@@ -236,9 +238,10 @@ namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf0
             return true;
         }
 
-        private bool TryGetReferenceIndex(Span<byte> buffer, out ushort index, out int consumedLength)
+        private bool TryGetReference(Span<byte> buffer, out object value, out int consumedLength)
         {
-            index = default;
+            var index = 0;
+            value = default;
             consumedLength = default;
             if (!TryDescribeData(buffer, out var type, out var length))
             {
@@ -252,6 +255,11 @@ namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf0
 
             index = RtmpBitConverter.ToUInt16(buffer.Slice(MARKER_LENGTH, sizeof(ushort)));
             consumedLength = MARKER_LENGTH + sizeof(ushort);
+            if (_readReferenceTable.Count <= index)
+            {
+                return false;
+            }
+            value = _readReferenceTable[index];
             return true;
         }
 
@@ -305,7 +313,7 @@ namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf0
             }
             value = obj;
             consumedLength = consumed;
-
+            _readReferenceTable.Add(value);
             return true;
         }
 
@@ -349,6 +357,7 @@ namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf0
             array = obj;
             consumedLength = consumed;
 
+            _readReferenceTable.Add(array);
             return true;
         }
 
@@ -513,6 +522,7 @@ namespace Harmonic.NetWorking.Rtmp.BitConverters.Amf0
 
             value = obj;
             consumedLength = consumed;
+            _readReferenceTable.Add(value);
 
             return true;
         }
