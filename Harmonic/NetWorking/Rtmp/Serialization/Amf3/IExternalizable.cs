@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Harmonic.Buffers;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -8,6 +9,6 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf3
     {
         bool TryDecodeData(Span<byte> buffer, out int consumed);
 
-        bool TryEncodeData(Span<byte> buffer, out int consumed);
+        bool TryEncodeData(UnlimitedBuffer buffer);
     }
 }

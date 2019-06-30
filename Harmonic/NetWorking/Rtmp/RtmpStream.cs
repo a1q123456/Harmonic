@@ -1,5 +1,4 @@
 ﻿using Harmonic.NetWorking;
-using Harmonic.NetWorking;
 using Harmonic.NetWorking.Rtmp.Data;
 using Harmonic.NetWorking.Rtmp.Exceptions;
 using System;
@@ -15,6 +14,7 @@ using System.IO.Pipelines;
 using System.Collections.ObjectModel;
 using System.Collections.Concurrent;
 using Harmonic.NetWorking.Rtmp.Messages;
+using Harmonic.NetWorking.Rtmp.Serialization;
 
 namespace Harmonic.NetWorking.Rtmp
 {
@@ -34,12 +34,12 @@ namespace Harmonic.NetWorking.Rtmp
 
         class MessageReadingState
         {
-            public Message Message;
+            public uint MessageLength;
             public byte[] Body;
             public int CurrentIndex;
             public long RemainBytes
             {
-                get => Message.MessageHeader.MessageLength - CurrentIndex;
+                get => MessageLength - CurrentIndex;
             }
             public bool IsCompleted
             {
@@ -637,6 +637,7 @@ namespace Harmonic.NetWorking.Rtmp
                 state = new MessageReadingState()
                 {
                     CurrentIndex = 0,
+                    MessageLength = header.MessageHeader.MessageLength,
                     Body = _arrayPool.Rent((int)header.MessageHeader.MessageLength)
                 };
                 _incompleteMessageState.Add(header.ChunkBasicHeader.ChunkStreamId, state);

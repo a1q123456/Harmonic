@@ -1,36 +1,69 @@
-﻿using Harmonic.NetWorking.Rtmp.Common;
+﻿using Harmonic.Buffers;
+using Harmonic.NetWorking.Rtmp.Common;
 using Harmonic.NetWorking.Rtmp.Data;
 using Harmonic.NetWorking.Rtmp.Serialization;
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Pipelines;
 using System.Linq;
 using System.Text;
 using System.Xml;
 
 namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
 {
-    public partial class Amf0BitConverter
+    public class Amf0Writer
     {
-        private delegate bool GetBytesHandler<T>(T value, Span<byte> buffer, out int bytesConsumed);
-        private delegate bool GetBytesHandler(object value, Span<byte> buffer, out int bytesConsumed);
-
+        private delegate bool GetBytesHandler<T>(T value);
+        private delegate bool GetBytesHandler(object value);
+        private List<object> _referenceTable = new List<object>();
         private IReadOnlyDictionary<Type, GetBytesHandler> _getBytesHandlers = null;
+        private UnlimitedBuffer _writeBuffer = new UnlimitedBuffer();
+        private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
+        public int MessageLength => _writeBuffer.BufferLength;
+
+        public Amf0Writer()
+        {
+            var getBytesHandlers = new Dictionary<Type, GetBytesHandler>();
+            getBytesHandlers[typeof(double)] = GetBytesWrapper<double>(TryGetBytes);
+            getBytesHandlers[typeof(int)] = GetBytesWrapper<double>(TryGetBytes);
+            getBytesHandlers[typeof(short)] = GetBytesWrapper<double>(TryGetBytes);
+            getBytesHandlers[typeof(long)] = GetBytesWrapper<double>(TryGetBytes);
+            getBytesHandlers[typeof(uint)] = GetBytesWrapper<double>(TryGetBytes);
+            getBytesHandlers[typeof(ushort)] = GetBytesWrapper<double>(TryGetBytes);
+            getBytesHandlers[typeof(ulong)] = GetBytesWrapper<double>(TryGetBytes);
+            getBytesHandlers[typeof(float)] = GetBytesWrapper<double>(TryGetBytes);
+            getBytesHandlers[typeof(DateTime)] = GetBytesWrapper<DateTime>(TryGetBytes);
+            getBytesHandlers[typeof(string)] = GetBytesWrapper<string>(TryGetBytes);
+            getBytesHandlers[typeof(XmlDocument)] = GetBytesWrapper<XmlDocument>(TryGetBytes);
+            getBytesHandlers[typeof(Unsupported)] = GetBytesWrapper<Unsupported>(TryGetBytes);
+            getBytesHandlers[typeof(Undefined)] = GetBytesWrapper<Undefined>(TryGetBytes);
+            getBytesHandlers[typeof(bool)] = GetBytesWrapper<bool>(TryGetBytes);
+            getBytesHandlers[typeof(object)] = GetBytesWrapper<object>(TryGetBytes);
+            _getBytesHandlers = getBytesHandlers;
+        }
+
 
         private GetBytesHandler GetBytesWrapper<T>(GetBytesHandler<T> handler)
         {
-            return (object v, Span<byte> b, out int bytesConsumed) =>
+            return (object v) =>
             {
-                return handler((T)v, b, out bytesConsumed);
+                return handler((T)v);
             };
         }
 
-        public bool TryGetBytes(string str, Span<byte> buffer, out int consumed)
+        public void GetMessage(Span<byte> buffer)
         {
-            var bytesNeed = MARKER_LENGTH;
+            _referenceTable.Clear();
+            _writeBuffer.TakeOutMemory(buffer);
+        }
+
+        public bool TryGetBytes(string str)
+        {
+            var bytesNeed = Amf0CommonValues.MARKER_LENGTH;
             var headerLength = 0;
             var bodyLength = 0;
-            consumed = default;
             bool isLongString = false;
 
 
@@ -40,148 +73,151 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
 
             if (bodyLength > ushort.MaxValue)
             {
-                headerLength = LONG_STRING_HEADER_LENGTH;
+                headerLength = Amf0CommonValues.LONG_STRING_HEADER_LENGTH;
                 isLongString = true;
             }
             else
             {
-                headerLength = STRING_HEADER_LENGTH;
+                headerLength = Amf0CommonValues.STRING_HEADER_LENGTH;
             }
 
-            if (bytesNeed > buffer.Length)
+            var bufferBackend = _arrayPool.Rent(bytesNeed);
+            try
             {
-                return false;
+                var buffer = bufferBackend.AsSpan(0, bytesNeed);
+                if (isLongString)
+                {
+                    buffer[0] = (byte)Amf0Type.LongString;
+
+                    if (!RtmpBitConverter.TryGetBytes((uint)bodyLength, buffer.Slice(0, headerLength)))
+                    {
+                        return false;
+                    }
+                }
+                else
+                {
+                    buffer[0] = (byte)Amf0Type.StrictArray;
+                    if (!RtmpBitConverter.TryGetBytes((ushort)bodyLength, buffer.Slice(0, headerLength)))
+                    {
+                        return false;
+                    }
+                }
+
+                Encoding.UTF8.GetBytes(str, buffer.Slice(headerLength + Amf0CommonValues.MARKER_LENGTH));
+
+                _writeBuffer.WriteToBuffer(buffer);
+            }
+            finally
+            {
+                _arrayPool.Return(bufferBackend);
             }
 
-            if (isLongString)
-            {
-                buffer[0] = (byte)Amf0Type.LongString;
+            return true;
+        }
 
-                if (!RtmpBitConverter.TryGetBytes((uint)bodyLength, buffer.Slice(0, headerLength)))
+        public bool TryGetBytes(double val)
+        {
+            var bytesNeed = Amf0CommonValues.MARKER_LENGTH + sizeof(double);
+            var bufferBackend = _arrayPool.Rent(bytesNeed);
+            try
+            {
+                var buffer = bufferBackend.AsSpan(0, bytesNeed);
+                buffer[0] = (byte)Amf0Type.Number;
+                var ret = RtmpBitConverter.TryGetBytes(val, buffer.Slice(Amf0CommonValues.MARKER_LENGTH));
+                _writeBuffer.WriteToBuffer(buffer);
+                return ret;
+            }
+            finally
+            {
+                _arrayPool.Return(bufferBackend);
+            }
+        }
+
+        public bool TryGetBytes(bool val)
+        {
+            var bytesNeed = Amf0CommonValues.MARKER_LENGTH + sizeof(byte);
+
+            _writeBuffer.WriteToBuffer((byte)Amf0Type.Boolean);
+            _writeBuffer.WriteToBuffer((byte)(val ? 1 : 0));
+
+            return true;
+
+        }
+
+        public bool TryGetBytes(Undefined value)
+        {
+            var bytesNeed = Amf0CommonValues.MARKER_LENGTH;
+            var bufferBackend = _arrayPool.Rent(bytesNeed);
+
+            _writeBuffer.WriteToBuffer((byte)Amf0Type.Undefined);
+            return true;
+
+        }
+
+        public bool TryGetBytes(Unsupported value)
+        {
+            var bytesNeed = Amf0CommonValues.MARKER_LENGTH;
+            _writeBuffer.WriteToBuffer((byte)Amf0Type.Unsupported);
+
+            return true;
+        }
+
+        private bool TryGetReferenceIndexBytes(ushort index)
+        {
+            var bytesNeed = Amf0CommonValues.MARKER_LENGTH + sizeof(ushort);
+            var backend = _arrayPool.Rent(bytesNeed);
+            try
+            {
+                var buffer = backend.AsSpan(0, bytesNeed);
+                buffer[0] = (byte)Amf0Type.Reference;
+                var ret = RtmpBitConverter.TryGetBytes(index, buffer.Slice(Amf0CommonValues.MARKER_LENGTH));
+                _writeBuffer.WriteToBuffer(buffer);
+                return ret;
+            }
+            finally
+            {
+                _arrayPool.Return(backend);
+            }
+
+        }
+
+        public bool TryGetObjectEndBytes()
+        {
+            var bytesNeed = Amf0CommonValues.MARKER_LENGTH;
+            _writeBuffer.WriteToBuffer((byte)Amf0Type.ObjectEnd);
+            return true;
+        }
+
+        public bool TryGetBytes(DateTime dateTime)
+        {
+            var bytesNeed = Amf0CommonValues.MARKER_LENGTH + sizeof(double) + sizeof(short);
+
+            var backend = _arrayPool.Rent(bytesNeed);
+            try
+            {
+                var buffer = backend.AsSpan(0, bytesNeed);
+                buffer.Slice(0, bytesNeed).Clear();
+                buffer[0] = (byte)Amf0Type.Date;
+                var dof = new DateTimeOffset(dateTime);
+                var timestamp = (double)dof.ToUnixTimeMilliseconds() / 1000;
+                if (!RtmpBitConverter.TryGetBytes(timestamp, buffer.Slice(Amf0CommonValues.MARKER_LENGTH)))
                 {
                     return false;
                 }
+                _writeBuffer.WriteToBuffer(buffer);
+                return true;
             }
-            else
+            finally
             {
-                buffer[0] = (byte)Amf0Type.StrictArray;
-                if (!RtmpBitConverter.TryGetBytes((ushort)bodyLength, buffer.Slice(0, headerLength)))
-                {
-                    return false;
-                }
+                _arrayPool.Return(backend);
             }
 
-            Encoding.UTF8.GetBytes(str, buffer.Slice(headerLength + MARKER_LENGTH));
-            consumed = bytesNeed;
-            return true;
         }
 
-        public bool TryGetBytes(double val, Span<byte> buffer, out int consumed)
+        public bool TryGetBytes(XmlDocument xml)
         {
-            var bytesNeed = MARKER_LENGTH + sizeof(double);
-            consumed = default;
-            if (buffer.Length < bytesNeed)
-            {
-                return false;
-            }
-
-            buffer[0] = (byte)Amf0Type.Number;
-            consumed = bytesNeed;
-            return RtmpBitConverter.TryGetBytes(val, buffer.Slice(MARKER_LENGTH));
-        }
-
-        public bool TryGetBytes(bool val, Span<byte> buffer, out int consumed)
-        {
-            var bytesNeed = MARKER_LENGTH + sizeof(byte);
-            consumed = default;
-            if (buffer.Length < bytesNeed)
-            {
-                return false;
-            }
-
-            buffer[0] = (byte)Amf0Type.Boolean;
-            buffer[1] = (byte)(val ? 1 : 0);
-            consumed = bytesNeed;
-            return true;
-        }
-
-        public bool TryGetBytes(Undefined value, Span<byte> buffer, out int consumed)
-        {
-            var bytesNeed = MARKER_LENGTH;
-            consumed = default;
-            if (buffer.Length < bytesNeed)
-            {
-                return false;
-            }
-
-            buffer[0] = (byte)Amf0Type.Undefined;
-            consumed = bytesNeed;
-            return true;
-        }
-
-        public bool TryGetBytes(Unsupported value, Span<byte> buffer, out int consumed)
-        {
-            var bytesNeed = MARKER_LENGTH;
-            consumed = default;
-            if (buffer.Length < bytesNeed)
-            {
-                return false;
-            }
-
-            buffer[0] = (byte)Amf0Type.Unsupported;
-            consumed = bytesNeed;
-            return true;
-        }
-
-        public bool TryGetReferenceIndexBytes(ushort index, Span<byte> buffer, out int consumed)
-        {
-            var bytesNeed = MARKER_LENGTH + sizeof(ushort);
-            consumed = default;
-            if (buffer.Length < bytesNeed)
-            {
-                return false;
-            }
-
-            buffer[0] = (byte)Amf0Type.Reference;
-            consumed = bytesNeed;
-            return RtmpBitConverter.TryGetBytes(index, buffer.Slice(MARKER_LENGTH));
-        }
-
-        public bool TryGetObjectEndBytes(Span<byte> buffer, out int consumed)
-        {
-            var bytesNeed = MARKER_LENGTH;
-            consumed = default;
-            if (buffer.Length < bytesNeed)
-            {
-                return false;
-            }
-
-            buffer[0] = (byte)Amf0Type.ObjectEnd;
-            consumed = bytesNeed;
-            return true;
-        }
-
-        public bool TryGetBytes(DateTime dateTime, Span<byte> buffer, out int consumed)
-        {
-            var bytesNeed = MARKER_LENGTH + sizeof(double) + sizeof(short);
-            consumed = default;
-            if (buffer.Length < bytesNeed)
-            {
-                return false;
-            }
-            buffer.Slice(0, bytesNeed).Clear();
-            buffer[0] = (byte)Amf0Type.Date;
-            var dof = new DateTimeOffset(dateTime);
-            var timestamp = (double)dof.ToUnixTimeMilliseconds() / 1000;
-            consumed = bytesNeed;
-            return RtmpBitConverter.TryGetBytes(timestamp, buffer.Slice(MARKER_LENGTH));
-        }
-
-        public bool TryGetBytes(XmlDocument xml, Span<byte> buffer, out int consumed)
-        {
-            var bytesNeed = MARKER_LENGTH;
+            var bytesNeed = Amf0CommonValues.MARKER_LENGTH;
             string content = null;
-            consumed = default;
             using (var stringWriter = new StringWriter())
             using (var xmlTextWriter = XmlWriter.Create(stringWriter))
             {
@@ -198,268 +234,219 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
             var bodyBytes = Encoding.UTF8.GetByteCount(content);
             bytesNeed += bodyBytes;
 
-            if (buffer.Length < bytesNeed)
+            var backend = _arrayPool.Rent(bytesNeed);
+            try
             {
-                return false;
+                var buffer = backend.AsSpan(0, bytesNeed);
+                buffer[0] = (byte)Amf0Type.XmlDocument;
+                RtmpBitConverter.TryGetBytes((uint)bodyBytes, buffer.Slice(Amf0CommonValues.MARKER_LENGTH));
+                Encoding.UTF8.GetBytes(content, buffer.Slice(Amf0CommonValues.MARKER_LENGTH + Amf0CommonValues.LONG_STRING_HEADER_LENGTH));
+                _writeBuffer.WriteToBuffer(buffer);
+                return true;
             }
+            finally
+            {
+                _arrayPool.Return(backend);
+            }
+        }
 
-            buffer[0] = (byte)Amf0Type.XmlDocument;
-            RtmpBitConverter.TryGetBytes((uint)bodyBytes, buffer.Slice(MARKER_LENGTH));
-            Encoding.UTF8.GetBytes(content, buffer.Slice(MARKER_LENGTH + LONG_STRING_HEADER_LENGTH));
-            consumed = bytesNeed;
+        public bool TryGetNullBytes()
+        {
+            _writeBuffer.WriteToBuffer((byte)Amf0Type.Null);
+
             return true;
         }
 
-        public bool TryGetNullBytes(Span<byte> buffer, out int consumed)
+        public bool TryGetValueBytes(object value)
         {
-            consumed = default;
-            if (buffer.Length < MARKER_LENGTH)
-            {
-                return false;
-            }
-            buffer[0] = (byte)Amf0Type.Null;
-            consumed = MARKER_LENGTH;
-            return true;
-        }
-
-        public bool TryGetUndefinedBytes(Span<byte> buffer, out int consumed)
-        {
-            consumed = default;
-            if (buffer.Length < MARKER_LENGTH)
-            {
-                return false;
-            }
-            buffer[0] = (byte)Amf0Type.Undefined;
-            consumed = MARKER_LENGTH;
-            return true;
-        }
-
-        public bool TryGetUnsupportedBytes(Span<byte> buffer, out int consumed)
-        {
-            consumed = default;
-            if (buffer.Length < MARKER_LENGTH)
-            {
-                return false;
-            }
-            buffer[0] = (byte)Amf0Type.Unsupported;
-            consumed = MARKER_LENGTH;
-            return true;
-        }
-
-        public bool TryGetBytesGeneric(object value, Span<byte> buffer, out int bytesConsumed)
-        {
-            bytesConsumed = default;
             var valueType = value.GetType();
             if (!_getBytesHandlers.TryGetValue(valueType, out var handler))
             {
                 return false;
             }
 
-            return handler(value, buffer, out bytesConsumed);
+            return handler(value);
         }
 
-        public bool TryGetBytes(List<object> value, Span<byte> buffer, out int consumed)
+        // strict array
+        public bool TryGetBytes(List<object> value)
         {
-            consumed = 0;
             if (value == null)
             {
-                throw new ArgumentNullException();
+                return TryGetNullBytes();
             }
 
-            var bytesNeed = MARKER_LENGTH + sizeof(uint);
-            if (buffer.Length < bytesNeed)
-            {
-                return false;
-            }
+            var bytesNeed = Amf0CommonValues.MARKER_LENGTH + sizeof(uint);
 
-            var refIndex = _writeReferenceTable.IndexOf(value);
+            var refIndex = _referenceTable.IndexOf(value);
 
             if (refIndex >= 0)
             {
-                return TryGetReferenceIndexBytes((ushort)refIndex, buffer, out consumed);
+                return TryGetReferenceIndexBytes((ushort)refIndex);
             }
 
-            buffer[0] = (byte)Amf0Type.StrictArray;
-            if (!RtmpBitConverter.TryGetBytes((uint)value.Count, buffer.Slice(MARKER_LENGTH)))
+            _writeBuffer.WriteToBuffer((byte)Amf0Type.StrictArray);
+            var countBuffer = _arrayPool.Rent(sizeof(uint));
+            try
             {
-                return false;
+                if (!RtmpBitConverter.TryGetBytes((uint)value.Count, countBuffer))
+                {
+                    return false;
+                }
+                _writeBuffer.WriteToBuffer(countBuffer.AsSpan(0, sizeof(uint)));
             }
-            consumed = bytesNeed;
-            var arrayBuffer = buffer.Slice(bytesNeed);
+            finally
+            {
+                _arrayPool.Return(countBuffer);
+            }
 
             foreach (var data in value)
             {
-                if (!TryGetBytesGeneric(data, arrayBuffer, out var valueConsumed))
+                if (!TryGetValueBytes(data))
                 {
-                    if (!TryGetBytes(data, arrayBuffer, out valueConsumed))
-                    {
-                        return false;
-                    }
+                    return false;
                 }
-                arrayBuffer = arrayBuffer.Slice(valueConsumed);
-                consumed += valueConsumed;
             }
-            _writeReferenceTable.Add(value);
+            _referenceTable.Add(value);
             return true;
         }
 
-        public bool TryGetBytes(Dictionary<string, object> value, Span<byte> buffer, out int consumed)
+        public bool TryGetBytes(Dictionary<string, object> value)
         {
-            consumed = 0;
             if (value == null)
             {
-                throw new ArgumentNullException();
+                return TryGetNullBytes();
             }
 
-            if (buffer.Length < MARKER_LENGTH + sizeof(uint))
-            {
-                return false;
-            }
-            var refIndex = _writeReferenceTable.IndexOf(value);
+            var refIndex = _referenceTable.IndexOf(value);
 
             if (refIndex >= 0)
             {
-                return TryGetReferenceIndexBytes((ushort)refIndex, buffer, out consumed);
+                return TryGetReferenceIndexBytes((ushort)refIndex);
             }
-            buffer[0] = (byte)Amf0Type.EcmaArray;
-            if (!RtmpBitConverter.TryGetBytes((uint)value.Count, buffer.Slice(MARKER_LENGTH)))
+            _writeBuffer.WriteToBuffer((byte)Amf0Type.EcmaArray);
+            var countBuffer = _arrayPool.Rent(sizeof(uint));
+            try
             {
-                return false;
+                if (!RtmpBitConverter.TryGetBytes((uint)value.Count, countBuffer))
+                {
+                    return false;
+                }
+                _writeBuffer.WriteToBuffer(countBuffer.AsSpan(0, sizeof(uint)));
             }
-
-            var arrayBuffer = buffer.Slice(MARKER_LENGTH + sizeof(uint));
+            finally
+            {
+                _arrayPool.Return(countBuffer);
+            }
 
             foreach ((var key, var data) in value)
             {
-                if (!TryGetBytes(key, arrayBuffer, out var keyConsumed))
+                if (!TryGetBytes(key))
                 {
                     return false;
                 }
-                arrayBuffer = arrayBuffer.Slice(keyConsumed);
-                if (!TryGetBytesGeneric(data, arrayBuffer, out var valueConsumed))
+                if (!TryGetValueBytes(data))
                 {
-                    if (!TryGetBytes(data, arrayBuffer, out valueConsumed))
-                    {
-                        return false;
-                    }
+                    return false;
                 }
-                arrayBuffer = arrayBuffer.Slice(valueConsumed);
-                consumed += keyConsumed + valueConsumed;
             }
-            _writeReferenceTable.Add(value);
+            _referenceTable.Add(value);
             return true;
         }
 
-        public bool TryGetTypedBytes(object value, Span<byte> buffer, out int consumed)
+        public bool TryGetTypedBytes(object value)
         {
-            consumed = 0;
-            var bytesNeed = MARKER_LENGTH + sizeof(ushort);
-            if (buffer.Length < bytesNeed)
-            {
-                return false;
-            }
             if (value == null)
             {
-                throw new ArgumentNullException();
+                return TryGetNullBytes();
             }
-            var refIndex = _writeReferenceTable.IndexOf(value);
+            var refIndex = _referenceTable.IndexOf(value);
 
             if (refIndex >= 0)
             {
-                return TryGetReferenceIndexBytes((ushort)refIndex, buffer, out consumed);
+                return TryGetReferenceIndexBytes((ushort)refIndex);
             }
-            buffer[0] = (byte)Amf0Type.TypedObject;
-            buffer = buffer.Slice(MARKER_LENGTH);
+            _writeBuffer.WriteToBuffer((byte)Amf0Type.TypedObject);
+
             var valueType = value.GetType();
             var classNameLength = (ushort)Encoding.UTF8.GetByteCount(valueType.Name);
-            RtmpBitConverter.TryGetBytes(classNameLength, buffer);
-            consumed += sizeof(ushort);
-            buffer = buffer.Slice(classNameLength);
-            consumed += classNameLength;
-            if (!TryGetObjectBytesImpl(value, buffer.Slice(MARKER_LENGTH), out var bodyConsumed))
+            var countBuffer = _arrayPool.Rent(sizeof(ushort));
+            try
             {
-                return false;
+                RtmpBitConverter.TryGetBytes(classNameLength, countBuffer);
+                _writeBuffer.WriteToBuffer(countBuffer.AsSpan(0, sizeof(ushort)));
+            }
+            finally
+            {
+                _arrayPool.Return(countBuffer);
             }
 
-            consumed += bodyConsumed;
-            if (!TryGetBytes("", buffer, out var keyConsumed))
+            if (!TryGetObjectBytesImpl(value))
             {
                 return false;
             }
-            if (!TryGetObjectEndBytes(buffer, out var valueConsumed))
+            
+            if (!TryGetBytes(""))
             {
                 return false;
             }
-            consumed += keyConsumed;
-            consumed += valueConsumed;
-            _writeReferenceTable.Add(value);
+            if (!TryGetObjectEndBytes())
+            {
+                return false;
+            }
+            _referenceTable.Add(value);
             return true;
         }
 
-        public bool TryGetBytes(object value, Span<byte> buffer, out int consumed)
+        public bool TryGetBytes(object value)
         {
-            consumed = 0;
-            if (buffer.Length < MARKER_LENGTH)
-            {
-                return false;
-            }
             if (value == null)
             {
-                return TryGetNullBytes(buffer, out consumed);
+                return TryGetNullBytes();
             }
-            var refIndex = _writeReferenceTable.IndexOf(value);
+            var refIndex = _referenceTable.IndexOf(value);
 
             if (refIndex >= 0)
             {
-                return TryGetReferenceIndexBytes((ushort)refIndex, buffer, out consumed);
+                return TryGetReferenceIndexBytes((ushort)refIndex);
             }
-            buffer[0] = (byte)Amf0Type.Object;
-            consumed = MARKER_LENGTH;
-            if (!TryGetObjectBytesImpl(value, buffer.Slice(MARKER_LENGTH), out var bodyConsumed))
-            {
-                return false;
-            }
+            _writeBuffer.WriteToBuffer((byte)Amf0Type.Object);
 
-            consumed += bodyConsumed;
-            if (!TryGetBytes("", buffer, out var keyConsumed))
+            if (!TryGetObjectBytesImpl(value))
             {
                 return false;
             }
-            if (!TryGetObjectEndBytes(buffer, out var valueConsumed))
+            
+            if (!TryGetBytes(""))
             {
                 return false;
             }
-            consumed += keyConsumed;
-            consumed += valueConsumed;
-            _writeReferenceTable.Add(value);
+            if (!TryGetObjectEndBytes())
+            {
+                return false;
+            }
+            _referenceTable.Add(value);
             return true;
         }
 
-        private bool TryGetObjectBytesImpl(object value, Span<byte> buffer, out int consumed)
+        private bool TryGetObjectBytesImpl(object value)
         {
-            consumed = 0;
-
             var props = value.GetType().GetProperties();
-            var propBuffer = buffer;
             foreach (var prop in props)
             {
                 var propValue = prop.GetValue(value);
-                if (!TryGetBytes(prop.Name, propBuffer, out var keyConsumed))
+                if (!TryGetBytes(prop.Name))
                 {
                     return false;
                 }
-                propBuffer = propBuffer.Slice(keyConsumed);
-                if (!TryGetBytesGeneric(propValue, propBuffer, out var valueConsumed))
+                if (!TryGetValueBytes(propValue))
                 {
-                    if (!TryGetObjectBytesImpl(propValue, propBuffer, out valueConsumed))
+                    if (!TryGetObjectBytesImpl(propValue))
                     {
                         return false;
                     }
                 }
-                propBuffer = propBuffer.Slice(valueConsumed);
-                consumed += keyConsumed + valueConsumed;
             }
-
 
             return true;
         }

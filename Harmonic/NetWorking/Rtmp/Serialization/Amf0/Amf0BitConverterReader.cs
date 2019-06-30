@@ -9,30 +9,57 @@ using System.Xml;
 
 namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
 {
-    public partial class Amf0BitConverter
+    public class Amf0Reader
     {
         public readonly static IReadOnlyDictionary<Amf0Type, long> TypeLengthMap = new Dictionary<Amf0Type, long>()
         {
             { Amf0Type.Number, 8 },
             { Amf0Type.Boolean, sizeof(byte) },
-            { Amf0Type.String, STRING_HEADER_LENGTH },
-            { Amf0Type.Object, /* object marker*/ MARKER_LENGTH - /* utf8-empty */STRING_HEADER_LENGTH - /* object end marker */MARKER_LENGTH },
+            { Amf0Type.String, Amf0CommonValues.STRING_HEADER_LENGTH },
+            { Amf0Type.Object, /* object marker*/ Amf0CommonValues.MARKER_LENGTH - /* utf8-empty */Amf0CommonValues.STRING_HEADER_LENGTH - /* object end marker */Amf0CommonValues.MARKER_LENGTH },
             { Amf0Type.Null, 0 },
             { Amf0Type.Undefined, 0 },
             { Amf0Type.Reference, sizeof(ushort) },
             { Amf0Type.EcmaArray, sizeof(uint) },
             { Amf0Type.StrictArray, sizeof(uint) },
             { Amf0Type.Date, 10 },
-            { Amf0Type.String, LONG_STRING_HEADER_LENGTH },
+            { Amf0Type.String, Amf0CommonValues.STRING_HEADER_LENGTH },
             { Amf0Type.Unsupported, 0 },
-            { Amf0Type.XmlDocument, LONG_STRING_HEADER_LENGTH },
-            { Amf0Type.TypedObject, /* object marker*/ MARKER_LENGTH - /* class name */ STRING_HEADER_LENGTH - /* at least on character for class name */ 1 - /* utf8-empty */STRING_HEADER_LENGTH - /* object end marker */MARKER_LENGTH }
+            { Amf0Type.XmlDocument, Amf0CommonValues.STRING_HEADER_LENGTH },
+            { Amf0Type.TypedObject, /* object marker*/ Amf0CommonValues.MARKER_LENGTH - /* class name */ Amf0CommonValues.STRING_HEADER_LENGTH - /* at least on character for class name */ 1 - /* utf8-empty */Amf0CommonValues.STRING_HEADER_LENGTH - /* object end marker */Amf0CommonValues.MARKER_LENGTH }
         };
 
         private delegate bool ReadDataHandler<T>(Span<byte> buffer, out T data, out int consumedLength);
         private delegate bool ReadDataHandler(Span<byte> buffer, out object data, out int consumedLength);
 
+        public IReadOnlyDictionary<string, Type> RegisteredTypes => _registeredTypes;
         private IReadOnlyDictionary<Amf0Type, ReadDataHandler> _readDataHandlers;
+        private Dictionary<string, Type> _registeredTypes = new Dictionary<string, Type>();
+        private List<object> _referenceTable = new List<object>();
+
+        public Amf0Reader()
+        {
+            var readDataHandlers = new Dictionary<Amf0Type, ReadDataHandler>();
+            readDataHandlers[Amf0Type.Number] = OutValueTypeEraser<double>(TryGetNumber);
+            readDataHandlers[Amf0Type.Boolean] = OutValueTypeEraser<bool>(TryGetBoolean);
+            readDataHandlers[Amf0Type.String] = OutValueTypeEraser<string>(TryGetString);
+            readDataHandlers[Amf0Type.Object] = OutValueTypeEraser<Dictionary<string, object>>(TryGetObject);
+            readDataHandlers[Amf0Type.Null] = OutValueTypeEraser<object>(TryGetNull);
+            readDataHandlers[Amf0Type.Undefined] = OutValueTypeEraser<Undefined>(TryGetUndefined);
+            readDataHandlers[Amf0Type.Reference] = OutValueTypeEraser<object>(TryGetReference);
+            readDataHandlers[Amf0Type.EcmaArray] = OutValueTypeEraser<Dictionary<string, object>>(TryGetEcmaArray);
+            readDataHandlers[Amf0Type.StrictArray] = OutValueTypeEraser<List<object>>(TryGetStrictArray);
+            readDataHandlers[Amf0Type.Date] = OutValueTypeEraser<DateTime>(TryGetDate);
+            readDataHandlers[Amf0Type.LongString] = OutValueTypeEraser<string>(TryGetLongString);
+            readDataHandlers[Amf0Type.Unsupported] = OutValueTypeEraser<Unsupported>(TryGetUnsupported);
+            readDataHandlers[Amf0Type.XmlDocument] = OutValueTypeEraser<XmlDocument>(TryGetXmlDocument);
+            readDataHandlers[Amf0Type.TypedObject] = OutValueTypeEraser<object>(TryGetTypedObject);
+            _readDataHandlers = readDataHandlers;
+        }
+        public void RegisterType<T>()
+        {
+            _registeredTypes.Add(typeof(T).Name, typeof(T));
+        }
 
         private ReadDataHandler OutValueTypeEraser<T>(ReadDataHandler<T> handler)
         {
@@ -48,7 +75,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
         {
             type = default;
             consumedLength = default;
-            if (buffer.Length < MARKER_LENGTH)
+            if (buffer.Length < Amf0CommonValues.MARKER_LENGTH)
             {
                 return false;
             }
@@ -58,13 +85,13 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
             {
                 return false;
             }
-            if (buffer.Length - MARKER_LENGTH < bytesNeed)
+            if (buffer.Length - Amf0CommonValues.MARKER_LENGTH < bytesNeed)
             {
                 return false;
             }
 
             type = marker;
-            consumedLength = (int)bytesNeed + MARKER_LENGTH;
+            consumedLength = (int)bytesNeed + Amf0CommonValues.MARKER_LENGTH;
 
             return true;
         }
@@ -81,7 +108,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
             {
                 return false;
             }
-            value = RtmpBitConverter.ToDouble(buffer.Slice(MARKER_LENGTH));
+            value = RtmpBitConverter.ToDouble(buffer.Slice(Amf0CommonValues.MARKER_LENGTH));
             bytesConsumed = length;
             return true;
         }
@@ -122,12 +149,12 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
             }
 
 
-            if (!TryGetStringImpl(buffer.Slice(MARKER_LENGTH), STRING_HEADER_LENGTH, out value, out bytesConsumed))
+            if (!TryGetStringImpl(buffer.Slice(Amf0CommonValues.MARKER_LENGTH), Amf0CommonValues.STRING_HEADER_LENGTH, out value, out bytesConsumed))
             {
                 return false;
             }
 
-            bytesConsumed += MARKER_LENGTH;
+            bytesConsumed += Amf0CommonValues.MARKER_LENGTH;
 
             return true;
         }
@@ -137,7 +164,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
             value = default;
             bytesConsumed = default;
             var obj = new Dictionary<string, object>();
-            var consumed = MARKER_LENGTH;
+            var consumed = Amf0CommonValues.MARKER_LENGTH;
             while (true)
             {
                 if (!TryGetString(objectBuffer, out var key, out var keyLength))
@@ -187,7 +214,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
                 return false;
             }
 
-            var objectBuffer = buffer.Slice(MARKER_LENGTH);
+            var objectBuffer = buffer.Slice(Amf0CommonValues.MARKER_LENGTH);
 
             if (!TryGetObjectImpl(objectBuffer, out var obj, out var consumed))
             {
@@ -197,7 +224,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
             value = obj;
             bytesConsumed = consumed;
 
-            _readReferenceTable.Add(value);
+            _referenceTable.Add(value);
 
             return true;
         }
@@ -216,7 +243,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
                 return false;
             }
             value = null;
-            bytesConsumed = MARKER_LENGTH;
+            bytesConsumed = Amf0CommonValues.MARKER_LENGTH;
             return true;
         }
 
@@ -234,7 +261,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
                 return false;
             }
             value = new Undefined();
-            consumedLength = MARKER_LENGTH;
+            consumedLength = Amf0CommonValues.MARKER_LENGTH;
             return true;
         }
 
@@ -253,13 +280,13 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
                 return false;
             }
 
-            index = RtmpBitConverter.ToUInt16(buffer.Slice(MARKER_LENGTH, sizeof(ushort)));
-            consumedLength = MARKER_LENGTH + sizeof(ushort);
-            if (_readReferenceTable.Count <= index)
+            index = RtmpBitConverter.ToUInt16(buffer.Slice(Amf0CommonValues.MARKER_LENGTH, sizeof(ushort)));
+            consumedLength = Amf0CommonValues.MARKER_LENGTH + sizeof(ushort);
+            if (_referenceTable.Count <= index)
             {
                 return false;
             }
-            value = _readReferenceTable[index];
+            value = _referenceTable[index];
             return true;
         }
 
@@ -280,9 +307,9 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
 
             var obj = new Dictionary<string, object>();
 
-            var elementCount = RtmpBitConverter.ToUInt32(buffer.Slice(MARKER_LENGTH, sizeof(uint)));
+            var elementCount = RtmpBitConverter.ToUInt32(buffer.Slice(Amf0CommonValues.MARKER_LENGTH, sizeof(uint)));
 
-            var arrayBodyBuffer = buffer.Slice(MARKER_LENGTH + sizeof(uint));
+            var arrayBodyBuffer = buffer.Slice(Amf0CommonValues.MARKER_LENGTH + sizeof(uint));
             var elementBodyBuffer = arrayBodyBuffer;
             int consumed = 0;
             for (uint i = 0; i < elementCount; i++)
@@ -313,7 +340,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
             }
             value = obj;
             consumedLength = consumed;
-            _readReferenceTable.Add(value);
+            _referenceTable.Add(value);
             return true;
         }
 
@@ -334,9 +361,9 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
 
             var obj = new List<object>();
 
-            var elementCount = RtmpBitConverter.ToUInt32(buffer.Slice(MARKER_LENGTH, sizeof(uint)));
+            var elementCount = RtmpBitConverter.ToUInt32(buffer.Slice(Amf0CommonValues.MARKER_LENGTH, sizeof(uint)));
 
-            var arrayBodyBuffer = buffer.Slice(MARKER_LENGTH + sizeof(uint));
+            var arrayBodyBuffer = buffer.Slice(Amf0CommonValues.MARKER_LENGTH + sizeof(uint));
             var elementBodyBuffer = arrayBodyBuffer;
             int consumed = 0;
             for (uint i = 0; i < elementCount; i++)
@@ -357,7 +384,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
             array = obj;
             consumedLength = consumed;
 
-            _readReferenceTable.Add(array);
+            _referenceTable.Add(array);
             return true;
         }
 
@@ -376,7 +403,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
                 return false;
             }
 
-            var timestamp = RtmpBitConverter.ToDouble(buffer.Slice(MARKER_LENGTH));
+            var timestamp = RtmpBitConverter.ToDouble(buffer.Slice(Amf0CommonValues.MARKER_LENGTH));
             value = DateTimeOffset.FromUnixTimeMilliseconds((long)(timestamp * 1000)).DateTime;
             consumendLength = length;
             return true;
@@ -397,12 +424,12 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
                 return false;
             }
 
-            if (!TryGetStringImpl(buffer.Slice(MARKER_LENGTH), LONG_STRING_HEADER_LENGTH, out value, out consumedLength))
+            if (!TryGetStringImpl(buffer.Slice(Amf0CommonValues.MARKER_LENGTH), Amf0CommonValues.STRING_HEADER_LENGTH, out value, out consumedLength))
             {
                 return false;
             }
 
-            consumedLength += MARKER_LENGTH;
+            consumedLength += Amf0CommonValues.MARKER_LENGTH;
 
             return true;
         }
@@ -412,13 +439,13 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
             value = default;
             consumedLength = default;
             var stringLength = (int)RtmpBitConverter.ToUInt32(buffer);
-            if (buffer.Length - LONG_STRING_HEADER_LENGTH < stringLength)
+            if (buffer.Length - Amf0CommonValues.STRING_HEADER_LENGTH < stringLength)
             {
                 return false;
             }
 
-            value = Encoding.UTF8.GetString(buffer.Slice(LONG_STRING_HEADER_LENGTH, stringLength));
-            consumedLength = LONG_STRING_HEADER_LENGTH + stringLength;
+            value = Encoding.UTF8.GetString(buffer.Slice(Amf0CommonValues.STRING_HEADER_LENGTH, stringLength));
+            consumedLength = Amf0CommonValues.STRING_HEADER_LENGTH + stringLength;
             return true;
         }
 
@@ -438,7 +465,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
             }
 
             value = new Unsupported();
-            consumedLength = MARKER_LENGTH;
+            consumedLength = Amf0CommonValues.MARKER_LENGTH;
 
             return true;
         }
@@ -452,14 +479,14 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
                 return false;
             }
 
-            if (!TryGetStringImpl(buffer.Slice(MARKER_LENGTH), LONG_STRING_HEADER_LENGTH, out var str, out consumedLength))
+            if (!TryGetStringImpl(buffer.Slice(Amf0CommonValues.MARKER_LENGTH), Amf0CommonValues.STRING_HEADER_LENGTH, out var str, out consumedLength))
             {
                 return false;
             }
 
             value = new XmlDocument();
             value.LoadXml(str);
-            consumedLength += MARKER_LENGTH;
+            consumedLength += Amf0CommonValues.MARKER_LENGTH;
 
             return true;
         }
@@ -479,9 +506,9 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
                 return false;
             }
 
-            var consumed = MARKER_LENGTH;
+            var consumed = Amf0CommonValues.MARKER_LENGTH;
 
-            if (!TryGetStringImpl(buffer.Slice(MARKER_LENGTH), STRING_HEADER_LENGTH, out var className, out var stringLength))
+            if (!TryGetStringImpl(buffer.Slice(Amf0CommonValues.MARKER_LENGTH), Amf0CommonValues.STRING_HEADER_LENGTH, out var className, out var stringLength))
             {
                 return false;
             }
@@ -522,7 +549,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
 
             value = obj;
             consumedLength = consumed;
-            _readReferenceTable.Add(value);
+            _referenceTable.Add(value);
 
             return true;
         }

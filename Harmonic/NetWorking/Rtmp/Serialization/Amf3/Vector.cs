@@ -27,5 +27,16 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf3
             }
             return base.Equals(obj);
         }
+
+        public override int GetHashCode()
+        {
+            var hash = new HashCode();
+            foreach (var d in _data)
+            {
+                hash.Add(d);
+            }
+            hash.Add(IsFixedSize);
+            return hash.ToHashCode();
+        }
     }
 }
