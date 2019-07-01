@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
 using System.Text;
 
-namespace Harmonic.NetWorking.Rtmp.Data
+namespace Harmonic.Networking.Rtmp.Data
 {
     public class ChunkBasicHeader 
     {

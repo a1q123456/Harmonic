@@ -1,10 +1,10 @@
-﻿using Harmonic.NetWorking.Rtmp.Data;
+﻿using Harmonic.Networking.Rtmp.Data;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.NetWorking.Rtmp.Serialization
+namespace Harmonic.Networking.Rtmp.Serialization
 {
     interface IRtmpMessageIO
     {

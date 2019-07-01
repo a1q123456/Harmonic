@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using Harmonic.NetWorking.Rtmp.Data;
+using Harmonic.Networking.Rtmp.Data;
 
-namespace Harmonic.NetWorking.Rtmp.Messages
+namespace Harmonic.Networking.Rtmp.Messages
 {
     public class WindowAcknowledgementSizeMessage : ControlMessage
     {

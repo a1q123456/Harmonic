@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Linq;
 
-namespace Harmonic.NetWorking.Rtmp.Serialization.Amf3
+namespace Harmonic.Networking.Amf.Serialization.Amf3
 {
     public class Vector<T> : List<T>
     {

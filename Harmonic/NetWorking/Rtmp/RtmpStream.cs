@@ -1,6 +1,6 @@
-﻿using Harmonic.NetWorking;
-using Harmonic.NetWorking.Rtmp.Data;
-using Harmonic.NetWorking.Rtmp.Exceptions;
+﻿using Harmonic.Networking;
+using Harmonic.Networking.Rtmp.Data;
+using Harmonic.Networking.Rtmp.Exceptions;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
@@ -13,10 +13,11 @@ using System.Threading.Tasks;
 using System.IO.Pipelines;
 using System.Collections.ObjectModel;
 using System.Collections.Concurrent;
-using Harmonic.NetWorking.Rtmp.Messages;
-using Harmonic.NetWorking.Rtmp.Serialization;
+using Harmonic.Networking.Rtmp.Messages;
+using Harmonic.Networking.Rtmp.Serialization;
+using Harmonic.Networking.Utils;
 
-namespace Harmonic.NetWorking.Rtmp
+namespace Harmonic.Networking.Rtmp
 {
     // TBD: retransfer bytes when acknowledgement not received
     class RtmpStream : IDisposable
@@ -279,24 +280,24 @@ namespace Harmonic.NetWorking.Rtmp
             {
                 case ChunkHeaderType.Type0:
                     buffer = _arrayPool.Rent(TYPE0_SIZE + EXTENDED_TIMESTAMP_LENGTH);
-                    RtmpBitConverter.TryGetUInt24Bytes(timestamp >= 0xFFFFFF ? 0xFFFFFF : timestamp, buffer.AsSpan(0, 3));
-                    RtmpBitConverter.TryGetUInt24Bytes(header.MessageLength, buffer.AsSpan(3, 3));
-                    RtmpBitConverter.TryGetBytes((byte)header.MessageType, buffer.AsSpan(6, 1));
-                    RtmpBitConverter.TryGetBytes(header.MessageStreamId.Value, buffer.AsSpan(7, 4), true);
+                    NetworkBitConverter.TryGetUInt24Bytes(timestamp >= 0xFFFFFF ? 0xFFFFFF : timestamp, buffer.AsSpan(0, 3));
+                    NetworkBitConverter.TryGetUInt24Bytes(header.MessageLength, buffer.AsSpan(3, 3));
+                    NetworkBitConverter.TryGetBytes((byte)header.MessageType, buffer.AsSpan(6, 1));
+                    NetworkBitConverter.TryGetBytes(header.MessageStreamId.Value, buffer.AsSpan(7, 4), true);
                     length = TYPE0_SIZE;
                     break;
                 case ChunkHeaderType.Type1:
                     buffer = _arrayPool.Rent(TYPE1_SIZE + EXTENDED_TIMESTAMP_LENGTH);
                     timestamp = prevHeader.Timestamp - timestamp;
-                    RtmpBitConverter.TryGetUInt24Bytes(timestamp >= 0xFFFFFF ? 0xFFFFFF : timestamp, buffer.AsSpan(0, 3));
-                    RtmpBitConverter.TryGetUInt24Bytes(header.MessageLength, buffer.AsSpan(3, 3));
-                    RtmpBitConverter.TryGetBytes((byte)header.MessageType, buffer.AsSpan(6, 1));
+                    NetworkBitConverter.TryGetUInt24Bytes(timestamp >= 0xFFFFFF ? 0xFFFFFF : timestamp, buffer.AsSpan(0, 3));
+                    NetworkBitConverter.TryGetUInt24Bytes(header.MessageLength, buffer.AsSpan(3, 3));
+                    NetworkBitConverter.TryGetBytes((byte)header.MessageType, buffer.AsSpan(6, 1));
                     length = TYPE1_SIZE;
                     break;
                 case ChunkHeaderType.Type2:
                     buffer = _arrayPool.Rent(TYPE2_SIZE + EXTENDED_TIMESTAMP_LENGTH);
                     timestamp = prevHeader.Timestamp - timestamp;
-                    RtmpBitConverter.TryGetUInt24Bytes(timestamp >= 0xFFFFFF ? 0xFFFFFF : timestamp, buffer.AsSpan(0, 3));
+                    NetworkBitConverter.TryGetUInt24Bytes(timestamp >= 0xFFFFFF ? 0xFFFFFF : timestamp, buffer.AsSpan(0, 3));
                     length = TYPE2_SIZE;
                     break;
                 case ChunkHeaderType.Type3:
@@ -308,7 +309,7 @@ namespace Harmonic.NetWorking.Rtmp
             }
             if (header.Timestamp == 0xFFFFFF)
             {
-                RtmpBitConverter.TryGetBytes(timestamp, buffer.AsSpan(length, EXTENDED_TIMESTAMP_LENGTH));
+                NetworkBitConverter.TryGetBytes(timestamp, buffer.AsSpan(length, EXTENDED_TIMESTAMP_LENGTH));
                 length += EXTENDED_TIMESTAMP_LENGTH;
             }
         }
@@ -397,7 +398,7 @@ namespace Harmonic.NetWorking.Rtmp
                 throw new ProtocolViolationException();
             }
 
-            _readerTimestampEpoch = RtmpBitConverter.ToUInt32(arr.AsSpan(1, 4));
+            _readerTimestampEpoch = NetworkBitConverter.ToUInt32(arr.AsSpan(1, 4));
             _writerTimestampEpoch = 0;
             var allZero = arr.AsSpan(5, 4);
             if (allZero[0] != 0 || allZero[1] != 0 || allZero[2] != 0 || allZero[3] != 0)
@@ -412,7 +413,7 @@ namespace Harmonic.NetWorking.Rtmp
 
             arr.AsSpan().Clear();
             arr[0] = 3;
-            RtmpBitConverter.TryGetBytes(_writerTimestampEpoch, arr.AsSpan(1, 4));
+            NetworkBitConverter.TryGetBytes(_writerTimestampEpoch, arr.AsSpan(1, 4));
             _s1Data.AsSpan(0, 1528).CopyTo(arr.AsSpan(9));
             SendRawData(arr, 1537);
 
@@ -434,7 +435,7 @@ namespace Harmonic.NetWorking.Rtmp
             {
                 buffer.Slice(consumed, 1536).CopyTo(arr);
                 consumed += 1536;
-                var s1Timestamp = RtmpBitConverter.ToUInt32(arr.AsSpan(0, 4));
+                var s1Timestamp = NetworkBitConverter.ToUInt32(arr.AsSpan(0, 4));
                 if (s1Timestamp != _writerTimestampEpoch)
                 {
                     throw new ProtocolViolationException();
@@ -445,8 +446,8 @@ namespace Harmonic.NetWorking.Rtmp
                     throw new ProtocolViolationException();
                 }
 
-                RtmpBitConverter.TryGetBytes(_readerTimestampEpoch, arr.AsSpan(0, 4));
-                RtmpBitConverter.TryGetBytes((uint)0, arr.AsSpan(4, 4));
+                NetworkBitConverter.TryGetBytes(_readerTimestampEpoch, arr.AsSpan(0, 4));
+                NetworkBitConverter.TryGetBytes((uint)0, arr.AsSpan(4, 4));
                 _c1Data.AsSpan(0, 1528).CopyTo(arr.AsSpan(8));
                 SendRawData(arr, 1536);
                 OnHandshakeSuccessful();
@@ -578,24 +579,24 @@ namespace Harmonic.NetWorking.Rtmp
                     arr = _arrayPool.Rent(TYPE0_SIZE);
                     buffer.Slice(consumed, TYPE0_SIZE).CopyTo(arr);
                     consumed += TYPE0_SIZE;
-                    header.MessageHeader.Timestamp = RtmpBitConverter.ToUInt24(arr.AsSpan(0, 3));
-                    header.MessageHeader.MessageLength = RtmpBitConverter.ToUInt24(arr.AsSpan(3, 3));
-                    header.MessageHeader.MessageType = (MessageType)RtmpBitConverter.ToUInt24(arr.AsSpan(6, 1));
-                    header.MessageHeader.MessageStreamId = RtmpBitConverter.ToUInt32(arr.AsSpan(7, 4), true);
+                    header.MessageHeader.Timestamp = NetworkBitConverter.ToUInt24(arr.AsSpan(0, 3));
+                    header.MessageHeader.MessageLength = NetworkBitConverter.ToUInt24(arr.AsSpan(3, 3));
+                    header.MessageHeader.MessageType = (MessageType)NetworkBitConverter.ToUInt24(arr.AsSpan(6, 1));
+                    header.MessageHeader.MessageStreamId = NetworkBitConverter.ToUInt32(arr.AsSpan(7, 4), true);
                     break;
                 case ChunkHeaderType.Type1:
                     arr = _arrayPool.Rent(TYPE1_SIZE);
                     buffer.Slice(consumed, TYPE1_SIZE).CopyTo(arr);
                     consumed += TYPE1_SIZE;
-                    header.MessageHeader.Timestamp = RtmpBitConverter.ToUInt24(arr.AsSpan(0, 3));
-                    header.MessageHeader.MessageLength = RtmpBitConverter.ToUInt24(arr.AsSpan(3, 3));
-                    header.MessageHeader.MessageType = (MessageType)RtmpBitConverter.ToUInt24(arr.AsSpan(6, 1));
+                    header.MessageHeader.Timestamp = NetworkBitConverter.ToUInt24(arr.AsSpan(0, 3));
+                    header.MessageHeader.MessageLength = NetworkBitConverter.ToUInt24(arr.AsSpan(3, 3));
+                    header.MessageHeader.MessageType = (MessageType)NetworkBitConverter.ToUInt24(arr.AsSpan(6, 1));
                     break;
                 case ChunkHeaderType.Type2:
                     arr = _arrayPool.Rent(TYPE2_SIZE);
                     buffer.Slice(consumed, TYPE2_SIZE).CopyTo(arr);
                     consumed += TYPE2_SIZE;
-                    header.MessageHeader.Timestamp = RtmpBitConverter.ToUInt24(arr.AsSpan(0, 3));
+                    header.MessageHeader.Timestamp = NetworkBitConverter.ToUInt24(arr.AsSpan(0, 3));
                     break;
             }
             if (arr != null)
@@ -622,7 +623,7 @@ namespace Harmonic.NetWorking.Rtmp
             }
             var arr = _arrayPool.Rent(4);
             buffer.Slice(consumed, 4).CopyTo(arr);
-            var extendedTimestamp = RtmpBitConverter.ToUInt32(arr.AsSpan(0, 4));
+            var extendedTimestamp = NetworkBitConverter.ToUInt32(arr.AsSpan(0, 4));
             _processingChunk.ExtendedTimestamp = extendedTimestamp;
             _processingChunk.MessageHeader.Timestamp = extendedTimestamp;
             _nextProcessState = ProcessState.CompleteMessage;

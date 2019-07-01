@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.NetWorking.Rtmp.Common
+namespace Harmonic.Networking.Amf.Common
 {
-    public class Unsupported
+    public class Undefined
     {
     }
 }

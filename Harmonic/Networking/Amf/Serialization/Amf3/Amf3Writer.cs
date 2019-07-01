@@ -1,5 +1,4 @@
-﻿using Harmonic.NetWorking.Rtmp.Common;
-using Harmonic.NetWorking.Rtmp.Data;
+﻿using Harmonic.Networking.Amf.Common;
 using System;
 using System.Linq;
 using System.Buffers;
@@ -8,8 +7,10 @@ using System.Text;
 using System.Xml;
 using System.IO;
 using Harmonic.Buffers;
+using Harmonic.Networking.Utils;
+using Harmonic.Networking.Amf.Data;
 
-namespace Harmonic.NetWorking.Rtmp.Serialization.Amf3
+namespace Harmonic.Networking.Amf.Serialization.Amf3
 {
     public class Amf3Writer
     {
@@ -126,7 +127,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf3
             var arr = ArrayPool<byte>.Shared.Rent(4);
             try
             {
-                RtmpBitConverter.TryGetBytes(value, arr);
+                NetworkBitConverter.TryGetBytes(value, arr);
                 _writerBuffer.WriteToBuffer(arr[0]);
                 for (int i = 1; i < length; i++)
                 {
@@ -157,7 +158,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf3
             var backend = _arrayPool.Rent(sizeof(double));
             try
             {
-                if (!RtmpBitConverter.TryGetBytes(value, backend))
+                if (!NetworkBitConverter.TryGetBytes(value, backend))
                 {
                     return false;
                 }
@@ -247,7 +248,6 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf3
 
             var refIndex = _objectReferenceTable.IndexOf(dateTime);
             uint header = 0;
-            int headerConsumed = 0;
             if (refIndex >= 0)
             {
                 header = (uint)refIndex << 1;
@@ -270,7 +270,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf3
             var backend = _arrayPool.Rent(sizeof(double));
             try
             {
-                if (!RtmpBitConverter.TryGetBytes(timestamp, backend))
+                if (!NetworkBitConverter.TryGetBytes(timestamp, backend))
                 {
                     return false;
                 }
@@ -377,9 +377,10 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf3
                 }
                 else
                 {
-                    traits.ClassName = "";
-                    traits.ClassType = Amf3ClassType.Dynamic;
+                    traits.ClassName = objType.Name;
+                    traits.ClassType = Amf3ClassType.Typed;
                 }
+                traits.IsDynamic = amf3Object.IsDynamic;
                 traits.Members = new List<string>(amf3Object.Fieldes.Keys);
                 memberValues = new List<object>(amf3Object.Fieldes.Keys.Select(k => amf3Object.Fieldes[k]));
             }
@@ -395,6 +396,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf3
                 traits.Members = new List<string>(objType.GetProperties().Select(p => p.Name));
                 memberValues = new List<object>(objType.GetProperties().Select(p => p.GetValue(value)));
             }
+
 
             var traitRefIndex = _objectTraitsReferenceTable.IndexOf(traits);
             if (traitRefIndex >= 0)
@@ -428,7 +430,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf3
                 else
                 {
                     header = 0x03;
-                    if (traits.ClassType == Amf3ClassType.Dynamic)
+                    if (traits.IsDynamic)
                     {
                         header |= 0x08;
                     }
@@ -458,7 +460,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf3
                 }
             }
 
-            if (traits.ClassType == Amf3ClassType.Dynamic)
+            if (traits.IsDynamic)
             {
                 var amf3Obj = value as Amf3Object;
                 foreach ((var key, var item) in amf3Obj.DynamicFields)
@@ -505,7 +507,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf3
                 {
                     return false;
                 }
-                if (!RtmpBitConverter.TryGetBytes(value.IsFixedSize ? 0x01 : 0x00, buffer))
+                if (!NetworkBitConverter.TryGetBytes(value.IsFixedSize ? 0x01 : 0x00, buffer))
                 {
                     return false;
                 }
@@ -513,7 +515,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf3
                 consumed += sizeof(byte);
                 foreach (var i in value)
                 {
-                    if (!RtmpBitConverter.TryGetBytes(i, buffer))
+                    if (!NetworkBitConverter.TryGetBytes(i, buffer))
                     {
                         return false;
                     }
@@ -553,7 +555,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf3
                 {
                     return false;
                 }
-                if (!RtmpBitConverter.TryGetBytes(value.IsFixedSize ? 0x01 : 0x00, buffer))
+                if (!NetworkBitConverter.TryGetBytes(value.IsFixedSize ? 0x01 : 0x00, buffer))
                 {
                     return false;
                 }
@@ -561,7 +563,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf3
                 consumed += sizeof(byte);
                 foreach (var i in value)
                 {
-                    if (!RtmpBitConverter.TryGetBytes(i, buffer))
+                    if (!NetworkBitConverter.TryGetBytes(i, buffer))
                     {
                         return false;
                     }
@@ -601,7 +603,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf3
                 {
                     return false;
                 }
-                if (!RtmpBitConverter.TryGetBytes(value.IsFixedSize ? 0x01 : 0x00, buffer))
+                if (!NetworkBitConverter.TryGetBytes(value.IsFixedSize ? 0x01 : 0x00, buffer))
                 {
                     return false;
                 }
@@ -609,7 +611,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf3
                 consumed += sizeof(byte);
                 foreach (var i in value)
                 {
-                    if (!RtmpBitConverter.TryGetBytes(i, buffer))
+                    if (!NetworkBitConverter.TryGetBytes(i, buffer))
                     {
                         return false;
                     }

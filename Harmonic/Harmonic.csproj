@@ -11,10 +11,10 @@
     <Compile Remove="Hosting\RtmpOptions.cs" />
     <Compile Remove="Hosting\RtmpServerBuilder.cs" />
     <Compile Remove="Hosting\WebsocketOptions.cs" />
-    <Compile Remove="NetWorking\ConnectionInformation.cs" />
-    <Compile Remove="NetWorking\IStreamSession.cs" />
-    <Compile Remove="NetWorking\Rtmp\Supervisor.cs" />
-    <Compile Remove="NetWorking\StreamHelper.cs" />
+    <Compile Remove="Networking\ConnectionInformation.cs" />
+    <Compile Remove="Networking\IStreamSession.cs" />
+    <Compile Remove="Networking\Rtmp\Supervisor.cs" />
+    <Compile Remove="Networking\StreamHelper.cs" />
     <Compile Remove="Service\PublisherSessionService.cs" />
   </ItemGroup>
   <ItemGroup>

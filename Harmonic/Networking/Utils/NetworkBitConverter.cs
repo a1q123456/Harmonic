@@ -6,9 +6,9 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace Harmonic.NetWorking.Rtmp.Data
+namespace Harmonic.Networking.Utils
 {
-    public static class RtmpBitConverter
+    public static class NetworkBitConverter
     {
         private static MemoryPool<byte> _memoryPool = MemoryPool<byte>.Shared;
 

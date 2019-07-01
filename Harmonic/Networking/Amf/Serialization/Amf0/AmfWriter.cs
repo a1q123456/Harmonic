@@ -1,7 +1,7 @@
 ﻿using Harmonic.Buffers;
-using Harmonic.NetWorking.Rtmp.Common;
-using Harmonic.NetWorking.Rtmp.Data;
-using Harmonic.NetWorking.Rtmp.Serialization;
+using Harmonic.Networking.Amf.Common;
+using Harmonic.Networking.Rtmp.Serialization;
+using Harmonic.Networking.Utils;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
@@ -11,7 +11,7 @@ using System.Linq;
 using System.Text;
 using System.Xml;
 
-namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
+namespace Harmonic.Networking.Amf.Serialization.Amf0
 {
     public class Amf0Writer
     {
@@ -59,6 +59,12 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
             _writeBuffer.TakeOutMemory(buffer);
         }
 
+        public bool TryGetAvmPlusBytes()
+        {
+            _writeBuffer.WriteToBuffer((byte)Amf0Type.AvmPlusObject);
+            return true;
+        }
+
         public bool TryGetBytes(string str)
         {
             var bytesNeed = Amf0CommonValues.MARKER_LENGTH;
@@ -89,7 +95,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
                 {
                     buffer[0] = (byte)Amf0Type.LongString;
 
-                    if (!RtmpBitConverter.TryGetBytes((uint)bodyLength, buffer.Slice(0, headerLength)))
+                    if (!NetworkBitConverter.TryGetBytes((uint)bodyLength, buffer.Slice(0, headerLength)))
                     {
                         return false;
                     }
@@ -97,7 +103,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
                 else
                 {
                     buffer[0] = (byte)Amf0Type.StrictArray;
-                    if (!RtmpBitConverter.TryGetBytes((ushort)bodyLength, buffer.Slice(0, headerLength)))
+                    if (!NetworkBitConverter.TryGetBytes((ushort)bodyLength, buffer.Slice(0, headerLength)))
                     {
                         return false;
                     }
@@ -123,7 +129,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
             {
                 var buffer = bufferBackend.AsSpan(0, bytesNeed);
                 buffer[0] = (byte)Amf0Type.Number;
-                var ret = RtmpBitConverter.TryGetBytes(val, buffer.Slice(Amf0CommonValues.MARKER_LENGTH));
+                var ret = NetworkBitConverter.TryGetBytes(val, buffer.Slice(Amf0CommonValues.MARKER_LENGTH));
                 _writeBuffer.WriteToBuffer(buffer);
                 return ret;
             }
@@ -170,7 +176,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
             {
                 var buffer = backend.AsSpan(0, bytesNeed);
                 buffer[0] = (byte)Amf0Type.Reference;
-                var ret = RtmpBitConverter.TryGetBytes(index, buffer.Slice(Amf0CommonValues.MARKER_LENGTH));
+                var ret = NetworkBitConverter.TryGetBytes(index, buffer.Slice(Amf0CommonValues.MARKER_LENGTH));
                 _writeBuffer.WriteToBuffer(buffer);
                 return ret;
             }
@@ -200,7 +206,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
                 buffer[0] = (byte)Amf0Type.Date;
                 var dof = new DateTimeOffset(dateTime);
                 var timestamp = (double)dof.ToUnixTimeMilliseconds() / 1000;
-                if (!RtmpBitConverter.TryGetBytes(timestamp, buffer.Slice(Amf0CommonValues.MARKER_LENGTH)))
+                if (!NetworkBitConverter.TryGetBytes(timestamp, buffer.Slice(Amf0CommonValues.MARKER_LENGTH)))
                 {
                     return false;
                 }
@@ -239,7 +245,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
             {
                 var buffer = backend.AsSpan(0, bytesNeed);
                 buffer[0] = (byte)Amf0Type.XmlDocument;
-                RtmpBitConverter.TryGetBytes((uint)bodyBytes, buffer.Slice(Amf0CommonValues.MARKER_LENGTH));
+                NetworkBitConverter.TryGetBytes((uint)bodyBytes, buffer.Slice(Amf0CommonValues.MARKER_LENGTH));
                 Encoding.UTF8.GetBytes(content, buffer.Slice(Amf0CommonValues.MARKER_LENGTH + Amf0CommonValues.LONG_STRING_HEADER_LENGTH));
                 _writeBuffer.WriteToBuffer(buffer);
                 return true;
@@ -289,7 +295,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
             var countBuffer = _arrayPool.Rent(sizeof(uint));
             try
             {
-                if (!RtmpBitConverter.TryGetBytes((uint)value.Count, countBuffer))
+                if (!NetworkBitConverter.TryGetBytes((uint)value.Count, countBuffer))
                 {
                     return false;
                 }
@@ -328,7 +334,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
             var countBuffer = _arrayPool.Rent(sizeof(uint));
             try
             {
-                if (!RtmpBitConverter.TryGetBytes((uint)value.Count, countBuffer))
+                if (!NetworkBitConverter.TryGetBytes((uint)value.Count, countBuffer))
                 {
                     return false;
                 }
@@ -373,7 +379,7 @@ namespace Harmonic.NetWorking.Rtmp.Serialization.Amf0
             var countBuffer = _arrayPool.Rent(sizeof(ushort));
             try
             {
-                RtmpBitConverter.TryGetBytes(classNameLength, countBuffer);
+                NetworkBitConverter.TryGetBytes(classNameLength, countBuffer);
                 _writeBuffer.WriteToBuffer(countBuffer.AsSpan(0, sizeof(ushort)));
             }
             finally
