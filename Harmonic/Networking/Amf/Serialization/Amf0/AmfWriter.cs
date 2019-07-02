@@ -1,4 +1,5 @@
 ﻿using Harmonic.Buffers;
+using Harmonic.Networking.Amf.Attributes;
 using Harmonic.Networking.Amf.Common;
 using Harmonic.Networking.Rtmp.Serialization;
 using Harmonic.Networking.Utils;
@@ -8,6 +9,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Pipelines;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Xml;
 
@@ -400,24 +402,38 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             _writeBuffer.WriteToBuffer((byte)Amf0Type.TypedObject);
 
             var valueType = value.GetType();
-            var classNameLength = (ushort)Encoding.UTF8.GetByteCount(valueType.Name);
-            var countBuffer = _arrayPool.Rent(sizeof(ushort));
-            try
+            var className = valueType.Name;
+
+            var clsAttr = (TypedObjectAttribute)Attribute.GetCustomAttribute(valueType, typeof(TypedObjectAttribute));
+            if (clsAttr != null && clsAttr.Name != null)
             {
-                NetworkBitConverter.TryGetBytes(classNameLength, countBuffer);
-                _writeBuffer.WriteToBuffer(countBuffer.AsSpan(0, sizeof(ushort)));
-            }
-            finally
-            {
-                _arrayPool.Return(countBuffer);
+                className = clsAttr.Name;
             }
 
-            if (!TryGetObjectBytesImpl(value))
+            if (!TryGetStringBytesImpl(className, out _))
             {
                 return false;
             }
 
-            if (!TryGetBytes(""))
+            var props = valueType.GetProperties();
+            
+            foreach (var prop in props)
+            {
+                var attr = (ClassFieldAttribute)Attribute.GetCustomAttribute(prop, typeof(ClassFieldAttribute));
+                if (attr != null)
+                {
+                    if (!TryGetStringBytesImpl(attr.Name ?? prop.Name, out _))
+                    {
+                        return false;
+                    }
+                    if (!TryGetValueBytes(prop.GetValue(value)))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            if (!TryGetStringBytesImpl("", out _))
             {
                 return false;
             }
@@ -448,7 +464,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                 return false;
             }
 
-            if (!TryGetBytes(""))
+            if (!TryGetStringBytesImpl("", out _))
             {
                 return false;
             }

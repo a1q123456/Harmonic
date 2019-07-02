@@ -294,5 +294,93 @@ namespace UnitTest
 
         }
 
+        [TestMethod]
+        public void TestObject()
+        {
+            var writer = new Amf0Writer();
+            var reader = new Amf0Reader();
+
+            object nullVal = null;
+            var refVal = new List<object>() { 1, 2, "test" };
+
+            var obj = new
+            {
+                c = 1.0,
+                test = false,
+                test2 = nullVal,
+                test3 = new Undefined(),
+                test4 = refVal,
+                test5 = "test",
+                test6 = refVal
+            };
+
+            Assert.IsTrue(writer.TryGetBytes(obj));
+            var buffer = new byte[writer.MessageLength];
+            writer.GetMessage(buffer);
+
+            // test reference table is working
+            Assert.AreEqual(buffer.Length, 97);
+            Assert.IsTrue(reader.TryGetObject(buffer, out var readObj, out var consumed));
+            Assert.AreEqual(consumed, buffer.Length);
+        }
+
+        [TypedObject(Name = "Another.Name")]
+        class TypedClass : IDynamicObject
+        {
+            [ClassField]
+            public double c { get; set; }
+            [ClassField]
+            public bool test { get; set; }
+            [ClassField]
+            public object test2 { get; set; }
+            [ClassField]
+            public Undefined test3 { get; set; }
+            [ClassField]
+            public List<object> test4 { get; set; }
+            [ClassField]
+            public string test5 { get; set; }
+            [ClassField]
+            public List<object> test6 { get; set; }
+
+            private Dictionary<string, object> _dynamicFields = new Dictionary<string, object>();
+
+            public IReadOnlyDictionary<string, object> DynamicFields => _dynamicFields;
+
+            public void AddDynamic(string key, object data)
+            {
+                _dynamicFields.Add(key, data);
+            }
+        }
+
+        [TestMethod]
+        public void TestTypedObject()
+        {
+            var writer = new Amf0Writer();
+            var reader = new Amf0Reader();
+            reader.RegisterType<TypedClass>("Another.Name");
+
+            object nullVal = null;
+            var refVal = new List<object>() { 1, 2, "test" };
+
+            var obj = new TypedClass()
+            {
+                c = 1.0,
+                test = false,
+                test2 = nullVal,
+                test3 = new Undefined(),
+                test4 = refVal,
+                test5 = "test",
+                test6 = refVal
+            };
+
+            Assert.IsTrue(writer.TryGetTypedBytes(obj));
+            var buffer = new byte[writer.MessageLength];
+            writer.GetMessage(buffer);
+            
+            Assert.IsTrue(reader.TryGetTypedObject(buffer, out var readObj, out var consumed));
+            Assert.AreEqual(consumed, buffer.Length);
+        }
+
+
     }
 }

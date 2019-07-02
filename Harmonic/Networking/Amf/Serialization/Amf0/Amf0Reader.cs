@@ -85,7 +85,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             };
             _registeredTypes.Add(type);
             _registeredTypeStates.Add(typeName, state);
-            _amf3Reader.RegisterTypedObject(mapedName, state);
+            _amf3Reader.RegisterTypedObject(typeName, state);
         }
 
         public void RegisterIExternalizableForAvmPlus<T>(string mapedName = null) where T : IExternalizable, new()
@@ -317,19 +317,14 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             value = default;
             bytesConsumed = default;
             var obj = new Dictionary<string, object>();
-            var consumed = Amf0CommonValues.MARKER_LENGTH;
+            var consumed = 0;
             while (true)
             {
-                if (!TryGetString(objectBuffer, out var key, out var keyLength))
+                if (!TryGetStringImpl(objectBuffer, Amf0CommonValues.STRING_HEADER_LENGTH, out var key, out var keyLength))
                 {
                     return false;
                 }
                 consumed += keyLength;
-
-                if (objectBuffer.Length - keyLength < 0)
-                {
-                    return false;
-                }
                 objectBuffer = objectBuffer.Slice(keyLength);
 
                 if (!TryGetValue(objectBuffer, out var dataType, out var data, out var valueLength))
@@ -337,19 +332,15 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                     return false;
                 }
                 consumed += valueLength;
-
-                if (objectBuffer.Length - valueLength < 0)
-                {
-                    return false;
-                }
                 objectBuffer = objectBuffer.Slice(valueLength);
+
                 if (!key.Any() && dataType == Amf0Type.ObjectEnd)
                 {
                     break;
                 }
-                consumed += Amf0CommonValues.MARKER_LENGTH;
                 obj.Add(key, data);
             }
+            value = obj;
             bytesConsumed = consumed;
             return true;
         }
@@ -718,7 +709,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             return true;
         }
 
-        private bool TryGetTypedObject(Span<byte> buffer, out object value, out int consumedLength)
+        public bool TryGetTypedObject(Span<byte> buffer, out object value, out int consumedLength)
         {
             value = default;
             consumedLength = default;

@@ -215,5 +215,24 @@ namespace UnitTest
             }
         }
 
+        [TestMethod]
+        public void TestReadObject()
+        {
+            var reader = new Amf0Reader();
+
+            // pyamf has a bug about element count of ecma array
+            // https://github.com/hydralabs/pyamf/blob/master/pyamf/amf0.py#L567
+            reader.StrictMode = false;
+
+            using (var f = new FileStream("../../../../samples/amf0/misc/object.amf0", FileMode.Open))
+            {
+                var data = new byte[f.Length];
+                f.Read(data);
+
+                Assert.IsTrue(reader.TryGetObject(data, out var dataRead, out var consumed));
+                Assert.IsTrue(dataRead.SequenceEqual(new Dictionary<string, object>() { ["a"] = "b", ["c"] = 1.0 }));
+            }
+        }
+
     }
 }
