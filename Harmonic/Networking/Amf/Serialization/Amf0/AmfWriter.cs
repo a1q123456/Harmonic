@@ -41,6 +41,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             getBytesHandlers[typeof(Undefined)] = GetBytesWrapper<Undefined>(TryGetBytes);
             getBytesHandlers[typeof(bool)] = GetBytesWrapper<bool>(TryGetBytes);
             getBytesHandlers[typeof(object)] = GetBytesWrapper<object>(TryGetBytes);
+            getBytesHandlers[typeof(List<object>)] = GetBytesWrapper<List<object>>(TryGetBytes);
             _getBytesHandlers = getBytesHandlers;
         }
 
@@ -49,7 +50,14 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
         {
             return (object v) =>
             {
-                return handler((T)v);
+                if (v is T tv)
+                {
+                    return handler(tv);
+                }
+                else
+                {
+                    return handler((T)Convert.ChangeType(v, typeof(T)));
+                }
             };
         }
 
@@ -65,51 +73,55 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             return true;
         }
 
-        public bool TryGetBytes(string str)
+        private bool TryGetStringBytesImpl(string str, out bool isLongString, bool marker = false, bool forceLongString = false)
         {
-            var bytesNeed = Amf0CommonValues.MARKER_LENGTH;
+            var bytesNeed = 0;
             var headerLength = 0;
             var bodyLength = 0;
-            bool isLongString = false;
 
-
-            bytesNeed += headerLength;
             bodyLength = Encoding.UTF8.GetByteCount(str);
             bytesNeed += bodyLength;
 
-            if (bodyLength > ushort.MaxValue)
+            if (bodyLength > ushort.MaxValue || forceLongString)
             {
                 headerLength = Amf0CommonValues.LONG_STRING_HEADER_LENGTH;
                 isLongString = true;
+                if (marker)
+                {
+                    _writeBuffer.WriteToBuffer((byte)Amf0Type.LongString);
+                }
+
             }
             else
             {
+                isLongString = false;
                 headerLength = Amf0CommonValues.STRING_HEADER_LENGTH;
+                if (marker)
+                {
+                    _writeBuffer.WriteToBuffer((byte)Amf0Type.String);
+                }
             }
-
+            bytesNeed += headerLength;
             var bufferBackend = _arrayPool.Rent(bytesNeed);
             try
             {
                 var buffer = bufferBackend.AsSpan(0, bytesNeed);
                 if (isLongString)
                 {
-                    buffer[0] = (byte)Amf0Type.LongString;
-
-                    if (!NetworkBitConverter.TryGetBytes((uint)bodyLength, buffer.Slice(0, headerLength)))
+                    if (!NetworkBitConverter.TryGetBytes((uint)bodyLength, buffer))
                     {
                         return false;
                     }
                 }
                 else
                 {
-                    buffer[0] = (byte)Amf0Type.StrictArray;
-                    if (!NetworkBitConverter.TryGetBytes((ushort)bodyLength, buffer.Slice(0, headerLength)))
+                    if (!NetworkBitConverter.TryGetBytes((ushort)bodyLength, buffer))
                     {
                         return false;
                     }
                 }
 
-                Encoding.UTF8.GetBytes(str, buffer.Slice(headerLength + Amf0CommonValues.MARKER_LENGTH));
+                Encoding.UTF8.GetBytes(str, buffer.Slice(headerLength));
 
                 _writeBuffer.WriteToBuffer(buffer);
             }
@@ -118,6 +130,25 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                 _arrayPool.Return(bufferBackend);
             }
 
+            return true;
+        }
+
+        public bool TryGetBytes(string str)
+        {
+            var bytesNeed = Amf0CommonValues.MARKER_LENGTH;
+
+            var refIndex = _referenceTable.IndexOf(str);
+
+            if (refIndex != -1)
+            {
+                return TryGetReferenceIndexBytes((ushort)refIndex);
+            }
+
+            if (!TryGetStringBytesImpl(str, out var isLongString, true))
+            {
+                return false;
+            }
+            _referenceTable.Add(str);
             return true;
         }
 
@@ -205,7 +236,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                 buffer.Slice(0, bytesNeed).Clear();
                 buffer[0] = (byte)Amf0Type.Date;
                 var dof = new DateTimeOffset(dateTime);
-                var timestamp = (double)dof.ToUnixTimeMilliseconds() / 1000;
+                var timestamp = (double)dof.ToUnixTimeMilliseconds();
                 if (!NetworkBitConverter.TryGetBytes(timestamp, buffer.Slice(Amf0CommonValues.MARKER_LENGTH)))
                 {
                     return false;
@@ -222,7 +253,6 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
 
         public bool TryGetBytes(XmlDocument xml)
         {
-            var bytesNeed = Amf0CommonValues.MARKER_LENGTH;
             string content = null;
             using (var stringWriter = new StringWriter())
             using (var xmlTextWriter = XmlWriter.Create(stringWriter))
@@ -237,23 +267,10 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                 return false;
             }
 
-            var bodyBytes = Encoding.UTF8.GetByteCount(content);
-            bytesNeed += bodyBytes;
+            _writeBuffer.WriteToBuffer((byte)Amf0Type.XmlDocument);
+            TryGetStringBytesImpl(content, out _, forceLongString: true);
+            return true;
 
-            var backend = _arrayPool.Rent(bytesNeed);
-            try
-            {
-                var buffer = backend.AsSpan(0, bytesNeed);
-                buffer[0] = (byte)Amf0Type.XmlDocument;
-                NetworkBitConverter.TryGetBytes((uint)bodyBytes, buffer.Slice(Amf0CommonValues.MARKER_LENGTH));
-                Encoding.UTF8.GetBytes(content, buffer.Slice(Amf0CommonValues.MARKER_LENGTH + Amf0CommonValues.LONG_STRING_HEADER_LENGTH));
-                _writeBuffer.WriteToBuffer(buffer);
-                return true;
-            }
-            finally
-            {
-                _arrayPool.Return(backend);
-            }
         }
 
         public bool TryGetNullBytes()
@@ -265,7 +282,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
 
         public bool TryGetValueBytes(object value)
         {
-            var valueType = value.GetType();
+            var valueType = value != null ? value.GetType() : typeof(object);
             if (!_getBytesHandlers.TryGetValue(valueType, out var handler))
             {
                 return false;
@@ -347,7 +364,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
 
             foreach ((var key, var data) in value)
             {
-                if (!TryGetBytes(key))
+                if (!TryGetStringBytesImpl(key, out _))
                 {
                     return false;
                 }
@@ -355,6 +372,14 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                 {
                     return false;
                 }
+            }
+            if (!TryGetStringBytesImpl("", out _))
+            {
+                return false;
+            }
+            if (!TryGetObjectEndBytes())
+            {
+                return false;
             }
             _referenceTable.Add(value);
             return true;
@@ -391,7 +416,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             {
                 return false;
             }
-            
+
             if (!TryGetBytes(""))
             {
                 return false;
@@ -422,7 +447,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             {
                 return false;
             }
-            
+
             if (!TryGetBytes(""))
             {
                 return false;
@@ -441,7 +466,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             foreach (var prop in props)
             {
                 var propValue = prop.GetValue(value);
-                if (!TryGetBytes(prop.Name))
+                if (!TryGetStringBytesImpl(prop.Name, out _))
                 {
                     return false;
                 }

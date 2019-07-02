@@ -18,6 +18,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             { Amf0Type.Number, 8 },
             { Amf0Type.Boolean, sizeof(byte) },
             { Amf0Type.String, Amf0CommonValues.STRING_HEADER_LENGTH },
+            { Amf0Type.LongString, Amf0CommonValues.LONG_STRING_HEADER_LENGTH },
             { Amf0Type.Object, /* object marker*/ Amf0CommonValues.MARKER_LENGTH - /* utf8-empty */Amf0CommonValues.STRING_HEADER_LENGTH - /* object end marker */Amf0CommonValues.MARKER_LENGTH },
             { Amf0Type.Null, 0 },
             { Amf0Type.Undefined, 0 },
@@ -26,9 +27,10 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             { Amf0Type.StrictArray, sizeof(uint) },
             { Amf0Type.Date, 10 },
             { Amf0Type.Unsupported, 0 },
-            { Amf0Type.XmlDocument, Amf0CommonValues.STRING_HEADER_LENGTH },
+            { Amf0Type.XmlDocument, 0 },
             { Amf0Type.TypedObject, /* object marker*/ Amf0CommonValues.MARKER_LENGTH - /* class name */ Amf0CommonValues.STRING_HEADER_LENGTH - /* at least on character for class name */ 1 - /* utf8-empty */Amf0CommonValues.STRING_HEADER_LENGTH - /* object end marker */Amf0CommonValues.MARKER_LENGTH },
-            { Amf0Type.AvmPlusObject, 0 }
+            { Amf0Type.AvmPlusObject, 0 },
+            { Amf0Type.ObjectEnd, 0 }
         };
 
         private delegate bool ReadDataHandler<T>(Span<byte> buffer, out T data, out int consumedLength);
@@ -40,6 +42,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
         private Dictionary<string, TypeRegisterState> _registeredTypeStates = new Dictionary<string, TypeRegisterState>();
         private List<object> _referenceTable = new List<object>();
         private Amf3.Amf3Reader _amf3Reader = new Amf3.Amf3Reader();
+        public bool StrictMode { get; set; } = true;
 
         public Amf0Reader()
         {
@@ -64,12 +67,12 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             _readDataHandlers = readDataHandlers;
         }
 
-        public void RegisterType<T>(string mapedName = null) where T: IDynamicObject, new()
+        public void RegisterType<T>(string mapedName = null) where T : IDynamicObject, new()
         {
             var type = typeof(T);
             var props = type.GetProperties();
             var fields = props.Where(p => p.CanWrite && Attribute.GetCustomAttribute(p, typeof(ClassFieldAttribute)) != null).ToList();
-            var members = fields.ToDictionary(p => ((ClassFieldAttribute)Attribute.GetCustomAttribute(p, typeof(ClassFieldAttribute))).Name??p.Name, p => new Action<object, object>(p.SetValue));
+            var members = fields.ToDictionary(p => ((ClassFieldAttribute)Attribute.GetCustomAttribute(p, typeof(ClassFieldAttribute))).Name ?? p.Name, p => new Action<object, object>(p.SetValue));
             if (members.Keys.Where(s => string.IsNullOrEmpty(s)).Any())
             {
                 throw new InvalidOperationException("Field name cannot be empty or null");
@@ -85,7 +88,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             _amf3Reader.RegisterTypedObject(mapedName, state);
         }
 
-        public void RegisterIExternalizableForAvmPlus<T>(string mapedName = null) where T: IExternalizable, new()
+        public void RegisterIExternalizableForAvmPlus<T>(string mapedName = null) where T : IExternalizable, new()
         {
             _amf3Reader.RegisterExternalizable<T>(mapedName);
         }
@@ -153,9 +156,13 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                 return false;
             }
             var messageLength = NetworkBitConverter.ToUInt32(buffer);
-            if (messageLength > 0 && buffer.Length < messageLength)
+            if (messageLength >= 0 && buffer.Length < messageLength)
             {
                 return false;
+            }
+            if (messageLength == 0 && StrictMode)
+            {
+                return true;
             }
             buffer = buffer.Slice(sizeof(uint));
             if (!TryGetValue(buffer, out _, out var content, out var contentConsumed))
@@ -301,7 +308,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             }
 
             bytesConsumed += Amf0CommonValues.MARKER_LENGTH;
-
+            _referenceTable.Add(value);
             return true;
         }
 
@@ -340,8 +347,10 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                 {
                     break;
                 }
+                consumed += Amf0CommonValues.MARKER_LENGTH;
                 obj.Add(key, data);
             }
+            bytesConsumed = consumed;
             return true;
         }
 
@@ -353,6 +362,16 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             if (!TryDescribeData(buffer, out var type, out _))
             {
                 return false;
+            }
+
+            if (type == Amf0Type.Null)
+            {
+                if (!TryGetNull(buffer, out _, out bytesConsumed))
+                {
+                    return false;
+                }
+                value = null;
+                return true;
             }
 
             if (type != Amf0Type.Object)
@@ -375,7 +394,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             return true;
         }
 
-        private bool TryGetNull(Span<byte> buffer, out object value, out int bytesConsumed)
+        public bool TryGetNull(Span<byte> buffer, out object value, out int bytesConsumed)
         {
             value = default;
             bytesConsumed = default;
@@ -393,7 +412,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             return true;
         }
 
-        private bool TryGetUndefined(Span<byte> buffer, out Undefined value, out int consumedLength)
+        public bool TryGetUndefined(Span<byte> buffer, out Undefined value, out int consumedLength)
         {
             value = default;
             consumedLength = default;
@@ -436,10 +455,39 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             return true;
         }
 
-        private bool TryGetEcmaArray(Span<byte> buffer, out Dictionary<string, object> value, out int consumedLength)
+        private bool TryGetKeyValuePair(Span<byte> buffer, out KeyValuePair<string, object> value, out bool kvEnd, out int consumed)
+        {
+            value = default;
+            kvEnd = default;
+
+            consumed = 0;
+            if (!TryGetStringImpl(buffer, Amf0CommonValues.STRING_HEADER_LENGTH, out var key, out var keyLength))
+            {
+                return false;
+            }
+            consumed += keyLength;
+            if (buffer.Length - keyLength < 0)
+            {
+                return false;
+            }
+            buffer = buffer.Slice(keyLength);
+
+            if (!TryGetValue(buffer, out var elementType, out var element, out var valueLength))
+            {
+                return false;
+            }
+            consumed += valueLength;
+            value = new KeyValuePair<string, object>(key, element);
+            kvEnd = !key.Any() && elementType == Amf0Type.ObjectEnd;
+
+            return true;
+        }
+
+        public bool TryGetEcmaArray(Span<byte> buffer, out Dictionary<string, object> value, out int consumedLength)
         {
             value = default;
             consumedLength = default;
+            int consumed = 0;
 
             if (!TryDescribeData(buffer, out var type, out _))
             {
@@ -456,41 +504,65 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             var elementCount = NetworkBitConverter.ToUInt32(buffer.Slice(Amf0CommonValues.MARKER_LENGTH, sizeof(uint)));
 
             var arrayBodyBuffer = buffer.Slice(Amf0CommonValues.MARKER_LENGTH + sizeof(uint));
-            var elementBodyBuffer = arrayBodyBuffer;
-            int consumed = 0;
-            for (uint i = 0; i < elementCount; i++)
+            consumed = Amf0CommonValues.MARKER_LENGTH + sizeof(uint);
+            if (StrictMode)
             {
-                if (!TryGetString(arrayBodyBuffer, out var key, out var keyLength))
+                for (int i = 0; i < elementCount; i++)
+                {
+                    if (!TryGetKeyValuePair(arrayBodyBuffer, out var kv, out _, out var kvConsumed))
+                    {
+                        return false;
+                    }
+                    arrayBodyBuffer = arrayBodyBuffer.Slice(kvConsumed);
+                    consumed += kvConsumed;
+                    obj.Add(kv.Key, kv.Value);
+                }
+                if (!TryGetStringImpl(arrayBodyBuffer, Amf0CommonValues.STRING_HEADER_LENGTH, out var emptyStr, out var emptyStrConsumed))
                 {
                     return false;
                 }
-                consumed += keyLength;
-                if (elementBodyBuffer.Length - keyLength < 0)
+                if (emptyStr.Any())
                 {
                     return false;
                 }
-                elementBodyBuffer = elementBodyBuffer.Slice(keyLength);
-
-                if (!TryGetValue(elementBodyBuffer, out _, out var element, out var valueLength))
+                consumed += emptyStrConsumed;
+                arrayBodyBuffer = arrayBodyBuffer.Slice(emptyStrConsumed);
+                if (!TryDescribeData(arrayBodyBuffer, out var objEndType, out var objEndConsumed))
                 {
                     return false;
                 }
-                consumed += valueLength;
-
-                obj.Add(key, element);
-                if (elementBodyBuffer.Length - valueLength < 0)
+                if (objEndType != Amf0Type.ObjectEnd)
                 {
                     return false;
                 }
-                elementBodyBuffer = elementBodyBuffer.Slice(valueLength);
+                consumed += objEndConsumed;
             }
+            else
+            {
+                while (true)
+                {
+                    if (!TryGetKeyValuePair(arrayBodyBuffer, out var kv, out var isEnd, out var kvConsumed))
+                    {
+                        return false;
+                    }
+                    arrayBodyBuffer = arrayBodyBuffer.Slice(kvConsumed);
+                    consumed += kvConsumed;
+                    if (isEnd)
+                    {
+                        break;
+                    }
+                    obj.Add(kv.Key, kv.Value);
+                }
+            }
+
+
             value = obj;
             consumedLength = consumed;
             _referenceTable.Add(value);
             return true;
         }
 
-        private bool TryGetStrictArray(Span<byte> buffer, out List<object> array, out int consumedLength)
+        public bool TryGetStrictArray(Span<byte> buffer, out List<object> array, out int consumedLength)
         {
             array = default;
             consumedLength = default;
@@ -534,7 +606,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             return true;
         }
 
-        private bool TryGetDate(Span<byte> buffer, out DateTime value, out int consumendLength)
+        public bool TryGetDate(Span<byte> buffer, out DateTime value, out int consumendLength)
         {
             value = default;
             consumendLength = default;
@@ -550,12 +622,12 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             }
 
             var timestamp = NetworkBitConverter.ToDouble(buffer.Slice(Amf0CommonValues.MARKER_LENGTH));
-            value = DateTimeOffset.FromUnixTimeMilliseconds((long)(timestamp * 1000)).DateTime;
+            value = DateTimeOffset.FromUnixTimeMilliseconds((long)timestamp).LocalDateTime;
             consumendLength = length;
             return true;
         }
 
-        private bool TryGetLongString(Span<byte> buffer, out string value, out int consumedLength)
+        public bool TryGetLongString(Span<byte> buffer, out string value, out int consumedLength)
         {
             value = default;
             consumedLength = default;
@@ -570,7 +642,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                 return false;
             }
 
-            if (!TryGetStringImpl(buffer.Slice(Amf0CommonValues.MARKER_LENGTH), Amf0CommonValues.STRING_HEADER_LENGTH, out value, out consumedLength))
+            if (!TryGetStringImpl(buffer.Slice(Amf0CommonValues.MARKER_LENGTH), Amf0CommonValues.LONG_STRING_HEADER_LENGTH, out value, out consumedLength))
             {
                 return false;
             }
@@ -593,7 +665,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             {
                 stringLength = (int)NetworkBitConverter.ToUInt32(buffer);
             }
-            
+
             if (buffer.Length - lengthOfLengthField < stringLength)
             {
                 return false;
@@ -625,7 +697,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             return true;
         }
 
-        private bool TryGetXmlDocument(Span<byte> buffer, out XmlDocument value, out int consumedLength)
+        public bool TryGetXmlDocument(Span<byte> buffer, out XmlDocument value, out int consumedLength)
         {
             value = default;
             consumedLength = default;
@@ -634,7 +706,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                 return false;
             }
 
-            if (!TryGetStringImpl(buffer.Slice(Amf0CommonValues.MARKER_LENGTH), Amf0CommonValues.STRING_HEADER_LENGTH, out var str, out consumedLength))
+            if (!TryGetStringImpl(buffer.Slice(Amf0CommonValues.MARKER_LENGTH), Amf0CommonValues.LONG_STRING_HEADER_LENGTH, out var str, out consumedLength))
             {
                 return false;
             }
@@ -741,6 +813,13 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             if (!TryDescribeData(objectBuffer, out var type, out var length))
             {
                 return false;
+            }
+
+            if (type == Amf0Type.ObjectEnd)
+            {
+                objectType = type;
+                valueLength = Amf0CommonValues.MARKER_LENGTH;
+                return true;
             }
 
             if (!_readDataHandlers.TryGetValue(type, out var handler))

@@ -48,7 +48,7 @@ namespace UnitTest
         {
             var reader = new Amf0Reader();
             reader.RegisterType<RemotingMessage>("flex.messaging.messages.RemotingMessage");
-
+            reader.StrictMode = false;
             using (var file = new FileStream("test.amf3", FileMode.Open))
             {
                 var data = new byte[file.Length];
