@@ -196,6 +196,25 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             return true;
         }
 
+        public bool TryGetBoolean(Span<byte> buffer, out bool value, out int consumed)
+        {
+            if (DataIsType(buffer, Amf3Type.True))
+            {
+                consumed = Amf3CommonValues.MARKER_LENGTH;
+                value = true;
+                return true;
+            }
+            else if (DataIsType(buffer, Amf3Type.False))
+            {
+                consumed = Amf3CommonValues.MARKER_LENGTH;
+                value = false;
+                return true;
+            }
+            value = default;
+            consumed = default;
+            return false;
+        }
+
         public bool TryGetFalse(Span<byte> buffer, out bool value, out int consumed)
         {
             value = default;

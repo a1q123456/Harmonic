@@ -1,4 +1,5 @@
-﻿using Harmonic.Networking.Amf.Attributes;
+﻿using Harmonic.Buffers;
+using Harmonic.Networking.Amf.Attributes;
 using Harmonic.Networking.Amf.Data;
 using Harmonic.Networking.Amf.Serialization.Amf0;
 using Harmonic.Networking.Amf.Serialization.Amf3;
@@ -45,6 +46,90 @@ namespace UnitTest
     [TestClass]
     public class TestAmf3Reader
     {
+        [TestMethod]
+        public void TestReadNumber()
+        {
+            var reader = new Amf3Reader();
+
+            var files = Directory.GetFiles("../../../../samples/amf3/number");
+
+            foreach (var file in files)
+            {
+                var value = double.Parse(Path.GetFileNameWithoutExtension(file));
+                using (var f = new FileStream(file, FileMode.Open))
+                {
+                    var data = new byte[f.Length];
+                    f.Read(data);
+                    Assert.IsTrue(reader.TryGetDouble(data, out var dataRead, out var consumed));
+                    Assert.AreEqual(dataRead, value);
+                    Assert.AreEqual(consumed, f.Length);
+                }
+            }
+        }
+
+        [TestMethod]
+        public void TestReadInteger()
+        {
+            var reader = new Amf3Reader();
+
+            var files = Directory.GetFiles("../../../../samples/amf3/intenger");
+
+            foreach (var file in files)
+            {
+                var value = uint.Parse(Path.GetFileNameWithoutExtension(file));
+                using (var f = new FileStream(file, FileMode.Open))
+                {
+                    var data = new byte[f.Length];
+                    f.Read(data);
+                    Assert.IsTrue(reader.TryGetUInt29(data, out var dataRead, out var consumed));
+                    Assert.AreEqual(dataRead, value);
+                    Assert.AreEqual(consumed, f.Length);
+                }
+            }
+        }
+
+        [TestMethod]
+        public void TestReadString()
+        {
+            var reader = new Amf3Reader();
+
+            var files = Directory.GetFiles("../../../../samples/amf3/string");
+
+            foreach (var file in files)
+            {
+                var value = Path.GetFileNameWithoutExtension(file);
+                using (var f = new FileStream(file, FileMode.Open))
+                {
+                    var data = new byte[f.Length];
+                    f.Read(data);
+                    Assert.IsTrue(reader.TryGetString(data, out var dataRead, out var consumed));
+                    Assert.AreEqual(dataRead, value);
+                    Assert.AreEqual(consumed, f.Length);
+                }
+            }
+        }
+
+        [TestMethod]
+        public void TestReadBoolean()
+        {
+            var reader = new Amf3Reader();
+
+            var files = Directory.GetFiles("../../../../samples/amf3/boolean");
+
+            foreach (var file in files)
+            {
+                var value = bool.Parse(Path.GetFileNameWithoutExtension(file));
+                using (var f = new FileStream(file, FileMode.Open))
+                {
+                    var data = new byte[f.Length];
+                    f.Read(data);
+                    Assert.IsTrue(reader.TryGetBoolean(data, out var dataRead, out var consumed));
+                    Assert.AreEqual(dataRead, value);
+                    Assert.AreEqual(consumed, f.Length);
+                }
+            }
+        }
+
         [TestMethod]
         public void TestReadPacket1()
         {
@@ -304,7 +389,7 @@ namespace UnitTest
                 Assert.AreEqual(consumed, f.Length);
             }
         }
-        
+
         [TestMethod]
         public void TestReadVectorDouble()
         {
@@ -324,7 +409,7 @@ namespace UnitTest
                 Assert.AreEqual(consumed, f.Length);
             }
         }
-        
+
         public class TestClass : IDynamicObject
         {
             [ClassField(Name = "t1")]
@@ -345,7 +430,7 @@ namespace UnitTest
                 _dynamicFields.Add(key, data);
             }
         }
-           
+
 
         [TestMethod]
         public void TestReadVectorTyped()
@@ -401,6 +486,68 @@ namespace UnitTest
                 Assert.AreEqual(obj.Fields["t3"], "aac");
 
                 Assert.AreEqual(v[1], 2.0);
+                Assert.AreEqual(consumed, data.Length);
+            }
+        }
+
+        [TestMethod]
+        public void TestReadByteArray()
+        {
+            var reader = new Amf3Reader();
+
+            using (var f = new FileStream("../../../../samples/amf3/misc/bytearray.amf3", FileMode.Open))
+            {
+                var data = new byte[f.Length];
+                f.Read(data);
+
+                Assert.IsTrue(reader.TryGetByteArray(data, out var dataRead, out var consumed));
+
+                Assert.AreEqual(dataRead[0], (byte)1);
+                Assert.AreEqual(dataRead[1], (byte)2);
+                Assert.AreEqual(dataRead[2], (byte)3);
+
+                Assert.AreEqual(consumed, data.Length);
+            }
+        }
+
+        public class iexternalizable : IExternalizable
+        {
+            public double v1;
+            public int v2;
+
+            public bool TryEncodeData(UnlimitedBuffer buffer)
+            {
+                var b1 = BitConverter.GetBytes(v1);
+                var b2 = BitConverter.GetBytes(v2);
+                buffer.WriteToBuffer(b1);
+                buffer.WriteToBuffer(b2);
+                return true;
+            }
+
+            public bool TryDecodeData(Span<byte> buffer, out int consumed)
+            {
+                v1 = BitConverter.ToDouble(buffer);
+                v2 = BitConverter.ToInt32(buffer.Slice(sizeof(double)));
+                consumed = sizeof(double) + sizeof(int);
+                return true;
+            }
+        }
+
+        [TestMethod]
+        public void TestReadExternalizable()
+        {
+            var reader = new Amf3Reader();
+            reader.RegisterExternalizable<iexternalizable>();
+            using (var f = new FileStream("../../../../samples/amf3/misc/externalizable.amf3", FileMode.Open))
+            {
+                var data = new byte[f.Length];
+                f.Read(data);
+
+                Assert.IsTrue(reader.TryGetObject(data, out var dataRead, out var consumed));
+                var ie = (iexternalizable)dataRead;
+                Assert.AreEqual(ie.v1, 3.14);
+                Assert.AreEqual(ie.v2, 333);
+
                 Assert.AreEqual(consumed, data.Length);
             }
         }

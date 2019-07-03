@@ -360,7 +360,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                     WriteU29BytesImpl(header);
                     WriteStringBytesImpl(traits.ClassName, _stringReferenceTable);
                     var extObj = value as IExternalizable;
-                    extObj.EncodeData(_writerBuffer);
+                    extObj.TryEncodeData(_writerBuffer);
                     return;
                 }
                 else

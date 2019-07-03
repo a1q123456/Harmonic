@@ -9,6 +9,6 @@ namespace Harmonic.Networking.Amf.Data
     {
         bool TryDecodeData(Span<byte> buffer, out int consumed);
 
-        bool EncodeData(UnlimitedBuffer buffer);
+        bool TryEncodeData(UnlimitedBuffer buffer);
     }
 }
