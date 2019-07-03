@@ -317,6 +317,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             value = default;
             bytesConsumed = default;
             var obj = new Dictionary<string, object>();
+            _referenceTable.Add(obj);
             var consumed = 0;
             while (true)
             {
@@ -378,9 +379,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             }
 
             value = obj;
-            bytesConsumed = consumed;
+            bytesConsumed = consumed + Amf0CommonValues.MARKER_LENGTH;
 
-            _referenceTable.Add(value);
 
             return true;
         }
@@ -491,6 +491,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             }
 
             var obj = new Dictionary<string, object>();
+            _referenceTable.Add(obj);
 
             var elementCount = NetworkBitConverter.ToUInt32(buffer.Slice(Amf0CommonValues.MARKER_LENGTH, sizeof(uint)));
 
@@ -549,7 +550,6 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
 
             value = obj;
             consumedLength = consumed;
-            _referenceTable.Add(value);
             return true;
         }
 
@@ -569,6 +569,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             }
 
             var obj = new List<object>();
+            _referenceTable.Add(obj);
 
             var elementCount = NetworkBitConverter.ToUInt32(buffer.Slice(Amf0CommonValues.MARKER_LENGTH, sizeof(uint)));
 
@@ -593,7 +594,6 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             array = obj;
             consumedLength = consumed;
 
-            _referenceTable.Add(array);
             return true;
         }
 
@@ -765,7 +765,6 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
 
             value = obj;
             consumedLength = consumed;
-            _referenceTable.Add(value);
 
             return true;
         }

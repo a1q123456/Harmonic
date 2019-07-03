@@ -25,7 +25,7 @@ namespace UnitTest
             for (int i = 0; i < 1000; i++)
             {
                 var num = random.NextDouble() * 10 - 5;
-                Assert.IsTrue(writer.TryGetBytes(num));
+                writer.WriteBytes(num);
                 var buffer = new byte[writer.MessageLength];
                 writer.GetMessage(buffer);
 
@@ -36,7 +36,7 @@ namespace UnitTest
             for (int i = 0; i < 1000; i++)
             {
                 var num = random.Next(-10, 10);
-                Assert.IsTrue(writer.TryGetBytes(num));
+                writer.WriteBytes(num);
                 var buffer = new byte[writer.MessageLength];
                 writer.GetMessage(buffer);
 
@@ -47,7 +47,7 @@ namespace UnitTest
             for (int i = 0; i < 1000; i++)
             {
                 var num = (float)random.Next(-10, 10);
-                Assert.IsTrue(writer.TryGetBytes(num));
+                writer.WriteBytes(num);
                 var buffer = new byte[writer.MessageLength];
                 writer.GetMessage(buffer);
 
@@ -58,7 +58,7 @@ namespace UnitTest
             for (int i = 0; i < 1000; i++)
             {
                 var num = (long)random.Next(-10, 10);
-                Assert.IsTrue(writer.TryGetBytes(num));
+                writer.WriteBytes(num);
                 var buffer = new byte[writer.MessageLength];
                 writer.GetMessage(buffer);
 
@@ -69,7 +69,7 @@ namespace UnitTest
             for (int i = 0; i < 1000; i++)
             {
                 var num = (ulong)random.Next(-10, 10);
-                Assert.IsTrue(writer.TryGetBytes(num));
+                writer.WriteBytes(num);
                 var buffer = new byte[writer.MessageLength];
                 writer.GetMessage(buffer);
 
@@ -80,7 +80,7 @@ namespace UnitTest
             for (int i = 0; i < 1000; i++)
             {
                 var num = (ushort)random.Next(-10, 10);
-                Assert.IsTrue(writer.TryGetBytes(num));
+                writer.WriteBytes(num);
                 var buffer = new byte[writer.MessageLength];
                 writer.GetMessage(buffer);
 
@@ -91,7 +91,7 @@ namespace UnitTest
             for (int i = 0; i < 1000; i++)
             {
                 var num = (short)random.Next(-10, 10);
-                Assert.IsTrue(writer.TryGetBytes(num));
+                writer.WriteBytes(num);
                 var buffer = new byte[writer.MessageLength];
                 writer.GetMessage(buffer);
 
@@ -110,7 +110,7 @@ namespace UnitTest
             for (int i = 0; i < 1000; i++)
             {
                 var val = Guid.NewGuid().ToString();
-                Assert.IsTrue(writer.TryGetBytes(val));
+                writer.WriteBytes(val);
                 var buffer = new byte[writer.MessageLength];
                 writer.GetMessage(buffer);
 
@@ -129,7 +129,7 @@ namespace UnitTest
             for (int i = 0; i < 1000; i++)
             {
                 var val = string.Concat(Enumerable.Repeat(Guid.NewGuid().ToString(), 2000));
-                Assert.IsTrue(writer.TryGetBytes(val));
+                writer.WriteBytes(val);
                 var buffer = new byte[writer.MessageLength];
                 writer.GetMessage(buffer);
 
@@ -147,7 +147,7 @@ namespace UnitTest
 
             var date = DateTime.Now;
 
-            Assert.IsTrue(writer.TryGetBytes(date));
+            writer.WriteBytes(date);
             var buffer = new byte[writer.MessageLength];
             writer.GetMessage(buffer);
 
@@ -166,8 +166,8 @@ namespace UnitTest
         {
             var writer = new Amf0Writer();
             var reader = new Amf0Reader();
-            
-            Assert.IsTrue(writer.TryGetBytes(true));
+
+            writer.WriteBytes(true);
             var buffer = new byte[writer.MessageLength];
             writer.GetMessage(buffer);
             
@@ -175,7 +175,7 @@ namespace UnitTest
             Assert.IsTrue(val);
             Assert.AreEqual(consumed, buffer.Length);
 
-            Assert.IsTrue(writer.TryGetBytes(false));
+            writer.WriteBytes(false);
             buffer = new byte[writer.MessageLength];
             writer.GetMessage(buffer);
 
@@ -195,7 +195,7 @@ namespace UnitTest
                 1, 3.0, "string", new DateTime(2019, 2, 11), false, new List<object>() { null, 3, "string2", "string2" }
             };
 
-            Assert.IsTrue(writer.TryGetBytes(array));
+            writer.WriteBytes(array);
             var buffer = new byte[writer.MessageLength];
             writer.GetMessage(buffer);
 
@@ -227,7 +227,7 @@ namespace UnitTest
                 ["4"] = "a" 
             };
 
-            Assert.IsTrue(writer.TryGetBytes(array));
+            writer.WriteBytes(array);
             var buffer = new byte[writer.MessageLength];
             writer.GetMessage(buffer);
             // EcmaMarker:byte + ElementCount: uint + 
@@ -248,7 +248,7 @@ namespace UnitTest
             var writer = new Amf0Writer();
             var reader = new Amf0Reader();
 
-            writer.TryGetNullBytes();
+            writer.WriteNullBytes();
             var buffer = new byte[writer.MessageLength];
             writer.GetMessage(buffer);
 
@@ -264,7 +264,7 @@ namespace UnitTest
             var writer = new Amf0Writer();
             var reader = new Amf0Reader();
 
-            writer.TryGetBytes(new Undefined());
+            writer.WriteBytes(new Undefined());
             var buffer = new byte[writer.MessageLength];
             writer.GetMessage(buffer);
 
@@ -283,7 +283,7 @@ namespace UnitTest
             var xml = new XmlDocument();
             var elem = xml.CreateElement("price");
             xml.AppendChild(elem);
-            writer.TryGetBytes(xml);
+            writer.WriteBytes(xml);
             var buffer = new byte[writer.MessageLength];
             writer.GetMessage(buffer);
             
@@ -314,7 +314,7 @@ namespace UnitTest
                 test6 = refVal
             };
 
-            Assert.IsTrue(writer.TryGetBytes(obj));
+            writer.WriteBytes(obj);
             var buffer = new byte[writer.MessageLength];
             writer.GetMessage(buffer);
 
@@ -373,14 +373,13 @@ namespace UnitTest
                 test6 = refVal
             };
 
-            Assert.IsTrue(writer.TryGetTypedBytes(obj));
+            writer.WriteTypedBytes(obj);
             var buffer = new byte[writer.MessageLength];
             writer.GetMessage(buffer);
             
             Assert.IsTrue(reader.TryGetTypedObject(buffer, out var readObj, out var consumed));
             Assert.AreEqual(consumed, buffer.Length);
         }
-
 
     }
 }

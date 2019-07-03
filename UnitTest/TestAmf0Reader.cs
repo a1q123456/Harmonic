@@ -89,6 +89,7 @@ namespace UnitTest
                 var arrayData = new List<object> { 1.0d, 2.0d, 3.0d, 4.0d, "a", "asdf", "eee" };
                 Assert.IsTrue(reader.TryGetStrictArray(data, out var dataRead, out var consumed));
                 Assert.IsTrue(arrayData.SequenceEqual(dataRead));
+                Assert.AreEqual(consumed, data.Length);
             }
         }
 
@@ -107,6 +108,7 @@ namespace UnitTest
                 Assert.AreEqual(dataRead.Year, 2019);
                 Assert.AreEqual(dataRead.Month, 2);
                 Assert.AreEqual(dataRead.Day, 11);
+                Assert.AreEqual(consumed, data.Length);
             }
         }
 
@@ -212,6 +214,7 @@ namespace UnitTest
 
                 Assert.IsTrue(reader.TryGetEcmaArray(data, out var dataRead, out var consumed));
                 Assert.IsTrue(dataRead.SequenceEqual(new Dictionary<string, object>() { ["a"] = 1.0d, ["b"] = "a", ["c"] = "a" }));
+                Assert.AreEqual(consumed, data.Length);
             }
         }
 
@@ -231,6 +234,22 @@ namespace UnitTest
 
                 Assert.IsTrue(reader.TryGetObject(data, out var dataRead, out var consumed));
                 Assert.IsTrue(dataRead.SequenceEqual(new Dictionary<string, object>() { ["a"] = "b", ["c"] = 1.0 }));
+                Assert.AreEqual(consumed, data.Length);
+            }
+        }
+        
+        [TestMethod]
+        public void TestPacket()
+        {
+            var reader = new Amf0Reader();
+            reader.RegisterType<RemotingMessage>("flex.messaging.messages.RemotingMessage");
+            reader.StrictMode = false;
+            using (var file = new FileStream("../../../../samples/amf0/misc/packet.amf0", FileMode.Open))
+            {
+                var data = new byte[file.Length];
+                file.Read(data);
+                Assert.IsTrue(reader.TryGetPacket(data, out var headers, out var messages, out var consumed));
+                Assert.AreEqual(consumed, file.Length);
             }
         }
 

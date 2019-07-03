@@ -18,7 +18,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
 
         public IReadOnlyDictionary<string, object> DynamicFields { get => _dynamicFields; }
 
-        public IReadOnlyDictionary<string, object> Fieldes { get => _fields; }
+        public IReadOnlyDictionary<string, object> Fields { get => _fields; }
 
         public void Add(string memberName, object member)
         {
@@ -32,7 +32,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
 
         public IEnumerator GetEnumerator()
         {
-            return ((IEnumerable)Fieldes).GetEnumerator();
+            return ((IEnumerable)Fields).GetEnumerator();
         }
     }
 }

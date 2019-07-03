@@ -17,9 +17,9 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
         private delegate bool ReaderHandler<T>(Span<byte> buffer, out T value, out int consumed);
         private delegate bool ReaderHandler(Span<byte> buffer, out object value, out int consumed);
 
-        private List<object> _readObjectReferenceTable = new List<object>();
+        private List<object> _objectReferenceTable = new List<object>();
         private List<string> _stringReferenceTable = new List<string>();
-        private List<Amf3ClassTraits> _readObjectTraitsReferenceTable = new List<Amf3ClassTraits>();
+        private List<Amf3ClassTraits> _objectTraitsReferenceTable = new List<Amf3ClassTraits>();
         private Dictionary<Amf3Type, ReaderHandler> _readerHandlers = new Dictionary<Amf3Type, ReaderHandler>();
         private Dictionary<string, TypeRegisterState> _registeredTypedObejectStates = new Dictionary<string, TypeRegisterState>();
         private List<Type> _registeredTypes = new List<Type>();
@@ -38,7 +38,9 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                  Amf3Type.False ,
                  Amf3Type.True,
                  Amf3Type.Integer ,
+                 Amf3Type.Double ,
                  Amf3Type.String ,
+                 Amf3Type.Xml ,
                  Amf3Type.XmlDocument ,
                  Amf3Type.Date ,
                  Amf3Type.Array ,
@@ -58,6 +60,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 [Amf3Type.Null] = ReaderHandlerWrapper<object>(TryGetNull),
                 [Amf3Type.True] = ReaderHandlerWrapper<bool>(TryGetTrue),
                 [Amf3Type.False] = ReaderHandlerWrapper<bool>(TryGetFalse),
+                [Amf3Type.Double] = ReaderHandlerWrapper<double>(TryGetDouble),
                 [Amf3Type.Integer] = ReaderHandlerWrapper<uint>(TryGetUInt29),
                 [Amf3Type.String] = ReaderHandlerWrapper<string>(TryGetString),
                 [Amf3Type.Xml] = ReaderHandlerWrapper<Amf3Xml>(TryGetXml),
@@ -66,9 +69,9 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 [Amf3Type.ByteArray] = ReaderHandlerWrapper<byte[]>(TryGetByteArray),
                 [Amf3Type.VectorDouble] = ReaderHandlerWrapper<Vector<double>>(TryGetVectorDouble),
                 [Amf3Type.VectorInt] = ReaderHandlerWrapper<Vector<int>>(TryGetVectorInt),
-                [Amf3Type.VectorUInt] = ReaderHandlerWrapper<Vector<uint>>(TryGetVectorUInt),
+                [Amf3Type.VectorUInt] = ReaderHandlerWrapper<Vector<uint>>(TryGetVectorUint),
                 [Amf3Type.VectorObject] = ReaderHandlerWrapper<object>(TryGetVectorObject),
-                [Amf3Type.Array] = ReaderHandlerWrapper<Dictionary<string, object>>(TryGetArray),
+                [Amf3Type.Array] = ReaderHandlerWrapper<Amf3Array>(TryGetArray),
                 [Amf3Type.Object] = ReaderHandlerWrapper<object>(TryGetObject),
                 [Amf3Type.Dictionary] = ReaderHandlerWrapper<Amf3Dictionary<object, object>>(TryGetDictionary)
             };
@@ -354,7 +357,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             }
 
             var objectBuffer = buffer.Slice(Amf3CommonValues.MARKER_LENGTH);
-            TryGetStringImpl(objectBuffer, _readObjectReferenceTable, out var str, out var strConsumed);
+            TryGetStringImpl(objectBuffer, _objectReferenceTable, out var str, out var strConsumed);
             var xml = new XmlDocument();
             xml.LoadXml(str);
             value = xml;
@@ -377,7 +380,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             {
                 return false;
             }
-            if (!TryGetReference(header, _readObjectReferenceTable, out var headerData, out DateTime refValue, out var isRef))
+            if (!TryGetReference(header, _objectReferenceTable, out var headerData, out DateTime refValue, out var isRef))
             {
                 return false;
             }
@@ -389,13 +392,13 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             }
 
             var timestamp = NetworkBitConverter.ToDouble(objectBuffer.Slice(headerLength));
-            value = DateTimeOffset.FromUnixTimeMilliseconds((long)(timestamp * 1000)).DateTime;
+            value = DateTimeOffset.FromUnixTimeMilliseconds((long)(timestamp)).LocalDateTime;
             consumed = Amf3CommonValues.MARKER_LENGTH + headerLength + sizeof(double);
-            _readObjectReferenceTable.Add(value);
+            _objectReferenceTable.Add(value);
             return true;
         }
 
-        public bool TryGetArray(Span<byte> buffer, out Dictionary<string, object> value, out int consumed)
+        public bool TryGetArray(Span<byte> buffer, out Amf3Array value, out int consumed)
         {
             value = default;
             consumed = default;
@@ -409,7 +412,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 return false;
             }
 
-            if (!TryGetReference(header, _readObjectReferenceTable, out var headerData, out Dictionary<string, object> refValue, out var isRef))
+            if (!TryGetReference(header, _objectReferenceTable, out var headerData, out Amf3Array refValue, out var isRef))
             {
                 return false;
             }
@@ -422,15 +425,14 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
 
             var arrayConsumed = 0;
             var arrayBuffer = buffer.Slice(Amf3CommonValues.MARKER_LENGTH + headerConsumed);
-            var itemCount = (int)headerData;
+            var denseItemCount = (int)headerData;
 
             if (!TryGetStringImpl(arrayBuffer, _stringReferenceTable, out var key, out var keyConsumed))
             {
                 return false;
             }
-            arrayConsumed += keyConsumed;
-            arrayBuffer = arrayBuffer.Slice(keyConsumed);
-            var array = new Dictionary<string, object>();
+            var array = new Amf3Array();
+            _objectReferenceTable.Add(array);
             if (key.Any())
             {
                 do
@@ -443,36 +445,31 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                     }
 
                     arrayConsumed += itemConsumed;
-                    array.Add(key, item);
+                    arrayBuffer = arrayBuffer.Slice(itemConsumed);
+                    array.SparsePart.Add(key, item);
                     if (!TryGetStringImpl(arrayBuffer, _stringReferenceTable, out key, out keyConsumed))
                     {
                         return false;
                     }
                 }
                 while (key.Any());
-                if (array.Count != itemCount)
-                {
-                    return false;
-                }
-                value = array;
-                consumed = Amf3CommonValues.MARKER_LENGTH + headerConsumed + arrayConsumed;
-                return true;
             }
+            arrayConsumed += keyConsumed;
+            arrayBuffer = arrayBuffer.Slice(keyConsumed);
 
-            for (int i = 0; i < itemCount; i++)
+            for (int i = 0; i < denseItemCount; i++)
             {
                 if (!TryGetValue(arrayBuffer, out var item, out var itemConsumed))
                 {
                     return false;
                 }
-                array.Add(i.ToString(), item);
+                array.DensePart.Add(item);
                 arrayConsumed += itemConsumed;
                 arrayBuffer = arrayBuffer.Slice(itemConsumed);
             }
 
             value = array;
             consumed = Amf3CommonValues.MARKER_LENGTH + headerConsumed + arrayConsumed;
-            _readObjectReferenceTable.Add(value);
             return true;
         }
 
@@ -491,7 +488,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             }
             consumed += headerLength;
 
-            if (!TryGetReference(header, _readObjectReferenceTable, out var headerData, out object refValue, out var isRef))
+            if (!TryGetReference(header, _objectReferenceTable, out var headerData, out object refValue, out var isRef))
             {
                 return false;
             }
@@ -505,12 +502,12 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             if ((header & 0x02) != 0x02)
             {
                 var referenceIndex = (int)((header >> 2) & 0x3FFFFFFF);
-                if (_readObjectTraitsReferenceTable.Count <= referenceIndex)
+                if (_objectTraitsReferenceTable.Count <= referenceIndex)
                 {
                     return false;
                 }
 
-                if (_readObjectTraitsReferenceTable[referenceIndex] is Amf3ClassTraits obj)
+                if (_objectTraitsReferenceTable[referenceIndex] is Amf3ClassTraits obj)
                 {
                     traits = obj;
                 }
@@ -580,7 +577,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                     dataBuffer = dataBuffer.Slice(keyConsumed);
                     consumed += keyConsumed;
                 }
-                _readObjectTraitsReferenceTable.Add(traits);
+                _objectTraitsReferenceTable.Add(traits);
             }
 
             object deserailziedObject = null;
@@ -599,6 +596,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 }
 
                 deserailziedObject = Activator.CreateInstance(classType);
+                _objectReferenceTable.Add(deserailziedObject);
                 foreach (var member in traits.Members)
                 {
                     if (!TryGetValue(valueBuffer, out var data, out var dataConsumed))
@@ -613,6 +611,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             else
             {
                 var obj = new Amf3Object();
+                _objectReferenceTable.Add(obj);
                 foreach (var member in traits.Members)
                 {
                     if (!TryGetValue(valueBuffer, out var data, out var dataConsumed))
@@ -657,7 +656,6 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
 
             value = deserailziedObject;
 
-            _readObjectReferenceTable.Add(value);
             return true;
         }
 
@@ -671,7 +669,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             }
 
             var objectBuffer = buffer.Slice(Amf3CommonValues.MARKER_LENGTH);
-            TryGetStringImpl(objectBuffer, _readObjectReferenceTable, out var str, out var strConsumed);
+            TryGetStringImpl(objectBuffer, _objectReferenceTable, out var str, out var strConsumed);
             var xml = new Amf3Xml();
             xml.LoadXml(str);
 
@@ -696,7 +694,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 return false;
             }
 
-            if (!TryGetReference(header, _readObjectReferenceTable, out var headerData, out byte[] refValue, out var isRef))
+            if (!TryGetReference(header, _objectReferenceTable, out var headerData, out byte[] refValue, out var isRef))
             {
                 return false;
             }
@@ -716,7 +714,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             value = new byte[arrayLen];
 
             objectBuffer.Slice(headerLen, arrayLen).CopyTo(value);
-            _readObjectReferenceTable.Add(value);
+            _objectReferenceTable.Add(value);
             consumed = Amf3CommonValues.MARKER_LENGTH + headerLen + arrayLen;
             return true;
         }
@@ -743,29 +741,11 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             return true;
         }
 
-        // Vector<Type> for typed vector otherwise Vector<object>
-        public bool TryGetVectorObject(Span<byte> buffer, out object value, out int consumed)
-        {
-            value = default;
-            consumed = default;
-            if (!DataIsType(buffer, Amf3Type.VectorObject))
-            {
-                return false;
-            }
-
-            if (!TryGetVecotrObject(buffer.Slice(Amf3CommonValues.MARKER_LENGTH), out value, out consumed))
-            {
-                return false;
-            }
-            consumed += Amf3CommonValues.MARKER_LENGTH;
-            return true;
-        }
-
         public bool TryGetVectorInt(Span<byte> buffer, out Vector<int> value, out int consumed)
         {
             value = default;
-            consumed = default;
-            if (!DataIsType(buffer, Amf3Type.VectorUInt))
+            consumed = Amf3CommonValues.MARKER_LENGTH;
+            if (!DataIsType(buffer, Amf3Type.VectorInt))
             {
                 return false;
             }
@@ -781,7 +761,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 return true;
             }
 
-            var vector = new Vector<int>();
+            var vector = new Vector<int> { IsFixedSize = isFixedSize };
+            _objectReferenceTable.Add(vector);
             for (int i = 0; i < itemCount; i++)
             {
                 if (!TryGetIntVectorData(ref buffer, vector, ref consumed))
@@ -789,15 +770,14 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                     return false;
                 }
             }
-
             value = vector;
             return true;
         }
 
-        public bool TryGetVectorUInt(Span<byte> buffer, out Vector<uint> value, out int consumed)
+        public bool TryGetVectorUint(Span<byte> buffer, out Vector<uint> value, out int consumed)
         {
             value = default;
-            consumed = default;
+            consumed = Amf3CommonValues.MARKER_LENGTH;
             if (!DataIsType(buffer, Amf3Type.VectorUInt))
             {
                 return false;
@@ -814,7 +794,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 return true;
             }
 
-            var vector = new Vector<uint>();
+            var vector = new Vector<uint> { IsFixedSize = isFixedSize };
+            _objectReferenceTable.Add(vector);
             for (int i = 0; i < itemCount; i++)
             {
                 if (!TryGetUIntVectorData(ref buffer, vector, ref consumed))
@@ -847,7 +828,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 return true;
             }
 
-            var vector = new Vector<double>();
+            var vector = new Vector<double>() { IsFixedSize = isFixedSize };
+            _objectReferenceTable.Add(vector);
             for (int i = 0; i < itemCount; i++)
             {
                 if (!TryGetDoubleVectorData(ref buffer, vector, ref consumed))
@@ -865,7 +847,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             var value = NetworkBitConverter.ToInt32(buffer);
             vector.Add(value);
             consumed += sizeof(int);
-            buffer = buffer.Slice(consumed);
+            buffer = buffer.Slice(sizeof(int));
             return true;
 
         }
@@ -875,7 +857,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             var value = NetworkBitConverter.ToUInt32(buffer);
             vector.Add(value);
             consumed += sizeof(uint);
-            buffer = buffer.Slice(consumed);
+            buffer = buffer.Slice(sizeof(uint));
             return true;
         }
 
@@ -884,7 +866,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             var value = NetworkBitConverter.ToDouble(buffer);
             vector.Add(value);
             consumed += sizeof(double);
-            buffer = buffer.Slice(consumed);
+            buffer = buffer.Slice(sizeof(double));
             return true;
 
         }
@@ -926,7 +908,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 return false;
             }
 
-            if (!TryGetReference(header, _readObjectReferenceTable, out var headerData, out T refValue, out isRef))
+            if (!TryGetReference(header, _objectReferenceTable, out var headerData, out T refValue, out isRef))
             {
                 return false;
             }
@@ -949,7 +931,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
 
             isFixedSize = objectBuffer[0] == 0x01;
             buffer = objectBuffer.Slice(sizeof(byte));
-            consumed = Amf3CommonValues.MARKER_LENGTH + headerLength;
+            consumed = Amf3CommonValues.MARKER_LENGTH + headerLength + sizeof(byte);
             return true;
         }
 
@@ -965,10 +947,17 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             return true;
         }
 
-        private bool TryGetVecotrObject(Span<byte> buffer, out object value, out int consumed)
+        public bool TryGetVectorObject(Span<byte> buffer, out object value, out int consumed)
         {
             value = default;
             consumed = default;
+
+            if (!DataIsType(buffer, Amf3Type.VectorObject))
+            {
+                return false;
+            }
+
+            buffer = buffer.Slice(Amf3CommonValues.MARKER_LENGTH);
 
             int arrayConsumed = 0;
 
@@ -997,6 +986,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             {
                 elementType = typeof(object);
                 var v = new Vector<object>();
+                _objectReferenceTable.Add(v);
                 v.IsFixedSize = isFixedSize;
                 resultVector = v;
                 addAction = v.Add;
@@ -1011,6 +1001,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
 
                 var vectorType = typeof(Vector<>).MakeGenericType(elementType);
                 resultVector = Activator.CreateInstance(vectorType);
+                _objectReferenceTable.Add(resultVector);
                 vectorType.GetProperty("IsFixedSize").SetValue(resultVector, isFixedSize);
                 var addMethod = vectorType.GetMethod("Add");
                 addAction = o => addMethod.Invoke(resultVector, new object[] { o });
@@ -1026,9 +1017,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 arrayBodyBuffer = arrayBodyBuffer.Slice(itemConsumed);
                 arrayConsumed += itemConsumed;
             }
-            _readObjectReferenceTable.Add(resultVector);
             value = resultVector;
-            consumed = Amf3CommonValues.MARKER_LENGTH + /* fixed size */ sizeof(byte) + typeNameConsumed + arrayConsumed;
+            consumed = typeNameConsumed + arrayConsumed;
             return true;
         }
 
@@ -1046,7 +1036,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 return false;
             }
 
-            if (!TryGetReference(header, _readObjectReferenceTable, out var headerData, out Amf3Dictionary<object, object> refValue, out var isRef))
+            if (!TryGetReference(header, _objectReferenceTable, out var headerData, out Amf3Dictionary<object, object> refValue, out var isRef))
             {
                 return false;
             }
@@ -1065,11 +1055,12 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             }
             var weakKeys = buffer[Amf3CommonValues.MARKER_LENGTH + headerLength] == 0x01;
 
-            var dictBuffer = buffer.Slice(Amf3CommonValues.MARKER_LENGTH + headerLength + /* ignore weak key flag */ 1);
+            var dictBuffer = buffer.Slice(Amf3CommonValues.MARKER_LENGTH + headerLength + /* weak key flag */ sizeof(byte));
             var dict = new Amf3Dictionary<object, object>()
             {
                 WeakKeys = weakKeys
             };
+            _objectReferenceTable.Add(dict);
             for (int i = 0; i < itemCount; i++)
             {
                 if (!TryGetValue(dictBuffer, out var key, out var keyConsumed))
@@ -1086,9 +1077,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 dict.Add(key, data);
                 dictConsumed += dataConsumed;
             }
-            _readObjectReferenceTable.Add(dict);
             value = dict;
-            consumed = Amf3CommonValues.MARKER_LENGTH + headerLength + dictConsumed;
+            consumed = Amf3CommonValues.MARKER_LENGTH + headerLength + dictConsumed + /* weak key flag */ sizeof(byte);
             return true;
         }
     }
