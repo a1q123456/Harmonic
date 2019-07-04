@@ -12,6 +12,30 @@ using System.Text;
 
 namespace UnitTest
 {
+
+    public class iexternalizable : IExternalizable
+    {
+        public double v1;
+        public int v2;
+
+        public bool TryEncodeData(UnlimitedBuffer buffer)
+        {
+            var b1 = BitConverter.GetBytes(v1);
+            var b2 = BitConverter.GetBytes(v2);
+            buffer.WriteToBuffer(b1);
+            buffer.WriteToBuffer(b2);
+            return true;
+        }
+
+        public bool TryDecodeData(Span<byte> buffer, out int consumed)
+        {
+            v1 = BitConverter.ToDouble(buffer);
+            v2 = BitConverter.ToInt32(buffer.Slice(sizeof(double)));
+            consumed = sizeof(double) + sizeof(int);
+            return true;
+        }
+    }
+
     public class RemotingMessage : IDynamicObject
     {
         private Dictionary<string, object> _dynamicFields = new Dictionary<string, object>();
@@ -507,29 +531,6 @@ namespace UnitTest
                 Assert.AreEqual(dataRead[2], (byte)3);
 
                 Assert.AreEqual(consumed, data.Length);
-            }
-        }
-
-        public class iexternalizable : IExternalizable
-        {
-            public double v1;
-            public int v2;
-
-            public bool TryEncodeData(UnlimitedBuffer buffer)
-            {
-                var b1 = BitConverter.GetBytes(v1);
-                var b2 = BitConverter.GetBytes(v2);
-                buffer.WriteToBuffer(b1);
-                buffer.WriteToBuffer(b2);
-                return true;
-            }
-
-            public bool TryDecodeData(Span<byte> buffer, out int consumed)
-            {
-                v1 = BitConverter.ToDouble(buffer);
-                v2 = BitConverter.ToInt32(buffer.Slice(sizeof(double)));
-                consumed = sizeof(double) + sizeof(int);
-                return true;
             }
         }
 

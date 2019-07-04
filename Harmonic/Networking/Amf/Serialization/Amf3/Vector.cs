@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace Harmonic.Networking.Amf.Serialization.Amf3
 {
-    public class Vector<T> : List<T>
+    public class Vector<T> : List<T>, IEquatable<List<T>>
     {
         private List<T> _data = new List<T>();
         public bool IsFixedSize { get; set; } = false;
@@ -26,6 +26,11 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 return IsFixedSize == en.IsFixedSize && en.SequenceEqual(this);
             }
             return base.Equals(obj);
+        }
+
+        public bool Equals(List<T> other)
+        {
+            return other.SequenceEqual(this);
         }
 
         public override int GetHashCode()

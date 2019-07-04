@@ -255,7 +255,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             value = default;
             consumed = default;
             var bytesNeed = 0;
-            for (int i = 0; i <= 4; i++)
+            for (int i = 0; i < 4; i++)
             {
                 bytesNeed++;
                 if (dataBuffer.Length < bytesNeed)
@@ -274,10 +274,10 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 case 3:
                 case 4:
                     dataBuffer[2] = (byte)(0x7F & dataBuffer[2]);
-                    dataBuffer[2] = (byte)(dataBuffer[1] << 7 | dataBuffer[2]);
                     dataBuffer[1] = (byte)(0x7F & dataBuffer[1]);
-                    dataBuffer[1] = (byte)(dataBuffer[0] << 6 | dataBuffer[0]);
                     dataBuffer[0] = (byte)(0x7F & dataBuffer[0]);
+                    dataBuffer[2] = (byte)(dataBuffer[1] << 7 | dataBuffer[2]);
+                    dataBuffer[1] = (byte)(dataBuffer[0] << 6 | (dataBuffer[1] >> 1));
                     dataBuffer[0] = (byte)(dataBuffer[0] >> 2);
                     break;
                 case 2:

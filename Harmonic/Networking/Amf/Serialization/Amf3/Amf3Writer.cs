@@ -28,17 +28,18 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
         private Dictionary<Type, WriteHandler> _writeHandlers = new Dictionary<Type, WriteHandler>();
 
         public int MessageLength => _writerBuffer.BufferLength;
+        public static readonly uint U29MAX = 0x1FFFFFFF;
 
         public Amf3Writer()
         {
 
             var writeHandlers = new Dictionary<Type, WriteHandler>();
             writeHandlers[typeof(int)] = WriteHandlerWrapper<double>(WriteBytes);
-            writeHandlers[typeof(uint)] = WriteHandlerWrapper<uint>(WriteU29Bytes);
+            writeHandlers[typeof(uint)] = WriteHandlerWrapper<uint>(WriteBytes);
             writeHandlers[typeof(long)] = WriteHandlerWrapper<double>(WriteBytes);
-            writeHandlers[typeof(ulong)] = WriteHandlerWrapper<uint>(WriteU29Bytes);
+            writeHandlers[typeof(ulong)] = WriteHandlerWrapper<uint>(WriteBytes);
             writeHandlers[typeof(short)] = WriteHandlerWrapper<double>(WriteBytes);
-            writeHandlers[typeof(ushort)] = WriteHandlerWrapper<uint>(WriteU29Bytes);
+            writeHandlers[typeof(ushort)] = WriteHandlerWrapper<uint>(WriteBytes);
             writeHandlers[typeof(double)] = WriteHandlerWrapper<double>(WriteBytes);
             writeHandlers[typeof(Undefined)] = WriteHandlerWrapper<Undefined>(WriteBytes);
             writeHandlers[typeof(object)] = WriteHandlerWrapper<object>(WriteBytes);
@@ -122,7 +123,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             {
                 length = 3;
             }
-            else if (value <= 0x3FFFFFFF)
+            else if (value <= U29MAX)
             {
                 length = 4;
             }
@@ -134,10 +135,30 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             try
             {
                 NetworkBitConverter.TryGetBytes(value, arr);
-                _writerBuffer.WriteToBuffer(arr[0]);
-                for (int i = 1; i < length; i++)
+
+                switch (length)
                 {
-                    _writerBuffer.WriteToBuffer((byte)((arr[i] << i - 1) | (arr[i - 1] >> 9 - i)));
+                    case 4:
+                        _writerBuffer.WriteToBuffer((byte)(arr[0] << 2 | ((arr[1]) >> 6) | 0x80));
+                        _writerBuffer.WriteToBuffer((byte)(arr[1] << 1 | ((arr[2]) >> 7) | 0x80));
+                        _writerBuffer.WriteToBuffer((byte)(arr[2] | 0x80));
+                        _writerBuffer.WriteToBuffer(arr[3]);
+                        break;
+                    case 3:
+                        _writerBuffer.WriteToBuffer((byte)(arr[1] << 2 | ((arr[2]) >> 6) | 0x80));
+                        _writerBuffer.WriteToBuffer((byte)(arr[2] << 1 | ((arr[3]) >> 7) | 0x80));
+                        _writerBuffer.WriteToBuffer((byte)(arr[3] & 0x7F));
+                        break;
+                    case 2:
+                        _writerBuffer.WriteToBuffer((byte)(arr[2] << 1 | ((arr[3]) >> 7) | 0x80));
+                        _writerBuffer.WriteToBuffer((byte)(arr[3] & 0x7F));
+                        break;
+                    case 1:
+                        _writerBuffer.WriteToBuffer((byte)(arr[3]));
+                        break;
+                    default:
+                        throw new ApplicationException();
+
                 }
 
             }
@@ -147,7 +168,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             }
         }
 
-        public void WriteU29Bytes(uint value)
+        public void WriteBytes(uint value)
         {
             _writerBuffer.WriteToBuffer((byte)Amf3Type.Integer);
             WriteU29BytesImpl(value);
@@ -238,7 +259,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             _objectReferenceTable.Add(dateTime);
 
             var timeOffset = new DateTimeOffset(dateTime);
-            var timestamp = timeOffset.ToUnixTimeMilliseconds() / 1000.0d;
+            var timestamp = timeOffset.ToUnixTimeMilliseconds();
             header = 0x01;
             WriteU29BytesImpl(header);
             var backend = _arrayPool.Rent(sizeof(double));
@@ -283,6 +304,11 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
 
         public void WriteValueBytes(object value)
         {
+            if (value == null)
+            {
+                WriteBytes((object)null);
+                return;
+            }
             var valueType = value.GetType();
 
             _writeHandlers.TryGetValue(valueType, out var handler);
@@ -400,7 +426,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
 
         public void WriteBytes(Vector<uint> value)
         {
-            _writerBuffer.WriteToBuffer((byte)Amf3Type.VectorDouble);
+            _writerBuffer.WriteToBuffer((byte)Amf3Type.VectorUInt);
 
             var refIndex = _objectReferenceTable.IndexOf(value);
             if (refIndex >= 0)
@@ -433,7 +459,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
 
         public void WriteBytes(Vector<int> value)
         {
-            _writerBuffer.WriteToBuffer((byte)Amf3Type.VectorDouble);
+            _writerBuffer.WriteToBuffer((byte)Amf3Type.VectorInt);
 
             var refIndex = _objectReferenceTable.IndexOf(value);
             if (refIndex >= 0)
@@ -544,21 +570,20 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             else
             {
                 _objectReferenceTable.Add(value);
-                var header = ((uint)value.DensePart.Count << 1) & 0x01;
+                var header = ((uint)value.DensePart.Count << 1) | 0x01;
                 WriteU29BytesImpl(header);
-
-                WriteStringBytesImpl("", _stringReferenceTable);
                 foreach ((var key, var item) in value.SparsePart)
                 {
                     WriteStringBytesImpl(key, _stringReferenceTable);
                     WriteValueBytes(item);
                 }
                 WriteStringBytesImpl("", _stringReferenceTable);
+
                 foreach (var i in value.DensePart)
                 {
                     WriteValueBytes(i);
                 }
-                
+
                 return;
             }
         }
@@ -578,7 +603,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             else
             {
                 _objectReferenceTable.Add(value);
-                var header = (uint)value.Count << 1;
+                var header = (uint)value.Count << 1 | 0x01;
                 WriteU29BytesImpl(header);
 
                 _writerBuffer.WriteToBuffer((byte)(value.WeakKeys ? 0x01 : 0x00));
