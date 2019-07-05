@@ -357,7 +357,7 @@ namespace UnitTest
         {
             var writer = new Amf0Writer();
             var reader = new Amf0Reader();
-            reader.RegisterType<TypedClass>("Another.Name");
+            reader.RegisterType<TypedClass>();
 
             object nullVal = null;
             var refVal = new List<object>() { 1, 2, "test" };

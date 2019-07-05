@@ -13,6 +13,42 @@ using System.Text;
 namespace UnitTest
 {
 
+    [TypedObject(Name = "TestClass")]
+    public class TestCls : IDynamicObject, IEquatable<TestCls>
+    {
+        [ClassField(Name = "t1")]
+        public double T1 { get; set; }
+        [ClassField(Name = "t2")]
+        public string T2 { get; set; }
+        [ClassField(Name = "t3")]
+        public string T3 { get; set; }
+        [ClassField]
+        public Vector<int> t4 { get; set; }
+
+        private Dictionary<string, object> _dynamicFields = new Dictionary<string, object>();
+
+        public IReadOnlyDictionary<string, object> DynamicFields => _dynamicFields;
+
+        public void AddDynamic(string key, object data)
+        {
+            _dynamicFields.Add(key, data);
+        }
+
+        public bool Equals(TestCls other)
+        {
+            return T1 == other.T1 && T2 == other.T2 && T3 == other.T3 && (t4 != null ? t4.Equals(other.t4) : t4 == other.t4) && _dynamicFields.SequenceEqual(other._dynamicFields);
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (obj is TestCls to)
+            {
+                return Equals(to);
+            }
+            return base.Equals(obj);
+        }
+    }
+
     public class iexternalizable : IExternalizable
     {
         public double v1;
@@ -36,6 +72,7 @@ namespace UnitTest
         }
     }
 
+    [TypedObject(Name = "flex.messaging.messages.RemotingMessage")]
     public class RemotingMessage : IDynamicObject
     {
         private Dictionary<string, object> _dynamicFields = new Dictionary<string, object>();
@@ -158,7 +195,7 @@ namespace UnitTest
         public void TestReadPacket1()
         {
             var reader = new Amf0Reader();
-            reader.RegisterType<RemotingMessage>("flex.messaging.messages.RemotingMessage");
+            reader.RegisterType<RemotingMessage>();
             reader.StrictMode = false;
             using (var file = new FileStream("../../../../samples/amf3/misc/packet.amf3", FileMode.Open))
             {
@@ -174,7 +211,7 @@ namespace UnitTest
         public void TestUndefined()
         {
             var reader = new Amf3Reader();
-            reader.RegisterTypedObject<RemotingMessage>("flex.messaging.messages.RemotingMessage");
+            reader.RegisterTypedObject<RemotingMessage>();
 
             using (var file = new FileStream("../../../../samples/amf3/misc/undefined.amf3", FileMode.Open))
             {
@@ -189,7 +226,7 @@ namespace UnitTest
         public void TestNull()
         {
             var reader = new Amf3Reader();
-            reader.RegisterTypedObject<RemotingMessage>("flex.messaging.messages.RemotingMessage");
+            reader.RegisterTypedObject<RemotingMessage>();
 
             using (var file = new FileStream("../../../../samples/amf3/misc/null.amf3", FileMode.Open))
             {
@@ -204,7 +241,7 @@ namespace UnitTest
         public void TestDate()
         {
             var reader = new Amf3Reader();
-            reader.RegisterTypedObject<RemotingMessage>("flex.messaging.messages.RemotingMessage");
+            reader.RegisterTypedObject<RemotingMessage>();
 
             using (var file = new FileStream("../../../../samples/amf3/misc/date.amf3", FileMode.Open))
             {
@@ -434,33 +471,12 @@ namespace UnitTest
             }
         }
 
-        public class TestClass : IDynamicObject
-        {
-            [ClassField(Name = "t1")]
-            public double T1 { get; set; }
-            [ClassField(Name = "t2")]
-            public string T2 { get; set; }
-            [ClassField(Name = "t3")]
-            public string T3 { get; set; }
-            [ClassField]
-            public Vector<int> t4 { get; set; }
-
-            private Dictionary<string, object> _dynamicFields = new Dictionary<string, object>();
-
-            public IReadOnlyDictionary<string, object> DynamicFields => _dynamicFields;
-
-            public void AddDynamic(string key, object data)
-            {
-                _dynamicFields.Add(key, data);
-            }
-        }
-
 
         [TestMethod]
         public void TestReadVectorTyped()
         {
             var reader = new Amf3Reader();
-            reader.RegisterTypedObject<TestClass>();
+            reader.RegisterTypedObject<TestCls>();
 
             using (var f = new FileStream("../../../../samples/amf3/misc/vector_typted_object.amf3", FileMode.Open))
             {
@@ -469,7 +485,7 @@ namespace UnitTest
 
                 Assert.IsTrue(reader.TryGetVectorObject(data, out var dataRead, out var consumed));
 
-                var v = (Vector<TestClass>)dataRead;
+                var v = (Vector<TestCls>)dataRead;
 
                 var t = v[0];
                 Assert.AreEqual(t.T1, 1.0);

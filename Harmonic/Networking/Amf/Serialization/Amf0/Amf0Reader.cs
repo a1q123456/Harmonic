@@ -6,6 +6,7 @@ using Harmonic.Networking.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Xml;
 
@@ -67,7 +68,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             _readDataHandlers = readDataHandlers;
         }
 
-        public void RegisterType<T>(string mapedName = null) where T : IDynamicObject, new()
+        public void RegisterType<T>() where T : new()
         {
             var type = typeof(T);
             var props = type.GetProperties();
@@ -76,6 +77,12 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             if (members.Keys.Where(s => string.IsNullOrEmpty(s)).Any())
             {
                 throw new InvalidOperationException("Field name cannot be empty or null");
+            }
+            string mapedName = null;
+            var attr = type.GetCustomAttribute<TypedObjectAttribute>();
+            if (attr != null)
+            {
+                mapedName = attr.Name;
             }
             var typeName = mapedName == null ? type.Name : mapedName;
             var state = new TypeRegisterState()
@@ -88,9 +95,9 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             _amf3Reader.RegisterTypedObject(typeName, state);
         }
 
-        public void RegisterIExternalizableForAvmPlus<T>(string mapedName = null) where T : IExternalizable, new()
+        public void RegisterIExternalizableForAvmPlus<T>() where T : IExternalizable, new()
         {
-            _amf3Reader.RegisterExternalizable<T>(mapedName);
+            _amf3Reader.RegisterExternalizable<T>();
         }
 
         private ReadDataHandler OutValueTypeEraser<T>(ReadDataHandler<T> handler)

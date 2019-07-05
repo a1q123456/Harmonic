@@ -99,7 +99,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             _registeredTypedObejectStates.Add(mappedName, state);
         }
 
-        public void RegisterTypedObject<T>(string mapedName = null) where T : IDynamicObject, new()
+        public void RegisterTypedObject<T>() where T: new()
         {
             var type = typeof(T);
             var props = type.GetProperties();
@@ -108,6 +108,12 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             if (members.Keys.Where(s => string.IsNullOrEmpty(s)).Any())
             {
                 throw new InvalidOperationException("Field name cannot be empty or null");
+            }
+            string mapedName = null;
+            var attr = type.GetCustomAttribute<TypedObjectAttribute>();
+            if (attr != null)
+            {
+                mapedName = attr.Name;
             }
 
             var typeName = mapedName == null ? type.Name : mapedName;
@@ -120,9 +126,15 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             _registeredTypedObejectStates.Add(typeName, state);
         }
 
-        public void RegisterExternalizable<T>(string mapedName = null) where T : IExternalizable, new()
+        public void RegisterExternalizable<T>() where T : IExternalizable, new()
         {
             var type = typeof(T);
+            string mapedName = null;
+            var attr = type.GetCustomAttribute<TypedObjectAttribute>();
+            if (attr != null)
+            {
+                mapedName = attr.Name;
+            }
             var typeName = mapedName == null ? type.Name : mapedName;
             _registeredExternalizable.Add(typeName, type);
         }
@@ -647,6 +659,10 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             if (traits.IsDynamic)
             {
                 var dynamicObject = deserailziedObject as IDynamicObject;
+                if (dynamicObject == null)
+                {
+                    return false;
+                }
                 if (!TryGetStringImpl(valueBuffer, _stringReferenceTable, out var key, out var keyConsumed))
                 {
                     return false;

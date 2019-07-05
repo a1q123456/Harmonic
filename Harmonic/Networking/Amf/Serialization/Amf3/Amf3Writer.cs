@@ -10,6 +10,8 @@ using Harmonic.Buffers;
 using Harmonic.Networking.Utils;
 using Harmonic.Networking.Amf.Data;
 using System.Diagnostics.Contracts;
+using System.Reflection;
+using Harmonic.Networking.Amf.Attributes;
 
 namespace Harmonic.Networking.Amf.Serialization.Amf3
 {
@@ -29,6 +31,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
 
         public int MessageLength => _writerBuffer.BufferLength;
         public static readonly uint U29MAX = 0x1FFFFFFF;
+        private MethodInfo _writeVectorTMethod = null;
+        private MethodInfo _writeDictionaryTMethod = null;
 
         public Amf3Writer()
         {
@@ -52,7 +56,39 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             writeHandlers[typeof(Vector<int>)] = WriteHandlerWrapper<Vector<int>>(WriteBytes);
             writeHandlers[typeof(Vector<uint>)] = WriteHandlerWrapper<Vector<uint>>(WriteBytes);
             writeHandlers[typeof(Vector<double>)] = WriteHandlerWrapper<Vector<double>>(WriteBytes);
+            writeHandlers[typeof(Vector<>)] = WrapVector;
+            writeHandlers[typeof(Amf3Dictionary<,>)] = WrapDictionary;
             _writeHandlers = writeHandlers;
+
+            Action<Vector<int>> method = WriteBytes<int>;
+            _writeVectorTMethod = method.Method.GetGenericMethodDefinition();
+
+            Action<Amf3Dictionary<int, int>> dictMethod = WriteBytes;
+            _writeDictionaryTMethod = dictMethod.Method.GetGenericMethodDefinition();
+
+        }
+
+        private void WrapVector(object value)
+        {
+            var valueType = value.GetType();
+            Contract.Assert(valueType.IsGenericType);
+            var defination = valueType.GetGenericTypeDefinition();
+            Contract.Assert(defination == typeof(Vector<>));
+            var vectorT = valueType.GetGenericArguments().First();
+
+            _writeVectorTMethod.MakeGenericMethod(vectorT).Invoke(this, new object[] { value });
+        }
+
+        private void WrapDictionary(object value)
+        {
+            var valueType = value.GetType();
+            Contract.Assert(valueType.IsGenericType);
+            var defination = valueType.GetGenericTypeDefinition();
+            Contract.Assert(defination == typeof(Amf3Dictionary<,>));
+            var tKey = valueType.GetGenericArguments().First();
+            var tValue = valueType.GetGenericArguments().Last();
+
+            _writeDictionaryTMethod.MakeGenericMethod(tKey, tValue).Invoke(this, new object[] { value });
         }
 
         private WriteHandler WriteHandlerWrapper<T>(WriteHandler<T> handler)
@@ -310,10 +346,37 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 return;
             }
             var valueType = value.GetType();
+            if (_writeHandlers.TryGetValue(valueType, out var handler))
+            {
+                handler(value);
+            }
+            else
+            {
+                if (valueType.IsGenericType)
+                {
+                    var genericDefination = valueType.GetGenericTypeDefinition();
 
-            _writeHandlers.TryGetValue(valueType, out var handler);
+                    if (genericDefination != typeof(Vector<>) && genericDefination != typeof(Amf3Dictionary<,>))
+                    {
+                        throw new NotSupportedException();
+                    }
+                    
+                    if (_writeHandlers.TryGetValue(genericDefination, out handler))
+                    {
+                        handler(value);
+                    }
+                }
+                else if (typeof(IDynamicObject).IsAssignableFrom(valueType))
+                {
+                    WriteBytes(value);
+                }
+                else
+                {
+                    Contract.Assert(false);
+                }
+            }
 
-            handler(value);
+            
         }
 
         public void WriteBytes(object value)
@@ -338,6 +401,12 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             }
 
             var objType = value.GetType();
+            string attrTypeName = null;
+            var classAttr = objType.GetCustomAttribute<TypedObjectAttribute>();
+            if (classAttr != null)
+            {
+                attrTypeName = classAttr.Name;
+            }
             var traits = new Amf3ClassTraits();
             var memberValues = new List<object>();
             if (value is Amf3Object amf3Object)
@@ -349,7 +418,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 }
                 else
                 {
-                    traits.ClassName = objType.Name;
+                    traits.ClassName = attrTypeName ?? objType.Name;
                     traits.ClassType = Amf3ClassType.Typed;
                 }
                 traits.IsDynamic = amf3Object.IsDynamic;
@@ -358,15 +427,24 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             }
             else if (value is IExternalizable)
             {
-                traits.ClassName = objType.Name;
+                traits.ClassName = attrTypeName ?? objType.Name;
                 traits.ClassType = Amf3ClassType.Externalizable;
             }
             else
             {
-                traits.ClassName = objType.Name;
+                traits.ClassName = attrTypeName ?? objType.Name;
                 traits.ClassType = Amf3ClassType.Typed;
-                traits.Members = new List<string>(objType.GetProperties().Select(p => p.Name));
-                memberValues = new List<object>(objType.GetProperties().Select(p => p.GetValue(value)));
+                var props = objType.GetProperties();
+                foreach (var prop in props)
+                {
+                    var attr = (ClassFieldAttribute)Attribute.GetCustomAttribute(prop, typeof(ClassFieldAttribute));
+                    if (attr != null)
+                    {
+                        traits.Members.Add(attr.Name ?? prop.Name);
+                        memberValues.Add(prop.GetValue(value));
+                    }
+                }
+                traits.IsDynamic = value is IDynamicObject;
             }
             _objectReferenceTable.Add(value);
 
@@ -399,6 +477,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                     var memberCount = (uint)traits.Members.Count;
                     header |= memberCount << 4;
                     WriteU29BytesImpl(header);
+                    WriteStringBytesImpl(traits.ClassName, _stringReferenceTable);
 
                     foreach (var memberName in traits.Members)
                     {
@@ -408,6 +487,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 _objectTraitsReferenceTable.Add(traits);
             }
 
+
             foreach (var memberValue in memberValues)
             {
                 WriteValueBytes(memberValue);
@@ -415,12 +495,13 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
 
             if (traits.IsDynamic)
             {
-                var amf3Obj = value as Amf3Object;
+                var amf3Obj = value as IDynamicObject;
                 foreach ((var key, var item) in amf3Obj.DynamicFields)
                 {
                     WriteStringBytesImpl(key, _stringReferenceTable);
                     WriteValueBytes(item);
                 }
+                WriteStringBytesImpl("", _stringReferenceTable);
             }
         }
 
@@ -447,8 +528,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                     foreach (var i in value)
                     {
                         Contract.Assert(NetworkBitConverter.TryGetBytes(i, buffer));
+                        _writerBuffer.WriteToBuffer(buffer.AsSpan(0, sizeof(uint)));
                     }
-                    _writerBuffer.WriteToBuffer(buffer.AsSpan(0, sizeof(uint)));
                 }
                 finally
                 {
@@ -528,7 +609,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
 
         public void WriteBytes<T>(Vector<T> value)
         {
-            _writerBuffer.WriteToBuffer((byte)Amf3Type.VectorDouble);
+            _writerBuffer.WriteToBuffer((byte)Amf3Type.VectorObject);
 
             var refIndex = _objectReferenceTable.IndexOf(value);
             if (refIndex >= 0)
@@ -543,8 +624,16 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 var header = ((uint)value.Count << 1) | 0x01;
                 WriteU29BytesImpl(header);
                 _writerBuffer.WriteToBuffer(value.IsFixedSize ? (byte)0x01 : (byte)0x00);
+                var tType = typeof(T);
 
-                var className = typeof(T) == typeof(object) ? "*" : typeof(T).Name;
+                string typeName = tType.Name;
+                var attr = tType.GetCustomAttribute<TypedObjectAttribute>();
+                if (attr != null)
+                {
+                    typeName = attr.Name;
+                }
+
+                var className = typeof(T) == typeof(object) ? "*" : typeName;
                 WriteStringBytesImpl(className, _stringReferenceTable);
 
                 foreach (var i in value)

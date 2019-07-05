@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Xml;
 
 namespace UnitTest
 {
@@ -36,7 +37,7 @@ namespace UnitTest
         }
 
         [TestMethod]
-        public void TestInt()
+        public void TestInteger()
         {
             var reader = new Amf3Reader();
             var writer = new Amf3Writer();
@@ -223,6 +224,272 @@ namespace UnitTest
             Assert.AreEqual(val.v2, ext.v2);
             Assert.AreEqual(buffer.Length, consumed);
 
+        }
+
+        public class TestCls2: IEquatable<TestCls2>
+        {
+            [ClassField]
+            public double t1 {get;set;}
+
+            public bool Equals(TestCls2 other)
+            {
+                return t1 == other.t1;
+            }
+
+            public override bool Equals(object obj)
+            {
+                if (obj is TestCls2 obj2)
+                {
+                    return Equals(obj2);
+                }
+                return base.Equals(obj);
+            }
+
+            public override int GetHashCode()
+            {
+                return HashCode.Combine(t1);
+            }
+        }
+
+        [TestMethod]
+        public void TestObject()
+        {
+            var reader = new Amf3Reader();
+            var writer = new Amf3Writer();
+
+            var obj = new Amf3Object
+            {
+                { "t1", (uint)2 },
+                { "t2", 3.1 }
+            };
+            obj.AddDynamic("t3", new Vector<int>() { 2, 3, 4 });
+
+            writer.WriteBytes(obj);
+            var buffer = new byte[writer.MessageLength];
+            writer.GetMessage(buffer);
+
+            Assert.IsTrue(reader.TryGetObject(buffer, out var readVal, out var consumed));
+            var readObj = (Amf3Object)readVal;
+            Assert.AreEqual(readObj.Fields["t1"], (uint)2);
+            Assert.AreEqual(readObj.Fields["t2"], 3.1);
+            Assert.AreEqual(readObj.DynamicFields["t3"], new Vector<int>() { 2, 3, 4 });
+            Assert.AreEqual(buffer.Length, consumed);
+        }
+
+        [TestMethod]
+        public void TestObject2()
+        {
+            var reader = new Amf3Reader();
+            var writer = new Amf3Writer();
+            reader.RegisterTypedObject<TestCls2>();
+
+            var obj = new TestCls2()
+            {
+                t1 = 3.5
+            };
+
+            writer.WriteBytes(obj);
+            var buffer = new byte[writer.MessageLength];
+            writer.GetMessage(buffer);
+
+            Assert.IsTrue(reader.TryGetObject(buffer, out var readVal, out var consumed));
+            Assert.AreEqual(obj, readVal);
+            Assert.AreEqual(buffer.Length, consumed);
+        }
+
+        [TestMethod]
+        public void TestObject3()
+        {
+            var reader = new Amf3Reader();
+            var writer = new Amf3Writer();
+            reader.RegisterTypedObject<TestCls>();
+            
+            var t = new TestCls()
+            {
+                T1 = 3.3,
+                T2 = "abc",
+                T3 = "abd",
+                t4 = new Vector<int>() { 2000, 30000, 400000 }
+            };
+
+            writer.WriteBytes(t);
+            var buffer = new byte[writer.MessageLength];
+            writer.GetMessage(buffer);
+
+            Assert.IsTrue(reader.TryGetObject(buffer, out var readVal, out var consumed));
+            Assert.AreEqual(t, readVal);
+            Assert.AreEqual(buffer.Length, consumed);
+        }
+
+        [TestMethod]
+        public void TestXmlDocument()
+        {
+            var writer = new Amf3Writer();
+            var reader = new Amf3Reader();
+
+            var xml = new XmlDocument();
+            var elem = xml.CreateElement("price");
+            xml.AppendChild(elem);
+            writer.WriteBytes(xml);
+            var buffer = new byte[writer.MessageLength];
+            writer.GetMessage(buffer);
+
+            Assert.IsTrue(reader.TryGetXmlDocument(buffer, out var ud, out var consunmed));
+            Assert.IsNotNull(ud);
+            Assert.AreNotEqual(ud.GetElementsByTagName("price").Count, 0);
+            Assert.AreEqual(consunmed, buffer.Length);
+
+
+        }
+
+        [TestMethod]
+        public void TestXml()
+        {
+            var writer = new Amf3Writer();
+            var reader = new Amf3Reader();
+
+            var xml = new Amf3Xml();
+            var elem = xml.CreateElement("price");
+            xml.AppendChild(elem);
+            writer.WriteBytes(xml);
+            var buffer = new byte[writer.MessageLength];
+            writer.GetMessage(buffer);
+
+            Assert.IsTrue(reader.TryGetXml(buffer, out var ud, out var consunmed));
+            Assert.IsNotNull(ud);
+            Assert.AreNotEqual(ud.GetElementsByTagName("price").Count, 0);
+            Assert.AreEqual(consunmed, buffer.Length);
+
+
+        }
+
+        [TestMethod]
+        public void TestVectorUint()
+        {
+            var writer = new Amf3Writer();
+            var reader = new Amf3Reader();
+
+            var v = new Vector<uint>() { 2, 3, 4 };
+            writer.WriteBytes(v);
+            var buffer = new byte[writer.MessageLength];
+            writer.GetMessage(buffer);
+
+            reader.TryGetVectorUint(buffer, out var readVal, out var consumed);
+            Assert.AreEqual(v, readVal);
+            Assert.AreEqual(buffer.Length, consumed);
+
+        }
+
+        [TestMethod]
+        public void TestVectorInt()
+        {
+            var writer = new Amf3Writer();
+            var reader = new Amf3Reader();
+
+            var v = new Vector<int>() { 2, 3, 4 };
+            writer.WriteBytes(v);
+            var buffer = new byte[writer.MessageLength];
+            writer.GetMessage(buffer);
+
+            reader.TryGetVectorInt(buffer, out var readVal, out var consumed);
+            Assert.AreEqual(v, readVal);
+            Assert.AreEqual(buffer.Length, consumed);
+
+        }
+
+        [TestMethod]
+        public void TestVectorDouble()
+        {
+            var writer = new Amf3Writer();
+            var reader = new Amf3Reader();
+
+            var v = new Vector<double>() { 2, 3, 4 };
+            writer.WriteBytes(v);
+            var buffer = new byte[writer.MessageLength];
+            writer.GetMessage(buffer);
+
+            reader.TryGetVectorDouble(buffer, out var readVal, out var consumed);
+            Assert.AreEqual(v, readVal);
+            Assert.AreEqual(buffer.Length, consumed);
+
+        }
+
+        [TestMethod]
+        public void TestVectorTypedObject()
+        {
+            var writer = new Amf3Writer();
+            var reader = new Amf3Reader();
+
+            reader.RegisterTypedObject<TestCls>();
+
+            var t = new TestCls()
+            {
+                T1 = 3.3,
+                T2 = "abc",
+                T3 = "abd",
+                t4 = new Vector<int>() { 2000, 30000, 400000 }
+            };
+            t.AddDynamic("t5", new Vector<TestCls>() { new TestCls { T1 = 5.6 } });
+
+            var v = new Vector<TestCls>() { t, t, t };
+            writer.WriteBytes(v);
+            var buffer = new byte[writer.MessageLength];
+            writer.GetMessage(buffer);
+
+            reader.TryGetVectorObject(buffer, out var readVal, out var consumed);
+            Assert.IsTrue(readVal.GetType().GetGenericArguments().First() == typeof(TestCls));
+            Assert.AreEqual(v, readVal);
+            Assert.AreEqual(buffer.Length, consumed);
+
+        }
+
+        [TestMethod]
+        public void TestVectorAnyObject()
+        {
+            var writer = new Amf3Writer();
+            var reader = new Amf3Reader();
+
+            reader.RegisterTypedObject<TestCls>();
+
+            var t = new TestCls()
+            {
+                T1 = 3.3,
+                T2 = "abc",
+                T3 = "abd",
+                t4 = new Vector<int>() { 2000, 30000, 400000 }
+            };
+
+            var v = new Vector<object>() { t, 3.2, 4.5 };
+            writer.WriteBytes(v);
+            var buffer = new byte[writer.MessageLength];
+            writer.GetMessage(buffer);
+
+            reader.TryGetVectorObject(buffer, out var readVal, out var consumed);
+
+            Assert.IsTrue(readVal.GetType().GetGenericArguments().First() == typeof(object));
+            Assert.AreEqual(v, readVal);
+            Assert.AreEqual(buffer.Length, consumed);
+
+        }
+
+        [TestMethod]
+        public void TestString()
+        {
+            var writer = new Amf3Writer();
+            var reader = new Amf3Reader();
+
+            for (int i = 0; i < 1000; i++)
+            {
+                var str = Guid.NewGuid().ToString();
+                writer.WriteBytes(str);
+                var buffer = new byte[writer.MessageLength];
+                writer.GetMessage(buffer);
+
+                Assert.IsTrue(reader.TryGetString(buffer, out var readVal, out var consumed));
+                Assert.AreEqual(str, readVal);
+                Assert.AreEqual(buffer.Length, consumed);
+
+            }
 
         }
 

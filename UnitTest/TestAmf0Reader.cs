@@ -242,7 +242,7 @@ namespace UnitTest
         public void TestPacket()
         {
             var reader = new Amf0Reader();
-            reader.RegisterType<RemotingMessage>("flex.messaging.messages.RemotingMessage");
+            reader.RegisterType<RemotingMessage>();
             reader.StrictMode = false;
             using (var file = new FileStream("../../../../samples/amf0/misc/packet.amf0", FileMode.Open))
             {
