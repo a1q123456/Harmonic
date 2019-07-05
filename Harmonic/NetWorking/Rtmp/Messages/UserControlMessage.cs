@@ -1,14 +1,16 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Text;
 using Harmonic.Networking.Rtmp.Data;
+using Harmonic.Networking.Utils;
 
 namespace Harmonic.Networking.Rtmp.Messages
 {
     public enum UserControlEventType : ushort
     {
         StreamBegin,
-        StreamEOF,
+        StreamEof,
         StreamDry,
         SetBufferLength,
         StreamIsRecorded,
@@ -16,13 +18,15 @@ namespace Harmonic.Networking.Rtmp.Messages
         PingResponse
     }
 
-    public class UserControlMessage : ControlMessage
+    public abstract class UserControlMessage : ControlMessage
     {
-        public UserControlEventType UserControlEventType { get; set; }
-        public object EventData { get; set; }
+        protected UserControlEventType UserControlEventType { get; set; }
 
-        public UserControlMessage() : base(MessageType.UserControlMessages)
+        public UserControlMessage(UserControlEventType userControlEventType) : base(MessageType.UserControlMessages)
         {
+            UserControlEventType = userControlEventType;
         }
+        
     }
+
 }

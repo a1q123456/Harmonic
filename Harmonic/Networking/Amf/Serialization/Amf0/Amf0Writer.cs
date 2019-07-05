@@ -1,7 +1,6 @@
 ﻿using Harmonic.Buffers;
 using Harmonic.Networking.Amf.Attributes;
 using Harmonic.Networking.Amf.Common;
-using Harmonic.Networking.Rtmp.Serialization;
 using Harmonic.Networking.Utils;
 using System;
 using System.Buffers;
@@ -18,13 +17,10 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
 {
     public class Amf0Writer
     {
-        private delegate void GetBytesHandler<T>(T value);
-        private delegate void GetBytesHandler(object value);
-        private List<object> _referenceTable = new List<object>();
+        private delegate void GetBytesHandler<T>(T value, SerializationContext context);
+        private delegate void GetBytesHandler(object value, SerializationContext context);
         private IReadOnlyDictionary<Type, GetBytesHandler> _getBytesHandlers = null;
-        private UnlimitedBuffer _writeBuffer = new UnlimitedBuffer();
         private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
-        public int MessageLength => _writeBuffer.BufferLength;
 
         public Amf0Writer()
         {
@@ -51,32 +47,25 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
 
         private GetBytesHandler GetBytesWrapper<T>(GetBytesHandler<T> handler)
         {
-            return (object v) =>
+            return (object v, SerializationContext context) =>
             {
                 if (v is T tv)
                 {
-                    handler(tv);
+                    handler(tv, context);
                 }
                 else
                 {
-                    handler((T)Convert.ChangeType(v, typeof(T)));
+                    handler((T)Convert.ChangeType(v, typeof(T)), context);
                 }
             };
         }
-
-        public void GetMessage(Span<byte> buffer)
+        
+        public void WriteAvmPlusBytes(SerializationContext context)
         {
-            _referenceTable.Clear();
-            _writeBuffer.TakeOutMemory(buffer);
+            context.Buffer.WriteToBuffer((byte)Amf0Type.AvmPlusObject);
         }
 
-        public bool TryGetAvmPlusBytes()
-        {
-            _writeBuffer.WriteToBuffer((byte)Amf0Type.AvmPlusObject);
-            return true;
-        }
-
-        private void WriteStringBytesImpl(string str, out bool isLongString, bool marker = false, bool forceLongString = false)
+        private void WriteStringBytesImpl(string str, SerializationContext context, out bool isLongString, bool marker = false, bool forceLongString = false)
         {
             var bytesNeed = 0;
             var headerLength = 0;
@@ -91,7 +80,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                 isLongString = true;
                 if (marker)
                 {
-                    _writeBuffer.WriteToBuffer((byte)Amf0Type.LongString);
+                    context.Buffer.WriteToBuffer((byte)Amf0Type.LongString);
                 }
 
             }
@@ -101,7 +90,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                 headerLength = Amf0CommonValues.STRING_HEADER_LENGTH;
                 if (marker)
                 {
-                    _writeBuffer.WriteToBuffer((byte)Amf0Type.String);
+                    context.Buffer.WriteToBuffer((byte)Amf0Type.String);
                 }
             }
             bytesNeed += headerLength;
@@ -120,7 +109,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
 
                 Encoding.UTF8.GetBytes(str, buffer.Slice(headerLength));
 
-                _writeBuffer.WriteToBuffer(buffer);
+                context.Buffer.WriteToBuffer(buffer);
             }
             finally
             {
@@ -129,23 +118,23 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             
         }
 
-        public void WriteBytes(string str)
+        public void WriteBytes(string str, SerializationContext context)
         {
             var bytesNeed = Amf0CommonValues.MARKER_LENGTH;
 
-            var refIndex = _referenceTable.IndexOf(str);
+            var refIndex = context.ReferenceTable.IndexOf(str);
 
             if (refIndex != -1)
             {
-                WriteReferenceIndexBytes((ushort)refIndex);
+                WriteReferenceIndexBytes((ushort)refIndex, context);
                 return;
             }
 
-            WriteStringBytesImpl(str, out var isLongString, true);
-            _referenceTable.Add(str);
+            WriteStringBytesImpl(str, context, out var isLongString, true);
+            context.ReferenceTable.Add(str);
         }
 
-        public void WriteBytes(double val)
+        public void WriteBytes(double val, SerializationContext context)
         {
             var bytesNeed = Amf0CommonValues.MARKER_LENGTH + sizeof(double);
             var bufferBackend = _arrayPool.Rent(bytesNeed);
@@ -154,7 +143,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                 var buffer = bufferBackend.AsSpan(0, bytesNeed);
                 buffer[0] = (byte)Amf0Type.Number;
                 Contract.Assert(NetworkBitConverter.TryGetBytes(val, buffer.Slice(Amf0CommonValues.MARKER_LENGTH)));
-                _writeBuffer.WriteToBuffer(buffer);
+                context.Buffer.WriteToBuffer(buffer);
             }
             finally
             {
@@ -162,30 +151,30 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             }
         }
 
-        public void WriteBytes(bool val)
+        public void WriteBytes(bool val, SerializationContext context)
         {
             var bytesNeed = Amf0CommonValues.MARKER_LENGTH + sizeof(byte);
 
-            _writeBuffer.WriteToBuffer((byte)Amf0Type.Boolean);
-            _writeBuffer.WriteToBuffer((byte)(val ? 1 : 0));
+            context.Buffer.WriteToBuffer((byte)Amf0Type.Boolean);
+            context.Buffer.WriteToBuffer((byte)(val ? 1 : 0));
 
         }
 
-        public void WriteBytes(Undefined value)
+        public void WriteBytes(Undefined value, SerializationContext context)
         {
             var bytesNeed = Amf0CommonValues.MARKER_LENGTH;
             var bufferBackend = _arrayPool.Rent(bytesNeed);
 
-            _writeBuffer.WriteToBuffer((byte)Amf0Type.Undefined);
+            context.Buffer.WriteToBuffer((byte)Amf0Type.Undefined);
         }
 
-        public void WriteBytes(Unsupported value)
+        public void WriteBytes(Unsupported value, SerializationContext context)
         {
             var bytesNeed = Amf0CommonValues.MARKER_LENGTH;
-            _writeBuffer.WriteToBuffer((byte)Amf0Type.Unsupported);
+            context.Buffer.WriteToBuffer((byte)Amf0Type.Unsupported);
         }
 
-        private void WriteReferenceIndexBytes(ushort index)
+        private void WriteReferenceIndexBytes(ushort index, SerializationContext context)
         {
             var bytesNeed = Amf0CommonValues.MARKER_LENGTH + sizeof(ushort);
             var backend = _arrayPool.Rent(bytesNeed);
@@ -194,7 +183,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                 var buffer = backend.AsSpan(0, bytesNeed);
                 buffer[0] = (byte)Amf0Type.Reference;
                 Contract.Assert(NetworkBitConverter.TryGetBytes(index, buffer.Slice(Amf0CommonValues.MARKER_LENGTH)));
-                _writeBuffer.WriteToBuffer(buffer);
+                context.Buffer.WriteToBuffer(buffer);
             }
             finally
             {
@@ -203,13 +192,13 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
 
         }
 
-        private void WriteObjectEndBytes()
+        private void WriteObjectEndBytes(SerializationContext context)
         {
             var bytesNeed = Amf0CommonValues.MARKER_LENGTH;
-            _writeBuffer.WriteToBuffer((byte)Amf0Type.ObjectEnd);
+            context.Buffer.WriteToBuffer((byte)Amf0Type.ObjectEnd);
         }
 
-        public void WriteBytes(DateTime dateTime)
+        public void WriteBytes(DateTime dateTime, SerializationContext context)
         {
             var bytesNeed = Amf0CommonValues.MARKER_LENGTH + sizeof(double) + sizeof(short);
 
@@ -222,7 +211,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                 var dof = new DateTimeOffset(dateTime);
                 var timestamp = (double)dof.ToUnixTimeMilliseconds();
                 Contract.Assert(NetworkBitConverter.TryGetBytes(timestamp, buffer.Slice(Amf0CommonValues.MARKER_LENGTH)));
-                _writeBuffer.WriteToBuffer(buffer);
+                context.Buffer.WriteToBuffer(buffer);
             }
             finally
             {
@@ -231,7 +220,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
 
         }
 
-        public void WriteBytes(XmlDocument xml)
+        public void WriteBytes(XmlDocument xml, SerializationContext context)
         {
             string content = null;
             using (var stringWriter = new StringWriter())
@@ -242,49 +231,49 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                 content = stringWriter.GetStringBuilder().ToString();
             }
 
-            _writeBuffer.WriteToBuffer((byte)Amf0Type.XmlDocument);
-            WriteStringBytesImpl(content, out _, forceLongString: true);
+            context.Buffer.WriteToBuffer((byte)Amf0Type.XmlDocument);
+            WriteStringBytesImpl(content, context, out _, forceLongString: true);
         }
 
-        public void WriteNullBytes()
+        public void WriteNullBytes(SerializationContext context)
         {
-            _writeBuffer.WriteToBuffer((byte)Amf0Type.Null);
+            context.Buffer.WriteToBuffer((byte)Amf0Type.Null);
         }
 
-        public void WriteValueBytes(object value)
+        public void WriteValueBytes(object value, SerializationContext context)
         {
             var valueType = value != null ? value.GetType() : typeof(object);
             Contract.Assert(_getBytesHandlers.TryGetValue(valueType, out var handler));
 
-            handler(value);
+            handler(value, context);
         }
 
         // strict array
-        public void WriteBytes(List<object> value)
+        public void WriteBytes(List<object> value, SerializationContext context)
         {
             if (value == null)
             {
-                WriteNullBytes();
+                WriteNullBytes(context);
                 return;
             }
 
             var bytesNeed = Amf0CommonValues.MARKER_LENGTH + sizeof(uint);
 
-            var refIndex = _referenceTable.IndexOf(value);
+            var refIndex = context.ReferenceTable.IndexOf(value);
 
             if (refIndex >= 0)
             {
-                WriteReferenceIndexBytes((ushort)refIndex);
+                WriteReferenceIndexBytes((ushort)refIndex, context);
                 return;
             }
-            _referenceTable.Add(value);
+            context.ReferenceTable.Add(value);
 
-            _writeBuffer.WriteToBuffer((byte)Amf0Type.StrictArray);
+            context.Buffer.WriteToBuffer((byte)Amf0Type.StrictArray);
             var countBuffer = _arrayPool.Rent(sizeof(uint));
             try
             {
                 Contract.Assert(NetworkBitConverter.TryGetBytes((uint)value.Count, countBuffer));
-                _writeBuffer.WriteToBuffer(countBuffer.AsSpan(0, sizeof(uint)));
+                context.Buffer.WriteToBuffer(countBuffer.AsSpan(0, sizeof(uint)));
             }
             finally
             {
@@ -293,32 +282,32 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
 
             foreach (var data in value)
             {
-                WriteValueBytes(data);
+                WriteValueBytes(data, context);
             }
         }
 
-        public void WriteBytes(Dictionary<string, object> value)
+        public void WriteBytes(Dictionary<string, object> value, SerializationContext context)
         {
             if (value == null)
             {
-                WriteNullBytes();
+                WriteNullBytes(context);
                 return;
             }
 
-            var refIndex = _referenceTable.IndexOf(value);
+            var refIndex = context.ReferenceTable.IndexOf(value);
 
             if (refIndex >= 0)
             {
-                WriteReferenceIndexBytes((ushort)refIndex);
+                WriteReferenceIndexBytes((ushort)refIndex, context);
                 return;
             }
-            _writeBuffer.WriteToBuffer((byte)Amf0Type.EcmaArray);
-            _referenceTable.Add(value);
+            context.Buffer.WriteToBuffer((byte)Amf0Type.EcmaArray);
+            context.ReferenceTable.Add(value);
             var countBuffer = _arrayPool.Rent(sizeof(uint));
             try
             {
                 Contract.Assert(NetworkBitConverter.TryGetBytes((uint)value.Count, countBuffer));
-                _writeBuffer.WriteToBuffer(countBuffer.AsSpan(0, sizeof(uint)));
+                context.Buffer.WriteToBuffer(countBuffer.AsSpan(0, sizeof(uint)));
             }
             finally
             {
@@ -327,29 +316,29 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
 
             foreach ((var key, var data) in value)
             {
-                WriteStringBytesImpl(key, out _);
-                WriteValueBytes(data);
+                WriteStringBytesImpl(key, context, out _);
+                WriteValueBytes(data, context);
             }
-            WriteStringBytesImpl("", out _);
-            WriteObjectEndBytes();
+            WriteStringBytesImpl("", context, out _);
+            WriteObjectEndBytes(context);
         }
 
-        public void WriteTypedBytes(object value)
+        public void WriteTypedBytes(object value, SerializationContext context)
         {
             if (value == null)
             {
-                WriteNullBytes();
+                WriteNullBytes(context);
                 return;
             }
-            var refIndex = _referenceTable.IndexOf(value);
+            var refIndex = context.ReferenceTable.IndexOf(value);
 
             if (refIndex >= 0)
             {
-                WriteReferenceIndexBytes((ushort)refIndex);
+                WriteReferenceIndexBytes((ushort)refIndex, context);
                 return;
             }
-            _writeBuffer.WriteToBuffer((byte)Amf0Type.TypedObject);
-            _referenceTable.Add(value);
+            context.Buffer.WriteToBuffer((byte)Amf0Type.TypedObject);
+            context.ReferenceTable.Add(value);
 
             var valueType = value.GetType();
             var className = valueType.Name;
@@ -360,7 +349,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                 className = clsAttr.Name;
             }
 
-            WriteStringBytesImpl(className, out _);
+            WriteStringBytesImpl(className, context, out _);
 
             var props = valueType.GetProperties();
             
@@ -369,46 +358,47 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                 var attr = (ClassFieldAttribute)Attribute.GetCustomAttribute(prop, typeof(ClassFieldAttribute));
                 if (attr != null)
                 {
-                    WriteStringBytesImpl(attr.Name ?? prop.Name, out _);
-                    WriteValueBytes(prop.GetValue(value));
+                    WriteStringBytesImpl(attr.Name ?? prop.Name, context, out _);
+                    WriteValueBytes(prop.GetValue(value), context);
                 }
             }
 
-            WriteStringBytesImpl("", out _);
-            WriteObjectEndBytes();
+            WriteStringBytesImpl("", context, out _);
+            WriteObjectEndBytes(context);
         }
 
-        public void WriteBytes(object value)
+        public void WriteBytes(object value, SerializationContext context)
         {
             if (value == null)
             {
-                WriteNullBytes();
+                WriteNullBytes(context);
                 return;
             }
-            var refIndex = _referenceTable.IndexOf(value);
+            var refIndex = context.ReferenceTable.IndexOf(value);
 
             if (refIndex >= 0)
             {
-                WriteReferenceIndexBytes((ushort)refIndex);
+                WriteReferenceIndexBytes((ushort)refIndex, context);
                 return;
             }
-            _writeBuffer.WriteToBuffer((byte)Amf0Type.Object);
-            _referenceTable.Add(value);
+            context.Buffer.WriteToBuffer((byte)Amf0Type.Object);
+            context.ReferenceTable.Add(value);
 
-            WriteObjectBytesImpl(value);
-            WriteStringBytesImpl("", out _);
-            WriteObjectEndBytes();
+            WriteObjectBytesImpl(value, context);
+            WriteStringBytesImpl("", context, out _);
+            WriteObjectEndBytes(context);
         }
 
-        private void WriteObjectBytesImpl(object value)
+        private void WriteObjectBytesImpl(object value, SerializationContext context)
         {
             var props = value.GetType().GetProperties();
             foreach (var prop in props)
             {
                 var propValue = prop.GetValue(value);
-                WriteStringBytesImpl(prop.Name, out _);
-                WriteValueBytes(propValue);
+                WriteStringBytesImpl(prop.Name, context, out _);
+                WriteValueBytes(propValue, context);
             }
         }
+        
     }
 }

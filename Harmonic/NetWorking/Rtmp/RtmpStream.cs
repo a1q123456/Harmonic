@@ -14,8 +14,11 @@ using System.IO.Pipelines;
 using System.Collections.ObjectModel;
 using System.Collections.Concurrent;
 using Harmonic.Networking.Rtmp.Messages;
-using Harmonic.Networking.Rtmp.Serialization;
 using Harmonic.Networking.Utils;
+using Harmonic.Networking.Rtmp.Serialization;
+using Harmonic.Buffers;
+using Harmonic.Networking.Amf.Serialization.Amf0;
+using Harmonic.Networking.Amf.Serialization.Amf3;
 
 namespace Harmonic.Networking.Rtmp
 {
@@ -65,7 +68,6 @@ namespace Harmonic.Networking.Rtmp
         private MemoryPool<byte> _memoryPool = MemoryPool<byte>.Shared;
         private Dictionary<uint, MessageHeader> _previousReadMessageHeader = new Dictionary<uint, MessageHeader>();
         private Dictionary<uint, MessageReadingState> _incompleteMessageState = new Dictionary<uint, MessageReadingState>();
-        private Dictionary<MessageType, IRtmpMessageIO> _messageIO = new Dictionary<MessageType, IRtmpMessageIO>();
         internal uint? ReadWindowAcknowledgementSize { get; set; } = null;
         internal uint? WriteWindowAcknowledgementSize { get; set; } = null;
         internal uint ReadWindowSize { get; set; } = 0;
@@ -86,7 +88,12 @@ namespace Harmonic.Networking.Rtmp
         private byte[] _s1Data = null;
         private byte[] _c1Data = null;
         private Queue<WriteState> _writerQueue = new Queue<WriteState>();
-        RtmpSession _rtmpSession = null;
+        private RtmpSession _rtmpSession = null;
+        private Amf0Reader _amf0Reader = new Amf0Reader();
+        private Amf0Writer _amf0Writer = new Amf0Writer();
+        private Amf3Reader _amf3Reader = new Amf3Reader();
+        private Amf3Writer _amf3Writer = new Amf3Writer();
+
 
         public RtmpStream(Socket socket, int resumeWriterThreshole = 65535)
         {
@@ -225,12 +232,25 @@ namespace Harmonic.Networking.Rtmp
             {
                 throw new InvalidOperationException("cannot send message that has not attached to a message stream");
             }
-            if (!_messageIO.TryGetValue(message.MessageHeader.MessageType, out var io))
-            {
-                throw new NotSupportedException();
-            }
             var ret = new TaskCompletionSource<int>();
-            io.GetBytes(_arrayPool, message, out var buffer, out var length);
+            byte[] buffer = null;
+            uint length = 0;
+            using (var writeBuffer = new UnlimitedBuffer())
+            {
+                var context = new Serialization.SerializationContext()
+                {
+                    Amf0Reader = _amf0Reader,
+                    Amf0Writer = _amf0Writer,
+                    Amf3Reader = _amf3Reader,
+                    Amf3Writer = _amf3Writer,
+                    WriteBuffer = writeBuffer
+                };
+                message.Serialize(context);
+                length = (uint)writeBuffer.BufferLength;
+                buffer = _arrayPool.Rent((int)length);
+                writeBuffer.TakeOutMemory(buffer);
+            }
+                
             try
             {
                 message.MessageHeader.MessageLength = length;
