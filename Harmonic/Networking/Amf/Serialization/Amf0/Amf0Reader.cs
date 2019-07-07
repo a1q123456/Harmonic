@@ -2,6 +2,7 @@
 using Harmonic.Networking.Amf.Common;
 using Harmonic.Networking.Amf.Data;
 using Harmonic.Networking.Amf.Serialization.Amf3;
+using Harmonic.Networking.Amf.Serialization.Attributes;
 using Harmonic.Networking.Utils;
 using System;
 using System.Collections.Generic;
@@ -52,7 +53,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                 [Amf0Type.Number] = OutValueTypeEraser<double>(TryGetNumber),
                 [Amf0Type.Boolean] = OutValueTypeEraser<bool>(TryGetBoolean),
                 [Amf0Type.String] = OutValueTypeEraser<string>(TryGetString),
-                [Amf0Type.Object] = OutValueTypeEraser<Dictionary<string, object>>(TryGetObject),
+                [Amf0Type.Object] = OutValueTypeEraser<AmfObject>(TryGetObject),
                 [Amf0Type.Null] = OutValueTypeEraser<object>(TryGetNull),
                 [Amf0Type.Undefined] = OutValueTypeEraser<Undefined>(TryGetUndefined),
                 [Amf0Type.Reference] = OutValueTypeEraser<object>(TryGetReference),
@@ -353,7 +354,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             return true;
         }
 
-        public bool TryGetObject(Span<byte> buffer, out Dictionary<string, object> value, out int bytesConsumed)
+        public bool TryGetObject(Span<byte> buffer, out AmfObject value, out int bytesConsumed)
         {
             value = default;
             bytesConsumed = default;
@@ -385,7 +386,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                 return false;
             }
 
-            value = obj;
+            value = new AmfObject(obj);
             bytesConsumed = consumed + Amf0CommonValues.MARKER_LENGTH;
 
 

@@ -12,6 +12,7 @@ using Harmonic.Networking.Amf.Data;
 using System.Diagnostics.Contracts;
 using System.Reflection;
 using Harmonic.Networking.Amf.Attributes;
+using Harmonic.Networking.Amf.Serialization.Attributes;
 
 namespace Harmonic.Networking.Amf.Serialization.Amf3
 {
@@ -31,27 +32,29 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
         public Amf3Writer()
         {
 
-            var writeHandlers = new Dictionary<Type, WriteHandler>();
-            writeHandlers[typeof(int)] = WriteHandlerWrapper<double>(WriteBytes);
-            writeHandlers[typeof(uint)] = WriteHandlerWrapper<uint>(WriteBytes);
-            writeHandlers[typeof(long)] = WriteHandlerWrapper<double>(WriteBytes);
-            writeHandlers[typeof(ulong)] = WriteHandlerWrapper<uint>(WriteBytes);
-            writeHandlers[typeof(short)] = WriteHandlerWrapper<double>(WriteBytes);
-            writeHandlers[typeof(ushort)] = WriteHandlerWrapper<uint>(WriteBytes);
-            writeHandlers[typeof(double)] = WriteHandlerWrapper<double>(WriteBytes);
-            writeHandlers[typeof(Undefined)] = WriteHandlerWrapper<Undefined>(WriteBytes);
-            writeHandlers[typeof(object)] = WriteHandlerWrapper<object>(WriteBytes);
-            writeHandlers[typeof(DateTime)] = WriteHandlerWrapper<DateTime>(WriteBytes);
-            writeHandlers[typeof(XmlDocument)] = WriteHandlerWrapper<XmlDocument>(WriteBytes);
-            writeHandlers[typeof(Amf3Xml)] = WriteHandlerWrapper<Amf3Xml>(WriteBytes);
-            writeHandlers[typeof(bool)] = WriteHandlerWrapper<bool>(WriteBytes);
-            writeHandlers[typeof(Memory<byte>)] = WriteHandlerWrapper<Memory<byte>>(WriteBytes);
-            writeHandlers[typeof(string)] = WriteHandlerWrapper<string>(WriteBytes);
-            writeHandlers[typeof(Vector<int>)] = WriteHandlerWrapper<Vector<int>>(WriteBytes);
-            writeHandlers[typeof(Vector<uint>)] = WriteHandlerWrapper<Vector<uint>>(WriteBytes);
-            writeHandlers[typeof(Vector<double>)] = WriteHandlerWrapper<Vector<double>>(WriteBytes);
-            writeHandlers[typeof(Vector<>)] = WrapVector;
-            writeHandlers[typeof(Amf3Dictionary<,>)] = WrapDictionary;
+            var writeHandlers = new Dictionary<Type, WriteHandler>
+            {
+                [typeof(int)] = WriteHandlerWrapper<double>(WriteBytes),
+                [typeof(uint)] = WriteHandlerWrapper<uint>(WriteBytes),
+                [typeof(long)] = WriteHandlerWrapper<double>(WriteBytes),
+                [typeof(ulong)] = WriteHandlerWrapper<uint>(WriteBytes),
+                [typeof(short)] = WriteHandlerWrapper<double>(WriteBytes),
+                [typeof(ushort)] = WriteHandlerWrapper<uint>(WriteBytes),
+                [typeof(double)] = WriteHandlerWrapper<double>(WriteBytes),
+                [typeof(Undefined)] = WriteHandlerWrapper<Undefined>(WriteBytes),
+                [typeof(object)] = WriteHandlerWrapper<object>(WriteBytes),
+                [typeof(DateTime)] = WriteHandlerWrapper<DateTime>(WriteBytes),
+                [typeof(XmlDocument)] = WriteHandlerWrapper<XmlDocument>(WriteBytes),
+                [typeof(Amf3Xml)] = WriteHandlerWrapper<Amf3Xml>(WriteBytes),
+                [typeof(bool)] = WriteHandlerWrapper<bool>(WriteBytes),
+                [typeof(Memory<byte>)] = WriteHandlerWrapper<Memory<byte>>(WriteBytes),
+                [typeof(string)] = WriteHandlerWrapper<string>(WriteBytes),
+                [typeof(Vector<int>)] = WriteHandlerWrapper<Vector<int>>(WriteBytes),
+                [typeof(Vector<uint>)] = WriteHandlerWrapper<Vector<uint>>(WriteBytes),
+                [typeof(Vector<double>)] = WriteHandlerWrapper<Vector<double>>(WriteBytes),
+                [typeof(Vector<>)] = WrapVector,
+                [typeof(Amf3Dictionary<,>)] = WrapDictionary
+            };
             _writeHandlers = writeHandlers;
 
             Action<Vector<int>, SerializationContext> method = WriteBytes<int>;
@@ -352,13 +355,9 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                         handler(value, context);
                     }
                 }
-                else if (typeof(IDynamicObject).IsAssignableFrom(valueType))
-                {
-                    WriteBytes(value, context);
-                }
                 else
                 {
-                    Contract.Assert(false);
+                    WriteBytes(value, context);
                 }
             }
 
@@ -395,7 +394,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             }
             var traits = new Amf3ClassTraits();
             var memberValues = new List<object>();
-            if (value is Amf3Object amf3Object)
+            if (value is AmfObject amf3Object)
             {
                 if (amf3Object.IsAnonymous)
                 {
@@ -438,9 +437,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             var traitRefIndex = context.ObjectTraitsReferenceTable.IndexOf(traits);
             if (traitRefIndex >= 0)
             {
-                header = ((uint)traitRefIndex << 2) | 0x03;
+                header = ((uint)traitRefIndex << 2) | 0x01;
                 WriteU29BytesImpl(header, context);
-                return;
             }
             else
             {

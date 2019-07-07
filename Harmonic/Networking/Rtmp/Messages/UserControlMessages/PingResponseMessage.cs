@@ -6,13 +6,14 @@ using System.Collections.Generic;
 using System.Diagnostics.Contracts;
 using System.Text;
 
-namespace Harmonic.Networking.Rtmp.Messages
+namespace Harmonic.Networking.Rtmp.Messages.UserControlMessages
 {
-    public class PingRequestMessage : UserControlMessage
+    [UserControlMessage(Type = UserControlEventType.PingResponse)]
+    public class PingResponseMessage : UserControlMessage
     {
         public uint Timestamp { get; set; }
 
-        public PingRequestMessage() : base(UserControlEventType.PingRequest)
+        public PingResponseMessage()
         {
 
         }

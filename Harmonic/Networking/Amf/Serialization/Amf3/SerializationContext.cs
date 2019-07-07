@@ -7,16 +7,31 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
 {
     public class SerializationContext : IDisposable
     {
-        public UnlimitedBuffer Buffer { get; set; } = new UnlimitedBuffer();
+        public UnlimitedBuffer Buffer { get; private set; }
         public List<object> ObjectReferenceTable { get; set; } = new List<object>();
         public List<string> StringReferenceTable { get; set; } = new List<string>();
         public List<Amf3ClassTraits> ObjectTraitsReferenceTable { get; set; } = new List<Amf3ClassTraits>();
 
-        public int MessageLength =>< Buffer.BufferLength;
+        public int MessageLength => Buffer.BufferLength;
+        private bool _disposeBuffer = true;
+
+        public SerializationContext()
+        {
+            Buffer = new UnlimitedBuffer();
+        }
+
+        public SerializationContext(UnlimitedBuffer buffer)
+        {
+            Buffer = buffer;
+            _disposeBuffer = false;
+        }
 
         public void Dispose()
         {
-            ((IDisposable)Buffer).Dispose();
+            if (_disposeBuffer)
+            {
+                ((IDisposable)Buffer).Dispose();
+            }
         }
 
         public void GetMessage(Span<byte> buffer)

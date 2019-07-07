@@ -11,9 +11,8 @@ namespace Harmonic.Networking.Rtmp.Data
     {
         protected ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
         public MessageHeader MessageHeader { get; internal set; } = new MessageHeader();
-        internal Message(MessageType messageType)
+        internal Message()
         {
-            MessageHeader.MessageType = messageType;
         }
 
         public abstract void Deserialize(SerializationContext context);

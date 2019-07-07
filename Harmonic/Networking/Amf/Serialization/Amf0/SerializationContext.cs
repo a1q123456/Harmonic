@@ -7,20 +7,36 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
 {
     public class SerializationContext : IDisposable
     {
-        public UnlimitedBuffer Buffer { get; set; } = new UnlimitedBuffer();
+        public UnlimitedBuffer Buffer { get; private set; }
         public List<object> ReferenceTable { get; set; } = new List<object>();
 
         public int MessageLength => Buffer.BufferLength;
 
-        public void Dispose()
+        private bool _disposeBuffer = true;
+
+        public SerializationContext()
         {
-            ((IDisposable)Buffer).Dispose();
+            Buffer = new UnlimitedBuffer();
+        }
+
+        public SerializationContext(UnlimitedBuffer buffer)
+        {
+            Buffer = buffer;
+            _disposeBuffer = false;
         }
 
         public void GetMessage(Span<byte> buffer)
         {
             ReferenceTable.Clear();
             Buffer.TakeOutMemory(buffer);
+        }
+
+        public void Dispose()
+        {
+            if (_disposeBuffer)
+            {
+                ((IDisposable)Buffer).Dispose();
+            }
         }
     }
 }

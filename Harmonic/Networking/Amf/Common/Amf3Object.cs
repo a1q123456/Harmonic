@@ -5,20 +5,30 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace Harmonic.Networking.Amf.Serialization.Amf3
+namespace Harmonic.Networking.Amf.Common
 {
-    public class Amf3Object : IDynamicObject, IEnumerable
+    public class AmfObject : IDynamicObject, IEnumerable
     {
         private Dictionary<string, object> _fields = new Dictionary<string, object>();
 
         private Dictionary<string, object> _dynamicFields = new Dictionary<string, object>();
 
-        public bool IsAnonymous { get => GetType() == typeof(Amf3Object); }
+        public bool IsAnonymous { get => GetType() == typeof(AmfObject); }
         public bool IsDynamic { get => _dynamicFields.Any(); }
 
         public IReadOnlyDictionary<string, object> DynamicFields { get => _dynamicFields; }
 
         public IReadOnlyDictionary<string, object> Fields { get => _fields; }
+
+        public AmfObject()
+        {
+
+        }
+
+        public AmfObject(Dictionary<string, object> values)
+        {
+            _fields = values;
+        }
 
         public void Add(string memberName, object member)
         {

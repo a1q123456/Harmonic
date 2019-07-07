@@ -9,6 +9,7 @@ using System.Buffers;
 using Harmonic.Networking.Amf.Data;
 using System.Reflection;
 using Harmonic.Networking.Amf.Attributes;
+using Harmonic.Networking.Amf.Serialization.Attributes;
 
 namespace Harmonic.Networking.Amf.Serialization.Amf3
 {
@@ -530,7 +531,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 return true;
             }
             Amf3ClassTraits traits = null;
-            if ((header & 0x02) != 0x02)
+            if ((header & 0x02) == 0x00)
             {
                 var referenceIndex = (int)((header >> 2) & 0x3FFFFFFF);
                 if (_objectTraitsReferenceTable.Count <= referenceIndex)
@@ -641,7 +642,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             }
             else
             {
-                var obj = new Amf3Object();
+                var obj = new AmfObject();
                 _objectReferenceTable.Add(obj);
                 foreach (var member in traits.Members)
                 {

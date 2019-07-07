@@ -1,229 +1,59 @@
-﻿using Harmonic.Networking;
+﻿using Harmonic.Buffers;
+using Harmonic.Networking.Amf.Serialization.Amf0;
+using Harmonic.Networking.Amf.Serialization.Amf3;
 using Harmonic.Networking.Rtmp.Data;
-using Harmonic.Networking.Rtmp.Exceptions;
+using Harmonic.Networking.Rtmp.Messages;
+using Harmonic.Networking.Utils;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
-using System.IO;
-using System.Net;
-using System.Net.Sockets;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
-using System.IO.Pipelines;
-using System.Collections.ObjectModel;
-using System.Collections.Concurrent;
-using Harmonic.Networking.Rtmp.Messages;
-using Harmonic.Networking.Utils;
-using Harmonic.Networking.Rtmp.Serialization;
-using Harmonic.Buffers;
-using Harmonic.Networking.Amf.Serialization.Amf0;
-using Harmonic.Networking.Amf.Serialization.Amf3;
+using static Harmonic.Networking.Rtmp.IOPipeLine;
 
 namespace Harmonic.Networking.Rtmp
 {
-    // TBD: retransfer bytes when acknowledgement not received
-    class RtmpStream : IDisposable
+    class ChunkStreamContext : IDisposable
     {
-        enum ProcessState
-        {
-            HandshakeC0C1,
-            HandshakeC1,
-            HandshakeC2,
-            FirstByteBasicHeader,
-            ChunkMessageHeader,
-            ExtendedTimestamp,
-            CompleteMessage
-        }
-
-        class MessageReadingState
-        {
-            public uint MessageLength;
-            public byte[] Body;
-            public int CurrentIndex;
-            public long RemainBytes
-            {
-                get => MessageLength - CurrentIndex;
-            }
-            public bool IsCompleted
-            {
-                get => RemainBytes == 0;
-            }
-        }
-
-        class WriteState
-        {
-            public byte[] Buffer;
-            public int Length;
-            public TaskCompletionSource<int> TaskSource = null;
-        }
-
-        private delegate bool BufferProcessor(ReadOnlySequence<byte> buffer, ref int consumed);
-
-        private int ReadMinimumBufferSize { get => (ReadChunkSize + TYPE0_SIZE) * 4; }
-        private SemaphoreSlim _writerSignal = new SemaphoreSlim(0);
-        private Random _random = new Random();
-        private Socket _socket;
         private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
-        private MemoryPool<byte> _memoryPool = MemoryPool<byte>.Shared;
-        private Dictionary<uint, MessageHeader> _previousReadMessageHeader = new Dictionary<uint, MessageHeader>();
-        private Dictionary<uint, MessageReadingState> _incompleteMessageState = new Dictionary<uint, MessageReadingState>();
+        internal ChunkHeader _processingChunk = null;
+        internal int ReadMinimumBufferSize { get => (ReadChunkSize + TYPE0_SIZE) * 4; }
+        internal Dictionary<uint, MessageHeader> _previousReadMessageHeader = new Dictionary<uint, MessageHeader>();
+        internal Dictionary<uint, MessageReadingState> _incompleteMessageState = new Dictionary<uint, MessageReadingState>();
         internal uint? ReadWindowAcknowledgementSize { get; set; } = null;
         internal uint? WriteWindowAcknowledgementSize { get; set; } = null;
         internal uint ReadWindowSize { get; set; } = 0;
-        internal uint WriteWindowSize { get; private set; } = 0;
+        internal uint WriteWindowSize { get; set; } = 0;
         internal int ReadChunkSize { get; set; } = 128;
         internal bool BandwidthLimited { get; set; } = false;
-        private int _writeChunkSize = 128;
-        private readonly int EXTENDED_TIMESTAMP_LENGTH = 4;
-        private readonly int TYPE0_SIZE = 11;
-        private readonly int TYPE1_SIZE = 7;
-        private readonly int TYPE2_SIZE = 3;
-        private ProcessState _nextProcessState = ProcessState.FirstByteBasicHeader;
-        private ChunkHeader _processingChunk = null;
-        private readonly int _resumeWriterThreshole;
-        private IReadOnlyDictionary<ProcessState, BufferProcessor> _bufferProcessors;
-        private uint _readerTimestampEpoch = 0;
-        private uint _writerTimestampEpoch = 0;
-        private byte[] _s1Data = null;
-        private byte[] _c1Data = null;
-        private Queue<WriteState> _writerQueue = new Queue<WriteState>();
-        private RtmpSession _rtmpSession = null;
-        private Amf0Reader _amf0Reader = new Amf0Reader();
-        private Amf0Writer _amf0Writer = new Amf0Writer();
-        private Amf3Reader _amf3Reader = new Amf3Reader();
-        private Amf3Writer _amf3Writer = new Amf3Writer();
+        internal int _writeChunkSize = 128;
+        internal readonly int EXTENDED_TIMESTAMP_LENGTH = 4;
+        internal readonly int TYPE0_SIZE = 11;
+        internal readonly int TYPE1_SIZE = 7;
+        internal readonly int TYPE2_SIZE = 3;
 
+        internal RtmpSession _rtmpSession = null;
 
-        public RtmpStream(Socket socket, int resumeWriterThreshole = 65535)
+        internal Amf0Reader _amf0Reader = new Amf0Reader();
+        internal Amf0Writer _amf0Writer = new Amf0Writer();
+        internal Amf3Reader _amf3Reader = new Amf3Reader();
+        internal Amf3Writer _amf3Writer = new Amf3Writer();
+
+        private IOPipeLine _ioPipeline = null;
+
+        public ChunkStreamContext(IOPipeLine stream)
         {
-            _socket = socket;
-            _resumeWriterThreshole = resumeWriterThreshole;
-            var bufferProcessors = new Dictionary<ProcessState, BufferProcessor>();
-            bufferProcessors.Add(ProcessState.HandshakeC0C1, ProcessHandshakeC0C1);
-            bufferProcessors.Add(ProcessState.HandshakeC2, ProcessHandshakeC2);
-            bufferProcessors.Add(ProcessState.ChunkMessageHeader, ProcessChunkMessageHeader);
-            bufferProcessors.Add(ProcessState.CompleteMessage, ProcessCompleteMessage);
-            bufferProcessors.Add(ProcessState.ExtendedTimestamp, ProcessExtendedTimestamp);
-            bufferProcessors.Add(ProcessState.FirstByteBasicHeader, ProcessFirstByteBasicHeader);
-            _bufferProcessors = bufferProcessors;
+            _rtmpSession = new RtmpSession(stream);
+            _ioPipeline = stream;
+            _ioPipeline._bufferProcessors.Add(ProcessState.ChunkMessageHeader, ProcessChunkMessageHeader);
+            _ioPipeline._bufferProcessors.Add(ProcessState.CompleteMessage, ProcessCompleteMessage);
+            _ioPipeline._bufferProcessors.Add(ProcessState.ExtendedTimestamp, ProcessExtendedTimestamp);
+            _ioPipeline._bufferProcessors.Add(ProcessState.FirstByteBasicHeader, ProcessFirstByteBasicHeader);
         }
 
-        public Task StartAsync(CancellationToken ct = default)
+        public void Dispose()
         {
-            var d = PipeOptions.Default;
-            var opt = new PipeOptions(
-                MemoryPool<byte>.Shared,
-                d.ReaderScheduler,
-                d.WriterScheduler,
-                _resumeWriterThreshole,
-                d.ResumeWriterThreshold,
-                d.MinimumSegmentSize,
-                d.UseSynchronizationContext);
-            var pipe = new Pipe(opt);
-            var t1 = Producer(_socket, pipe.Writer, ct);
-            var t2 = Consumer(pipe.Reader, ct);
-            var t3 = Writer();
-            ct.Register(() =>
-            {
-                _rtmpSession.Dispose();
-                _rtmpSession = null;
-            });
-            return Task.WhenAll(t1, t2, t3);
-        }
-
-        private void OnHandshakeSuccessful()
-        {
-            _rtmpSession = new RtmpSession(this);
-        }
-
-        #region Sender
-        private async Task Writer()
-        {
-            while (true)
-            {
-                await _writerSignal.WaitAsync();
-                var data = _writerQueue.Dequeue();
-                await _socket.SendAsync(data.Buffer.AsMemory(data.Length), SocketFlags.None);
-                _arrayPool.Return(data.Buffer);
-                data.TaskSource?.SetResult(1);
-            }
-        }
-        #endregion
-
-        #region Receiver
-        private async Task Producer(Socket s, PipeWriter writer, CancellationToken ct = default)
-        {
-            while (ct.IsCancellationRequested)
-            {
-                var memory = writer.GetMemory(ReadMinimumBufferSize);
-                var bytesRead = await s.ReceiveAsync(memory, SocketFlags.None);
-                if (bytesRead == 0)
-                {
-                    break;
-                }
-                ReadWindowSize += (uint)bytesRead;
-                if (ReadWindowAcknowledgementSize.HasValue)
-                {
-                    if (ReadWindowSize >= ReadWindowAcknowledgementSize)
-                    {
-                        _rtmpSession?.Acknowledgement(ReadWindowAcknowledgementSize.Value);
-                        ReadWindowSize -= ReadWindowAcknowledgementSize.Value;
-                    }
-                }
-                writer.Advance(bytesRead);
-                var result = await writer.FlushAsync(ct);
-                if (result.IsCompleted || result.IsCanceled)
-                {
-                    break;
-                }
-            }
-
-            writer.Complete();
-        }
-
-        private async Task Consumer(PipeReader reader, CancellationToken ct = default)
-        {
-            while (true)
-            {
-                var result = await reader.ReadAsync(ct);
-
-                var buffer = result.Buffer;
-                int consumed = 0;
-
-                while (true)
-                {
-                    if (!_bufferProcessors[_nextProcessState](buffer, ref consumed))
-                    {
-                        break;
-                    }
-                }
-                buffer = buffer.Slice(consumed);
-
-                reader.AdvanceTo(buffer.Start, buffer.End);
-
-                if (result.IsCompleted || result.IsCanceled)
-                {
-                    break;
-                }
-            }
-
-            // Mark the PipeReader as complete
-            reader.Complete();
-        }
-        #endregion
-
-        #region Multiplexing
-        private Task SendRawData(byte[] data, int length)
-        {
-            var tcs = new TaskCompletionSource<int>();
-            _writerQueue.Enqueue(new WriteState()
-            {
-                Buffer = data,
-                Length = length,
-                TaskSource = tcs
-            });
-            return tcs.Task;
+            ((IDisposable)_rtmpSession).Dispose();
         }
 
         internal Task MultiplexMessageAsync(uint chunkStreamId, Message message)
@@ -250,7 +80,7 @@ namespace Harmonic.Networking.Rtmp
                 buffer = _arrayPool.Rent((int)length);
                 writeBuffer.TakeOutMemory(buffer);
             }
-                
+
             try
             {
                 message.MessageHeader.MessageLength = length;
@@ -276,13 +106,13 @@ namespace Harmonic.Networking.Rtmp
                     {
                         tcs = ret;
                     }
-                    _writerQueue.Enqueue(new WriteState()
+                    _ioPipeline._writerQueue.Enqueue(new WriteState()
                     {
                         Buffer = chunkBuffer,
                         Length = bodySize,
                         TaskSource = tcs
                     });
-                    _writerSignal.Release();
+                    _ioPipeline._writerSignal.Release();
                 }
             }
             finally
@@ -393,96 +223,6 @@ namespace Harmonic.Networking.Rtmp
                 return ChunkHeaderType.Type0;
             }
         }
-        #endregion
-
-        #region Demultiplexing
-        private bool ProcessHandshakeC0C1(ReadOnlySequence<byte> buffer, ref int consumed)
-        {
-            if (buffer.Length - consumed < 1537)
-            {
-                return false;
-            }
-            var arr = _arrayPool.Rent(1537);
-
-            buffer.Slice(consumed, 1537).CopyTo(arr);
-            consumed += 1537;
-            var version = arr[0];
-            _arrayPool.Return(arr);
-
-            if (version < 3)
-            {
-                throw new NotSupportedException();
-            }
-            if (version > 31)
-            {
-                throw new ProtocolViolationException();
-            }
-
-            _readerTimestampEpoch = NetworkBitConverter.ToUInt32(arr.AsSpan(1, 4));
-            _writerTimestampEpoch = 0;
-            var allZero = arr.AsSpan(5, 4);
-            if (allZero[0] != 0 || allZero[1] != 0 || allZero[2] != 0 || allZero[3] != 0)
-            {
-                throw new ProtocolViolationException();
-            }
-            _c1Data = _arrayPool.Rent(1528);
-
-            arr.AsSpan(9).CopyTo(_c1Data);
-            _s1Data = _arrayPool.Rent(1528);
-            _random.NextBytes(_s1Data.AsSpan(1528));
-
-            arr.AsSpan().Clear();
-            arr[0] = 3;
-            NetworkBitConverter.TryGetBytes(_writerTimestampEpoch, arr.AsSpan(1, 4));
-            _s1Data.AsSpan(0, 1528).CopyTo(arr.AsSpan(9));
-            SendRawData(arr, 1537);
-
-            _nextProcessState = ProcessState.HandshakeC2;
-            return true;
-
-
-
-        }
-
-        private bool ProcessHandshakeC2(ReadOnlySequence<byte> buffer, ref int consumed)
-        {
-            if (buffer.Length - consumed < 1536)
-            {
-                return false;
-            }
-            byte[] arr = _arrayPool.Rent(1536);
-            try
-            {
-                buffer.Slice(consumed, 1536).CopyTo(arr);
-                consumed += 1536;
-                var s1Timestamp = NetworkBitConverter.ToUInt32(arr.AsSpan(0, 4));
-                if (s1Timestamp != _writerTimestampEpoch)
-                {
-                    throw new ProtocolViolationException();
-                }
-
-                if (!arr.AsSpan(8, 1528).SequenceEqual(_s1Data))
-                {
-                    throw new ProtocolViolationException();
-                }
-
-                NetworkBitConverter.TryGetBytes(_readerTimestampEpoch, arr.AsSpan(0, 4));
-                NetworkBitConverter.TryGetBytes((uint)0, arr.AsSpan(4, 4));
-                _c1Data.AsSpan(0, 1528).CopyTo(arr.AsSpan(8));
-                SendRawData(arr, 1536);
-                OnHandshakeSuccessful();
-                _nextProcessState = ProcessState.FirstByteBasicHeader;
-                return true;
-            }
-            finally
-            {
-                _arrayPool.Return(_c1Data);
-                _arrayPool.Return(_s1Data);
-                _s1Data = null;
-            }
-
-        }
-
         private void FillHeader(ChunkHeader header)
         {
             if (!_previousReadMessageHeader.TryGetValue(header.ChunkBasicHeader.ChunkStreamId, out var prevHeader) &&
@@ -510,6 +250,7 @@ namespace Harmonic.Networking.Rtmp
             }
         }
 
+
         private bool ProcessFirstByteBasicHeader(ReadOnlySequence<byte> buffer, ref int consumed)
         {
             if (buffer.Length - consumed < 1)
@@ -535,12 +276,12 @@ namespace Harmonic.Networking.Rtmp
                 if (header.ChunkBasicHeader.RtmpChunkHeaderType == ChunkHeaderType.Type3)
                 {
                     FillHeader(header);
-                    _nextProcessState = ProcessState.CompleteMessage;
+                    _ioPipeline._nextProcessState = ProcessState.CompleteMessage;
                 }
             }
             else
             {
-                _nextProcessState = ProcessState.ChunkMessageHeader;
+                _ioPipeline._nextProcessState = ProcessState.ChunkMessageHeader;
             }
             return true;
         }
@@ -626,11 +367,11 @@ namespace Harmonic.Networking.Rtmp
             FillHeader(header);
             if (header.MessageHeader.Timestamp == 0x00FFFFFF)
             {
-                _nextProcessState = ProcessState.ExtendedTimestamp;
+                _ioPipeline._nextProcessState = ProcessState.ExtendedTimestamp;
             }
             else
             {
-                _nextProcessState = ProcessState.CompleteMessage;
+                _ioPipeline._nextProcessState = ProcessState.CompleteMessage;
             }
             return true;
         }
@@ -646,7 +387,7 @@ namespace Harmonic.Networking.Rtmp
             var extendedTimestamp = NetworkBitConverter.ToUInt32(arr.AsSpan(0, 4));
             _processingChunk.ExtendedTimestamp = extendedTimestamp;
             _processingChunk.MessageHeader.Timestamp = extendedTimestamp;
-            _nextProcessState = ProcessState.CompleteMessage;
+            _ioPipeline._nextProcessState = ProcessState.CompleteMessage;
             return true;
         }
 
@@ -691,10 +432,51 @@ namespace Harmonic.Networking.Rtmp
                 _incompleteMessageState.Remove(header.ChunkBasicHeader.ChunkStreamId);
                 try
                 {
-                    if (_messageIO.TryGetValue(header.MessageHeader.MessageType, out var reader))
+                    var context = new Serialization.SerializationContext()
                     {
-                        var message = reader.ParseMessage(header.MessageHeader, state.Body);
-                        _rtmpSession?.MessageArrived(message);
+                        Amf0Reader = _amf0Reader,
+                        Amf0Writer = _amf0Writer,
+                        Amf3Reader = _amf3Reader,
+                        Amf3Writer = _amf3Writer,
+                        ReadBuffer = state.Body
+                    };
+                    if (header.MessageHeader.MessageType == MessageType.AggregateMessage)
+                    {
+                        var agg = new AggregateMessage()
+                        {
+                            MessageHeader = header.MessageHeader
+                        };
+                        agg.Deserialize(context);
+                        foreach (var message in agg.Messages)
+                        {
+                            if (!_ioPipeline._options._messageFactories.TryGetValue(message.Header.MessageType, out var factory))
+                            {
+                                continue;
+                            }
+                            var messageBuffer = _arrayPool.Rent((int)message.DataLength);
+                            context.ReadBuffer.AsSpan(message.DataOffset, (int)message.DataLength).CopyTo(messageBuffer);
+                            var msg = factory(header.MessageHeader, new Serialization.SerializationContext()
+                            {
+                                Amf0Reader = context.Amf0Reader,
+                                Amf3Reader = context.Amf3Reader,
+                                Amf0Writer = context.Amf0Writer,
+                                Amf3Writer = context.Amf3Writer,
+                                ReadBuffer = messageBuffer
+                            });
+                            msg.MessageHeader = header.MessageHeader;
+                            _rtmpSession.MessageArrived(msg);
+                        }
+                    }
+                    else
+                    {
+                        if (_ioPipeline._options._messageFactories.TryGetValue(header.MessageHeader.MessageType, out var factory))
+                        {
+
+                            var message = factory(header.MessageHeader, context);
+                            message.MessageHeader = header.MessageHeader;
+                            message.Deserialize(context);
+                            _rtmpSession.MessageArrived(message);
+                        }
                     }
                 }
                 finally
@@ -702,46 +484,9 @@ namespace Harmonic.Networking.Rtmp
                     _arrayPool.Return(state.Body);
                 }
             }
-            _nextProcessState = ProcessState.FirstByteBasicHeader;
+            _ioPipeline._nextProcessState = ProcessState.FirstByteBasicHeader;
             return true;
         }
-        #endregion
 
-
-        #region IDisposable Support
-        private bool disposedValue = false; // 要检测冗余调用
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!disposedValue)
-            {
-                if (disposing)
-                {
-                    _rtmpSession?.Dispose();
-                    _socket.Dispose();
-                }
-
-                // TODO: 释放未托管的资源(未托管的对象)并在以下内容中替代终结器。
-                // TODO: 将大型字段设置为 null。
-
-                disposedValue = true;
-            }
-        }
-
-        // TODO: 仅当以上 Dispose(bool disposing) 拥有用于释放未托管资源的代码时才替代终结器。
-        // ~RtmpStream() {
-        //   // 请勿更改此代码。将清理代码放入以上 Dispose(bool disposing) 中。
-        //   Dispose(false);
-        // }
-
-        // 添加此代码以正确实现可处置模式。
-        public void Dispose()
-        {
-            // 请勿更改此代码。将清理代码放入以上 Dispose(bool disposing) 中。
-            Dispose(true);
-            // TODO: 如果在以上内容中替代了终结器，则取消注释以下行。
-            // GC.SuppressFinalize(this);
-        }
-        #endregion
     }
 }

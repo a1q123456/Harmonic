@@ -2,6 +2,7 @@
 using Harmonic.Networking.Amf.Common;
 using Harmonic.Networking.Amf.Data;
 using Harmonic.Networking.Amf.Serialization.Amf0;
+using Harmonic.Networking.Amf.Serialization.Attributes;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using System.Collections.Generic;
@@ -21,83 +22,19 @@ namespace UnitTest
             var random = new Random();
             var writer = new Amf0Writer();
             var reader = new Amf0Reader();
-
-            for (int i = 0; i < 1000; i++)
+            using (var sc = new SerializationContext())
             {
-                var num = random.NextDouble() * 10 - 5;
-                writer.WriteBytes(num);
-                var buffer = new byte[writer.MessageLength];
-                writer.GetMessage(buffer);
+                for (int i = 0; i < 1000; i++)
+                {
+                    var num = random.NextDouble() * 10 - 5;
+                    writer.WriteBytes(num, sc);
+                    var buffer = new byte[sc.MessageLength];
+                    sc.GetMessage(buffer);
 
-                reader.TryGetNumber(buffer, out var readValue, out var consumed);
-                Assert.AreEqual(num, readValue);
-                Assert.AreEqual(buffer.Length, consumed);
-            }
-            for (int i = 0; i < 1000; i++)
-            {
-                var num = random.Next(-10, 10);
-                writer.WriteBytes(num);
-                var buffer = new byte[writer.MessageLength];
-                writer.GetMessage(buffer);
-
-                reader.TryGetNumber(buffer, out var readValue, out var consumed);
-                Assert.AreEqual(num, readValue);
-                Assert.AreEqual(buffer.Length, consumed);
-            }
-            for (int i = 0; i < 1000; i++)
-            {
-                var num = (float)random.Next(-10, 10);
-                writer.WriteBytes(num);
-                var buffer = new byte[writer.MessageLength];
-                writer.GetMessage(buffer);
-
-                reader.TryGetNumber(buffer, out var readValue, out var consumed);
-                Assert.AreEqual(num, readValue);
-                Assert.AreEqual(buffer.Length, consumed);
-            }
-            for (int i = 0; i < 1000; i++)
-            {
-                var num = (long)random.Next(-10, 10);
-                writer.WriteBytes(num);
-                var buffer = new byte[writer.MessageLength];
-                writer.GetMessage(buffer);
-
-                reader.TryGetNumber(buffer, out var readValue, out var consumed);
-                Assert.AreEqual(num, readValue);
-                Assert.AreEqual(buffer.Length, consumed);
-            }
-            for (int i = 0; i < 1000; i++)
-            {
-                var num = (ulong)random.Next(-10, 10);
-                writer.WriteBytes(num);
-                var buffer = new byte[writer.MessageLength];
-                writer.GetMessage(buffer);
-
-                reader.TryGetNumber(buffer, out var readValue, out var consumed);
-                Assert.AreEqual(num, readValue);
-                Assert.AreEqual(buffer.Length, consumed);
-            }
-            for (int i = 0; i < 1000; i++)
-            {
-                var num = (ushort)random.Next(-10, 10);
-                writer.WriteBytes(num);
-                var buffer = new byte[writer.MessageLength];
-                writer.GetMessage(buffer);
-
-                reader.TryGetNumber(buffer, out var readValue, out var consumed);
-                Assert.AreEqual(num, readValue);
-                Assert.AreEqual(buffer.Length, consumed);
-            }
-            for (int i = 0; i < 1000; i++)
-            {
-                var num = (short)random.Next(-10, 10);
-                writer.WriteBytes(num);
-                var buffer = new byte[writer.MessageLength];
-                writer.GetMessage(buffer);
-
-                reader.TryGetNumber(buffer, out var readValue, out var consumed);
-                Assert.AreEqual(num, readValue);
-                Assert.AreEqual(buffer.Length, consumed);
+                    reader.TryGetNumber(buffer, out var readValue, out var consumed);
+                    Assert.AreEqual(num, readValue);
+                    Assert.AreEqual(buffer.Length, consumed);
+                }
             }
         }
 
@@ -106,17 +43,19 @@ namespace UnitTest
         {
             var writer = new Amf0Writer();
             var reader = new Amf0Reader();
-
-            for (int i = 0; i < 1000; i++)
+            using (var sc = new SerializationContext())
             {
-                var val = Guid.NewGuid().ToString();
-                writer.WriteBytes(val);
-                var buffer = new byte[writer.MessageLength];
-                writer.GetMessage(buffer);
+                for (int i = 0; i < 1000; i++)
+                {
+                    var val = Guid.NewGuid().ToString();
+                    writer.WriteBytes(val, sc);
+                    var buffer = new byte[sc.MessageLength];
+                    sc.GetMessage(buffer);
 
-                reader.TryGetString(buffer, out var readValue, out var consumed);
-                Assert.AreEqual(val, readValue);
-                Assert.AreEqual(buffer.Length, consumed);
+                    reader.TryGetString(buffer, out var readValue, out var consumed);
+                    Assert.AreEqual(val, readValue);
+                    Assert.AreEqual(buffer.Length, consumed);
+                }
             }
         }
 
@@ -126,17 +65,21 @@ namespace UnitTest
             var writer = new Amf0Writer();
             var reader = new Amf0Reader();
 
-            for (int i = 0; i < 1000; i++)
+            using (var sc = new SerializationContext())
             {
-                var val = string.Concat(Enumerable.Repeat(Guid.NewGuid().ToString(), 2000));
-                writer.WriteBytes(val);
-                var buffer = new byte[writer.MessageLength];
-                writer.GetMessage(buffer);
+                for (int i = 0; i < 1000; i++)
+                {
+                    var val = string.Concat(Enumerable.Repeat(Guid.NewGuid().ToString(), 2000));
+                    writer.WriteBytes(val, sc);
+                    var buffer = new byte[sc.MessageLength];
+                    sc.GetMessage(buffer);
 
-                reader.TryGetLongString(buffer, out var readValue, out var consumed);
-                Assert.AreEqual(val, readValue);
-                Assert.AreEqual(buffer.Length, consumed);
+                    reader.TryGetLongString(buffer, out var readValue, out var consumed);
+                    Assert.AreEqual(val, readValue);
+                    Assert.AreEqual(buffer.Length, consumed);
+                }
             }
+
         }
 
         [TestMethod]
@@ -147,18 +90,21 @@ namespace UnitTest
 
             var date = DateTime.Now;
 
-            writer.WriteBytes(date);
-            var buffer = new byte[writer.MessageLength];
-            writer.GetMessage(buffer);
+            using (var sc = new SerializationContext())
+            {
+                writer.WriteBytes(date, sc);
+                var buffer = new byte[sc.MessageLength];
+                sc.GetMessage(buffer);
 
-            Assert.IsTrue(reader.TryGetDate(buffer, out var val, out var consumed));
-            Assert.AreEqual(val.Date, date.Date);
-            Assert.AreEqual(val.Hour, date.Hour);
-            Assert.AreEqual(val.Minute, date.Minute);
-            Assert.AreEqual(val.Second, date.Second);
-            Assert.AreEqual(val.Millisecond, date.Millisecond);
-            Assert.AreEqual(val.Kind, date.Kind);
-            Assert.AreEqual(consumed, buffer.Length);
+                Assert.IsTrue(reader.TryGetDate(buffer, out var val, out var consumed));
+                Assert.AreEqual(val.Date, date.Date);
+                Assert.AreEqual(val.Hour, date.Hour);
+                Assert.AreEqual(val.Minute, date.Minute);
+                Assert.AreEqual(val.Second, date.Second);
+                Assert.AreEqual(val.Millisecond, date.Millisecond);
+                Assert.AreEqual(val.Kind, date.Kind);
+                Assert.AreEqual(consumed, buffer.Length);
+            }
         }
 
         [TestMethod]
@@ -167,21 +113,25 @@ namespace UnitTest
             var writer = new Amf0Writer();
             var reader = new Amf0Reader();
 
-            writer.WriteBytes(true);
-            var buffer = new byte[writer.MessageLength];
-            writer.GetMessage(buffer);
-            
-            Assert.IsTrue(reader.TryGetBoolean(buffer, out var val, out var consumed));
-            Assert.IsTrue(val);
-            Assert.AreEqual(consumed, buffer.Length);
+            using (var sc = new SerializationContext())
+            {
+                writer.WriteBytes(true, sc);
+                var buffer = new byte[sc.MessageLength];
+                sc.GetMessage(buffer);
 
-            writer.WriteBytes(false);
-            buffer = new byte[writer.MessageLength];
-            writer.GetMessage(buffer);
+                Assert.IsTrue(reader.TryGetBoolean(buffer, out var val, out var consumed));
+                Assert.IsTrue(val);
+                Assert.AreEqual(consumed, buffer.Length);
 
-            Assert.IsTrue(reader.TryGetBoolean(buffer, out val, out consumed));
-            Assert.IsFalse(val);
-            Assert.AreEqual(consumed, buffer.Length);
+                writer.WriteBytes(false, sc);
+                buffer = new byte[sc.MessageLength];
+                sc.GetMessage(buffer);
+
+                Assert.IsTrue(reader.TryGetBoolean(buffer, out val, out consumed));
+                Assert.IsFalse(val);
+                Assert.AreEqual(consumed, buffer.Length);
+            }
+
         }
 
         [TestMethod]
@@ -195,22 +145,25 @@ namespace UnitTest
                 1, 3.0, "string", new DateTime(2019, 2, 11), false, new List<object>() { null, 3, "string2", "string2" }
             };
 
-            writer.WriteBytes(array);
-            var buffer = new byte[writer.MessageLength];
-            writer.GetMessage(buffer);
+            using (var sc = new SerializationContext())
+            {
+                writer.WriteBytes(array, sc);
+                var buffer = new byte[sc.MessageLength];
+                sc.GetMessage(buffer);
 
-            Assert.IsTrue(reader.TryGetStrictArray(buffer, out var val, out var consumed));
-            Assert.IsTrue((double)val[0] == 1.0);
-            Assert.IsTrue((double)val[1] == 3.0);
-            Assert.IsTrue((string)val[2] == "string");
-            Assert.IsTrue((DateTime)val[3] == new DateTime(2019, 2, 11));
-            Assert.IsTrue((bool)val[4] == false);
-            var e5 = (List<object>)val[5];
+                Assert.IsTrue(reader.TryGetStrictArray(buffer, out var val, out var consumed));
+                Assert.IsTrue((double)val[0] == 1.0);
+                Assert.IsTrue((double)val[1] == 3.0);
+                Assert.IsTrue((string)val[2] == "string");
+                Assert.IsTrue((DateTime)val[3] == new DateTime(2019, 2, 11));
+                Assert.IsTrue((bool)val[4] == false);
+                var e5 = (List<object>)val[5];
 
-            Assert.IsTrue(e5[0] == null);
-            Assert.IsTrue((double)e5[1] == 3.0);
-            Assert.IsTrue((string)e5[2] == "string2");
-            Assert.IsTrue((string)e5[3] == "string2");
+                Assert.IsTrue(e5[0] == null);
+                Assert.IsTrue((double)e5[1] == 3.0);
+                Assert.IsTrue((string)e5[2] == "string2");
+                Assert.IsTrue((string)e5[3] == "string2");
+            }
         }
 
         [TestMethod]
@@ -224,22 +177,24 @@ namespace UnitTest
                 ["1"] = 1.0,
                 ["2"] = 2.0,
                 ["3"] = "a",
-                ["4"] = "a" 
+                ["4"] = "a"
             };
+            using (var sc = new SerializationContext())
+            {
+                writer.WriteBytes(array, sc);
+                var buffer = new byte[sc.MessageLength];
+                sc.GetMessage(buffer);
+                // EcmaMarker:byte + ElementCount: uint + 
+                // StringLength: ushort + StringContent: byte * 1 + NumberMarker: byte + Number: double + 
+                // StringLength: ushort + StringContent: byte * 1 + NumberMarker: byte + Number: double 
+                // StringLength: ushort + StringContent: byte * 1 + StringMarker: byte + StringLength: ushort + StringContent: byte * 1 + 
+                // StringLength: ushort + StringContent: byte * 1 + ReferenceMarker: byte + ReferenceIndex: ushort +
+                // StringLength: ushort + StringConent: byte * 0 + ObjectEndMarker: byte
+                Assert.AreEqual(buffer.Length, 45);
+                Assert.IsTrue(reader.TryGetEcmaArray(buffer, out var readData, out var consumed));
 
-            writer.WriteBytes(array);
-            var buffer = new byte[writer.MessageLength];
-            writer.GetMessage(buffer);
-            // EcmaMarker:byte + ElementCount: uint + 
-            // StringLength: ushort + StringContent: byte * 1 + NumberMarker: byte + Number: double + 
-            // StringLength: ushort + StringContent: byte * 1 + NumberMarker: byte + Number: double 
-            // StringLength: ushort + StringContent: byte * 1 + StringMarker: byte + StringLength: ushort + StringContent: byte * 1 + 
-            // StringLength: ushort + StringContent: byte * 1 + ReferenceMarker: byte + ReferenceIndex: ushort +
-            // StringLength: ushort + StringConent: byte * 0 + ObjectEndMarker: byte
-            Assert.AreEqual(buffer.Length,  45);
-            Assert.IsTrue(reader.TryGetEcmaArray(buffer, out var readData, out var consumed));
-
-            Assert.IsTrue(readData.SequenceEqual(array));
+                Assert.IsTrue(readData.SequenceEqual(array));
+            }
         }
 
         [TestMethod]
@@ -248,14 +203,17 @@ namespace UnitTest
             var writer = new Amf0Writer();
             var reader = new Amf0Reader();
 
-            writer.WriteNullBytes();
-            var buffer = new byte[writer.MessageLength];
-            writer.GetMessage(buffer);
+            using (var sc = new SerializationContext())
+            {
+                writer.WriteNullBytes(sc);
+                var buffer = new byte[sc.MessageLength];
+                sc.GetMessage(buffer);
 
-            Assert.IsTrue(reader.TryGetNull(buffer, out var nullObj, out var consunmed));
-            Assert.IsNull(nullObj);
-            Assert.AreEqual(consunmed, buffer.Length);
-            
+                Assert.IsTrue(reader.TryGetNull(buffer, out var nullObj, out var consunmed));
+                Assert.IsNull(nullObj);
+                Assert.AreEqual(consunmed, buffer.Length);
+            }
+
         }
 
         [TestMethod]
@@ -264,13 +222,16 @@ namespace UnitTest
             var writer = new Amf0Writer();
             var reader = new Amf0Reader();
 
-            writer.WriteBytes(new Undefined());
-            var buffer = new byte[writer.MessageLength];
-            writer.GetMessage(buffer);
+            using (var sc = new SerializationContext())
+            {
+                writer.WriteBytes(new Undefined(), sc);
+                var buffer = new byte[sc.MessageLength];
+                sc.GetMessage(buffer);
 
-            Assert.IsTrue(reader.TryGetUndefined(buffer, out var ud, out var consunmed));
-            Assert.IsNotNull(ud);
-            Assert.AreEqual(consunmed, buffer.Length);
+                Assert.IsTrue(reader.TryGetUndefined(buffer, out var ud, out var consunmed));
+                Assert.IsNotNull(ud);
+                Assert.AreEqual(consunmed, buffer.Length);
+            }
 
         }
 
@@ -280,17 +241,20 @@ namespace UnitTest
             var writer = new Amf0Writer();
             var reader = new Amf0Reader();
 
-            var xml = new XmlDocument();
-            var elem = xml.CreateElement("price");
-            xml.AppendChild(elem);
-            writer.WriteBytes(xml);
-            var buffer = new byte[writer.MessageLength];
-            writer.GetMessage(buffer);
-            
-            Assert.IsTrue(reader.TryGetXmlDocument(buffer, out var ud, out var consunmed));
-            Assert.IsNotNull(ud);
-            Assert.AreNotEqual(ud.GetElementsByTagName("price").Count, 0);
-            Assert.AreEqual(consunmed, buffer.Length);
+            using (var sc = new SerializationContext())
+            {
+                var xml = new XmlDocument();
+                var elem = xml.CreateElement("price");
+                xml.AppendChild(elem);
+                writer.WriteBytes(xml, sc);
+                var buffer = new byte[sc.MessageLength];
+                sc.GetMessage(buffer);
+
+                Assert.IsTrue(reader.TryGetXmlDocument(buffer, out var ud, out var consunmed));
+                Assert.IsNotNull(ud);
+                Assert.AreNotEqual(ud.GetElementsByTagName("price").Count, 0);
+                Assert.AreEqual(consunmed, buffer.Length);
+            }
 
         }
 
@@ -303,25 +267,29 @@ namespace UnitTest
             object nullVal = null;
             var refVal = new List<object>() { 1, 2, "test" };
 
-            var obj = new
+            var obj = new AmfObject
             {
-                c = 1.0,
-                test = false,
-                test2 = nullVal,
-                test3 = new Undefined(),
-                test4 = refVal,
-                test5 = "test",
-                test6 = refVal
+                { "c" , 1.0},
+                {"test" , false},
+                {"test2" , nullVal},
+                {"test3" , new Undefined()},
+                {"test4" , refVal},
+                {"test5" , "test"},
+                {"test6" , refVal }
             };
 
-            writer.WriteBytes(obj);
-            var buffer = new byte[writer.MessageLength];
-            writer.GetMessage(buffer);
+            using (var sc = new SerializationContext())
+            {
+                writer.WriteBytes(obj, sc);
+                var buffer = new byte[sc.MessageLength];
+                sc.GetMessage(buffer);
 
-            // test reference table is working
-            Assert.AreEqual(buffer.Length, 97);
-            Assert.IsTrue(reader.TryGetObject(buffer, out var readObj, out var consumed));
-            Assert.AreEqual(consumed, buffer.Length);
+                // test reference table is working
+                Assert.AreEqual(buffer.Length, 97);
+                Assert.IsTrue(reader.TryGetObject(buffer, out var readObj, out var consumed));
+                Assert.AreEqual(consumed, buffer.Length);
+            }
+
         }
 
         [TypedObject(Name = "Another.Name")]
@@ -372,13 +340,16 @@ namespace UnitTest
                 test5 = "test",
                 test6 = refVal
             };
+            using (var sc = new SerializationContext())
+            {
+                writer.WriteTypedBytes(obj, sc);
+                var buffer = new byte[sc.MessageLength];
+                sc.GetMessage(buffer);
 
-            writer.WriteTypedBytes(obj);
-            var buffer = new byte[writer.MessageLength];
-            writer.GetMessage(buffer);
-            
-            Assert.IsTrue(reader.TryGetTypedObject(buffer, out var readObj, out var consumed));
-            Assert.AreEqual(consumed, buffer.Length);
+                Assert.IsTrue(reader.TryGetTypedObject(buffer, out var readObj, out var consumed));
+                Assert.AreEqual(consumed, buffer.Length);
+            }
+
         }
 
     }

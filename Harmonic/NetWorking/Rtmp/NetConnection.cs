@@ -1,7 +1,14 @@
-﻿using Harmonic.Networking.Rtmp.Data;
+﻿using Harmonic.Controllers;
+using Harmonic.Networking.Amf.Common;
+using Harmonic.Networking.Rtmp.Data;
 using Harmonic.Networking.Rtmp.Messages;
+using Harmonic.Networking.Rtmp.Messages.Commands;
+using Harmonic.Networking.Rtmp.Serialization;
+using Harmonic.Rpc;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -11,9 +18,28 @@ namespace Harmonic.Networking.Rtmp
     {
         private RtmpSession _rtmpSession = null;
         private RtmpChunkStream _rtmpChunkStream = null;
-        private Dictionary<uint, NetStream> _netStreams = new Dictionary<uint, NetStream>();
+        internal Dictionary<uint, AbstractController> _netStreams = new Dictionary<uint, AbstractController>();
         private RtmpControlMessageStream _controlMessageStream = null;
-        public IReadOnlyDictionary<uint, NetStream> NetStreams { get => _netStreams; }
+        public IReadOnlyDictionary<uint, AbstractController> NetStreams { get => _netStreams; }
+        private AbstractController _controller;
+        private AbstractController Controller
+        {
+            get
+            {
+                return _controller;
+            }
+            set
+            {
+                if (_controller != null)
+                {
+                    throw new InvalidOperationException("already have an controller");
+                }
+
+                _controller = value ?? throw new InvalidOperationException("controller cannot be null");
+                _controller.MessageStream = _controlMessageStream;
+                _controller.ChunkStream = _rtmpChunkStream;
+            }
+        }
 
         internal NetConnection(RtmpSession rtmpSession)
         {
@@ -24,34 +50,49 @@ namespace Harmonic.Networking.Rtmp
             _controlMessageStream.RegisterMessageHandler<CommandMessage>(MessageType.Amf3Command, CommandHandler);
         }
 
-        public void Connect()
+        private void CommandHandler(CommandMessage command)
         {
-
-
-            // TBD
+            if (command.ProcedureName == "connect")
+            {
+                Connect(command);
+            }
+            else if (command.ProcedureName == "close")
+            {
+                Close();
+            }
+            else if (_controller != null)
+            {
+                _rtmpSession.CommandHandler(_controller, command);
+            }
+            else
+            {
+                _rtmpSession.Close();
+            }
+        }
+        
+        public void Connect(CommandMessage command)
+        {
+            var commandObj = command.CommandObject;
+            if (_rtmpSession.FindController(commandObj.Fields["app"] as string, out var controllerType))
+            {
+                Controller = Activator.CreateInstance(controllerType) as AbstractController;
+            }
+            else
+            {
+                _rtmpSession.Close();
+            }
         }
 
         public void Close()
         {
-            // TBD
-        }
-
-        public uint CreateStream()
-        {
-            var stream = new NetStream(_rtmpSession);
-            _netStreams.Add(stream.MessageStreamId, stream);
-            return stream.MessageStreamId;
+            _rtmpSession.Close();
         }
 
         internal void MessageStreamDestroying(NetStream stream)
         {
-            _netStreams.Remove(stream.MessageStreamId);
+            _netStreams.Remove(stream.MessageStream.MessageStreamId);
         }
-
-        private void CommandHandler(CommandMessage command)
-        {
-            // TBD Rpc
-        }
+        
 
         #region IDisposable Support
         private bool disposedValue = false; // 要检测冗余调用
@@ -64,7 +105,10 @@ namespace Harmonic.Networking.Rtmp
                 {
                     foreach ((var streamId, var stream) in _netStreams)
                     {
-                        stream.Dispose();
+                        if (stream is IDisposable disp)
+                        {
+                            disp.Dispose();
+                        }
                     }
                     _rtmpChunkStream.Dispose();
                 }

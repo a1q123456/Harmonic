@@ -16,12 +16,13 @@ namespace Harmonic.Networking.Rtmp.Messages
         public uint DataLength { get; set; }
     }
 
+    [RtmpMessage(MessageType.AggregateMessage)]
     internal class AggregateMessage : Message
     {
         public List<MessageData> Messages { get; set; } = new List<MessageData>();
         public byte[] MessageBuffer { get; set; } = null;
 
-        public AggregateMessage() : base(MessageType.AggregateMessage)
+        public AggregateMessage() : base()
         {
         }
 

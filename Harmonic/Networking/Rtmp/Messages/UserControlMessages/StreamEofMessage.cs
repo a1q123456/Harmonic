@@ -6,13 +6,14 @@ using System.Collections.Generic;
 using System.Diagnostics.Contracts;
 using System.Text;
 
-namespace Harmonic.Networking.Rtmp.Messages
+namespace Harmonic.Networking.Rtmp.Messages.UserControlMessages
 {
-    public class StreamIsRecordedMessage : UserControlMessage
+    [UserControlMessage(Type = UserControlEventType.StreamEof)]
+    public class StreamEofMessage : UserControlMessage
     {
         public uint StreamID { get; set; }
 
-        public StreamIsRecordedMessage() : base(UserControlEventType.StreamIsRecorded)
+        public StreamEofMessage() : base()
         {
 
         }

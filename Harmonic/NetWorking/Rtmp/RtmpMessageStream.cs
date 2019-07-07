@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace Harmonic.Networking.Rtmp
 {
-    public abstract class RtmpMessageStream : IDisposable
+    public class RtmpMessageStream : IDisposable
     { 
         public uint MessageStreamId { get; private set; }
         internal RtmpSession RtmpSession { get; }
@@ -17,14 +17,12 @@ namespace Harmonic.Networking.Rtmp
         {
             MessageStreamId = messageStreamId;
             RtmpSession = rtmpSession;
-            RtmpSession.MessageStreamCreated(this);
         }
 
         internal RtmpMessageStream(RtmpSession rtmpSession)
         {
             MessageStreamId = rtmpSession.MakeUniqueMessageStreamId();
             RtmpSession = rtmpSession;
-            RtmpSession.MessageStreamCreated(this);
         }
         
         private void AttachMessage(Message message)

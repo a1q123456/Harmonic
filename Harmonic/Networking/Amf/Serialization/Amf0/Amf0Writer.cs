@@ -1,6 +1,7 @@
 ﻿using Harmonic.Buffers;
 using Harmonic.Networking.Amf.Attributes;
 using Harmonic.Networking.Amf.Common;
+using Harmonic.Networking.Amf.Serialization.Attributes;
 using Harmonic.Networking.Utils;
 using System;
 using System.Buffers;
@@ -39,7 +40,9 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             getBytesHandlers[typeof(Unsupported)] = GetBytesWrapper<Unsupported>(WriteBytes);
             getBytesHandlers[typeof(Undefined)] = GetBytesWrapper<Undefined>(WriteBytes);
             getBytesHandlers[typeof(bool)] = GetBytesWrapper<bool>(WriteBytes);
-            getBytesHandlers[typeof(object)] = GetBytesWrapper<object>(WriteBytes);
+            getBytesHandlers[typeof(object)] = GetBytesWrapper<object>(WriteTypedBytes);
+            getBytesHandlers[typeof(AmfObject)] = GetBytesWrapper<AmfObject>(WriteBytes);
+            getBytesHandlers[typeof(Dictionary<string, object>)] = GetBytesWrapper<Dictionary<string, object>>(WriteBytes);
             getBytesHandlers[typeof(List<object>)] = GetBytesWrapper<List<object>>(WriteBytes);
             _getBytesHandlers = getBytesHandlers;
         }
@@ -286,6 +289,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             }
         }
 
+        // ecma array
         public void WriteBytes(Dictionary<string, object> value, SerializationContext context)
         {
             if (value == null)
@@ -367,7 +371,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             WriteObjectEndBytes(context);
         }
 
-        public void WriteBytes(object value, SerializationContext context)
+        public void WriteBytes(AmfObject value, SerializationContext context)
         {
             if (value == null)
             {
@@ -383,22 +387,23 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             }
             context.Buffer.WriteToBuffer((byte)Amf0Type.Object);
             context.ReferenceTable.Add(value);
+            
+            foreach (var field in value.Fields)
+            {
+                WriteStringBytesImpl(field.Key, context, out _);
+                WriteValueBytes(field.Value, context);
+            }
 
-            WriteObjectBytesImpl(value, context);
+            foreach (var field in value.DynamicFields)
+            {
+                WriteStringBytesImpl(field.Key, context, out _);
+                WriteValueBytes(field.Value, context);
+            }
+
             WriteStringBytesImpl("", context, out _);
             WriteObjectEndBytes(context);
         }
-
-        private void WriteObjectBytesImpl(object value, SerializationContext context)
-        {
-            var props = value.GetType().GetProperties();
-            foreach (var prop in props)
-            {
-                var propValue = prop.GetValue(value);
-                WriteStringBytesImpl(prop.Name, context, out _);
-                WriteValueBytes(propValue, context);
-            }
-        }
+        
         
     }
 }

@@ -15,12 +15,13 @@ namespace Harmonic.Networking.Rtmp.Messages
         Dynamic
     }
 
+    [RtmpMessage(MessageType.SetPeerBandwidth)]
     public class SetPeerBandwidthMessage : ControlMessage
     {
         public uint WindowSize { get; set; }
         public LimitType LimitType { get; set; }
 
-        public SetPeerBandwidthMessage() : base(MessageType.SetPeerBandwidth)
+        public SetPeerBandwidthMessage() : base()
         {
         }
 

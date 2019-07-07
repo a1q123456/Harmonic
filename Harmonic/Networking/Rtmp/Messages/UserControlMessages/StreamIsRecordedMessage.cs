@@ -6,13 +6,14 @@ using System.Collections.Generic;
 using System.Diagnostics.Contracts;
 using System.Text;
 
-namespace Harmonic.Networking.Rtmp.Messages
+namespace Harmonic.Networking.Rtmp.Messages.UserControlMessages
 {
-    public class PingResponseMessage : UserControlMessage
+    [UserControlMessage(Type = UserControlEventType.StreamIsRecorded)]
+    public class StreamIsRecordedMessage : UserControlMessage
     {
-        public uint Timestamp { get; set; }
+        public uint StreamID { get; set; }
 
-        public PingResponseMessage() : base(UserControlEventType.PingResponse)
+        public StreamIsRecordedMessage() : base()
         {
 
         }
@@ -23,7 +24,7 @@ namespace Harmonic.Networking.Rtmp.Messages
             var eventType = (UserControlEventType)NetworkBitConverter.ToUInt16(span);
             span = span.Slice(sizeof(ushort));
             Contract.Assert(eventType == UserControlEventType.StreamIsRecorded);
-            Timestamp = NetworkBitConverter.ToUInt32(span);
+            StreamID = NetworkBitConverter.ToUInt32(span);
         }
 
         public override void Serialize(SerializationContext context)
@@ -35,7 +36,7 @@ namespace Harmonic.Networking.Rtmp.Messages
                 var span = buffer.AsSpan();
                 NetworkBitConverter.TryGetBytes((ushort)UserControlEventType.StreamBegin, span);
                 span = span.Slice(sizeof(ushort));
-                NetworkBitConverter.TryGetBytes(Timestamp, span);
+                NetworkBitConverter.TryGetBytes(StreamID, span);
             }
             finally
             {

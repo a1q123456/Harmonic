@@ -8,11 +8,12 @@ using Harmonic.Networking.Utils;
 
 namespace Harmonic.Networking.Rtmp.Messages
 {
+    [RtmpMessage(MessageType.SetChunkSize)]
     public class SetChunkSizeMessage : ControlMessage
     {
         public uint ChunkSize { get; set; }
 
-        public SetChunkSizeMessage() : base(MessageType.SetChunkSize)
+        public SetChunkSizeMessage() : base()
         {
             
         }

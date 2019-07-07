@@ -6,13 +6,14 @@ using System.Collections.Generic;
 using System.Diagnostics.Contracts;
 using System.Text;
 
-namespace Harmonic.Networking.Rtmp.Messages
+namespace Harmonic.Networking.Rtmp.Messages.UserControlMessages
 {
+    [UserControlMessage(Type = UserControlEventType.StreamDry)]
     public class StreamDryMessage : UserControlMessage
     {
         public uint StreamID { get; set; }
 
-        public StreamDryMessage() : base(UserControlEventType.StreamDry)
+        public StreamDryMessage()
         {
 
         }

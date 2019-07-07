@@ -8,11 +8,12 @@ using Harmonic.Networking.Utils;
 
 namespace Harmonic.Networking.Rtmp.Messages
 {
+    [RtmpMessage(MessageType.WindowAcknowledgementSize)]
     public class WindowAcknowledgementSizeMessage : ControlMessage
     {
         public uint WindowSize { get; set; }
 
-        public WindowAcknowledgementSizeMessage() : base(MessageType.WindowAcknowledgementSize)
+        public WindowAcknowledgementSizeMessage() : base()
         {
         }
 

@@ -8,11 +8,12 @@ using Harmonic.Networking.Utils;
 
 namespace Harmonic.Networking.Rtmp.Messages
 {
+    [RtmpMessage(MessageType.Acknowledgement)]
     public class AcknowledgementMessage : ControlMessage
     {
         public uint BytesReceived { get; set; }
 
-        public AcknowledgementMessage() : base(MessageType.Acknowledgement)
+        public AcknowledgementMessage() : base()
         {
         }
 
@@ -23,7 +24,7 @@ namespace Harmonic.Networking.Rtmp.Messages
 
         public override void Serialize(SerializationContext context)
         {
-            var buffer = _arrayPool.Rent(length);
+            var buffer = _arrayPool.Rent(sizeof(uint));
             try
             {
                 NetworkBitConverter.TryGetBytes(BytesReceived, buffer);

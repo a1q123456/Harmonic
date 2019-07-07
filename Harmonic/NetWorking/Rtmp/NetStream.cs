@@ -1,13 +1,22 @@
-﻿using System;
+﻿using Harmonic.Controllers;
+using Harmonic.Networking.Amf.Common;
+using Harmonic.Rpc;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
 namespace Harmonic.Networking.Rtmp
 {
-    public class NetStream : RtmpMessageStream
+    public class NetStream : AbstractController, IDisposable
     {
-        internal NetStream(RtmpSession rtmpSession) : base(rtmpSession)
+        [RpcMethod("play")]
+        public void Play(
+            [FromOptionalArgument] string streamName, 
+            [FromOptionalArgument] double start = -1, 
+            [FromOptionalArgument] double duration = -1, 
+            [FromOptionalArgument] bool reset = false)
         {
+
         }
 
         public void DeleteStream()
@@ -15,11 +24,40 @@ namespace Harmonic.Networking.Rtmp
             Dispose();
         }
 
-        protected override void Dispose(bool disposing)
+        #region IDisposable Support
+        private bool disposedValue = false; // 要检测冗余调用
+
+        protected virtual void Dispose(bool disposing)
         {
-            base.Dispose(disposing);
-            RtmpSession.NetConnection.MessageStreamDestroying(this);
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    MessageStream.RtmpSession.NetConnection.MessageStreamDestroying(this);
+                }
+
+                // TODO: 释放未托管的资源(未托管的对象)并在以下内容中替代终结器。
+                // TODO: 将大型字段设置为 null。
+
+                disposedValue = true;
+            }
         }
+
+        // TODO: 仅当以上 Dispose(bool disposing) 拥有用于释放未托管资源的代码时才替代终结器。
+        // ~NetStream() {
+        //   // 请勿更改此代码。将清理代码放入以上 Dispose(bool disposing) 中。
+        //   Dispose(false);
+        // }
+
+        // 添加此代码以正确实现可处置模式。
+        public void Dispose()
+        {
+            // 请勿更改此代码。将清理代码放入以上 Dispose(bool disposing) 中。
+            Dispose(true);
+            // TODO: 如果在以上内容中替代了终结器，则取消注释以下行。
+            // GC.SuppressFinalize(this);
+        }
+        #endregion
 
     }
 }
