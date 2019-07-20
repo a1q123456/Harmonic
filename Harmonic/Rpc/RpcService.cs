@@ -37,7 +37,7 @@ namespace Harmonic.Rpc
 
         public object InvokeMethod<T>(T instance, CommandMessage command) where T: AbstractController
         {
-            if (!Controllers.TryGetValue(typeof(T), out var methods))
+            if (!Controllers.TryGetValue(instance.GetType(), out var methods))
             {
                 throw new EntryPointNotFoundException();
             }
@@ -123,9 +123,8 @@ namespace Harmonic.Rpc
             throw new EntryPointNotFoundException();
         }
 
-        public void RegeisterController<T>() where T: AbstractController
+        internal void RegeisterController(Type controllerType)
         {
-            var controllerType = typeof(T);
             var methods = controllerType.GetMethods();
             foreach (var method in methods)
             {
@@ -178,7 +177,7 @@ namespace Harmonic.Rpc
                             });
                         }
                     }
-                    if (canInvoke)
+                    if (canInvoke || !parameters.Any())
                     {
                         rpcMethod.Method = method.Invoke;
                         rpcMethod.MethodName = methodName;

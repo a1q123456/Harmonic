@@ -20,7 +20,7 @@ namespace Harmonic.Networking.Rtmp.Messages
 
         public override void Deserialize(SerializationContext context)
         {
-            var chunkSize = NetworkBitConverter.ToInt32(context.ReadBuffer);
+            var chunkSize = NetworkBitConverter.ToInt32(context.ReadBuffer.Span);
             ChunkSize = (uint)chunkSize;
         }
 

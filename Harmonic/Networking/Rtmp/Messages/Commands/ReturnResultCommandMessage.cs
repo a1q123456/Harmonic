@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text;
 using Harmonic.Networking.Rtmp.Data;
 using Harmonic.Networking.Rtmp.Serialization;
+using Harmonic.NetWorking.Rtmp.Messages;
 
 namespace Harmonic.Networking.Rtmp.Messages.Commands
 {
@@ -14,6 +15,26 @@ namespace Harmonic.Networking.Rtmp.Messages.Commands
     {
         [OptionalArgument]
         public object ReturnValue { get; set; }
+        private bool _success = true;
+        public bool Success
+        {
+            get
+            {
+                return _success;
+            }
+            set
+            {
+                if (value)
+                {
+                    ProcedureName = "_result";
+                }
+                else
+                {
+                    ProcedureName = "_error";
+                }
+                _success = value;
+            }
+        }
 
         public ReturnResultCommandMessage(AmfEncodingVersion encoding) : base(encoding)
         {

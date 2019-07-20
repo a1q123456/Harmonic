@@ -22,6 +22,7 @@ using Harmonic.Networking.Amf.Serialization.Amf3;
 using System.Reflection;
 using Harmonic.Networking.Rtmp.Messages.UserControlMessages;
 using Harmonic.Networking.Rtmp.Messages.Commands;
+using Harmonic.Hosting;
 
 namespace Harmonic.Networking.Rtmp
 {
@@ -46,7 +47,7 @@ namespace Harmonic.Networking.Rtmp
         private Socket _socket;
         private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
         private MemoryPool<byte> _memoryPool = MemoryPool<byte>.Shared;
-        internal ProcessState _nextProcessState = ProcessState.FirstByteBasicHeader;
+        internal ProcessState _nextProcessState = ProcessState.HandshakeC0C1;
         private readonly int _resumeWriterThreshole;
         internal Dictionary<ProcessState, BufferProcessor> _bufferProcessors;
 
@@ -84,11 +85,49 @@ namespace Harmonic.Networking.Rtmp
                 ChunkStreamContext?.Dispose();
                 ChunkStreamContext = null;
             });
-            return Task.WhenAll(t1, t2, t3);
+            var tcs = new TaskCompletionSource<int>();
+            t1.ContinueWith(_ =>
+            {
+                tcs.TrySetException(t1.Exception.InnerException);
+            }, TaskContinuationOptions.OnlyOnFaulted);
+            t2.ContinueWith(_ =>
+            {
+                tcs.TrySetException(t2.Exception.InnerException);
+            }, TaskContinuationOptions.OnlyOnFaulted);
+            t3.ContinueWith(_ =>
+            {
+                tcs.TrySetException(t3.Exception.InnerException);
+            }, TaskContinuationOptions.OnlyOnFaulted);
+            t1.ContinueWith(_ =>
+            {
+                tcs.TrySetCanceled();
+            }, TaskContinuationOptions.OnlyOnCanceled);
+            t2.ContinueWith(_ =>
+            {
+                tcs.TrySetCanceled();
+            }, TaskContinuationOptions.OnlyOnCanceled);
+            t3.ContinueWith(_ =>
+            {
+                tcs.TrySetCanceled();
+            }, TaskContinuationOptions.OnlyOnCanceled);
+            t1.ContinueWith(_ =>
+            {
+                tcs.TrySetResult(1);
+            }, TaskContinuationOptions.OnlyOnRanToCompletion);
+            t2.ContinueWith(_ =>
+            {
+                tcs.TrySetResult(1);
+            }, TaskContinuationOptions.OnlyOnRanToCompletion);
+            t3.ContinueWith(_ =>
+            {
+                tcs.TrySetResult(1);
+            }, TaskContinuationOptions.OnlyOnRanToCompletion);
+            return tcs.Task;
         }
 
         internal void OnHandshakeSuccessful()
         {
+            _handshakeContext?.Dispose();
             _handshakeContext = null;
             _bufferProcessors.Clear();
             ChunkStreamContext = new ChunkStreamContext(this);
@@ -101,7 +140,7 @@ namespace Harmonic.Networking.Rtmp
             {
                 await _writerSignal.WaitAsync();
                 var data = _writerQueue.Dequeue();
-                await _socket.SendAsync(data.Buffer.AsMemory(data.Length), SocketFlags.None);
+                await _socket.SendAsync(data.Buffer.AsMemory(0, data.Length), SocketFlags.None);
                 _arrayPool.Return(data.Buffer);
                 data.TaskSource?.SetResult(1);
             }
@@ -111,7 +150,7 @@ namespace Harmonic.Networking.Rtmp
         #region Receiver
         private async Task Producer(Socket s, PipeWriter writer, CancellationToken ct = default)
         {
-            while (ct.IsCancellationRequested)
+            while (!ct.IsCancellationRequested)
             {
                 var memory = writer.GetMemory(ChunkStreamContext == null ? 1536 : ChunkStreamContext.ReadMinimumBufferSize);
                 var bytesRead = await s.ReceiveAsync(memory, SocketFlags.None);
@@ -147,10 +186,9 @@ namespace Harmonic.Networking.Rtmp
             while (true)
             {
                 var result = await reader.ReadAsync(ct);
-
                 var buffer = result.Buffer;
                 int consumed = 0;
-
+                
                 while (true)
                 {
                     if (!_bufferProcessors[_nextProcessState](buffer, ref consumed))
@@ -188,6 +226,7 @@ namespace Harmonic.Networking.Rtmp
                 Length = length,
                 TaskSource = tcs
             });
+            _writerSignal.Release();
             return tcs.Task;
         }
 
@@ -206,6 +245,7 @@ namespace Harmonic.Networking.Rtmp
             {
                 if (disposing)
                 {
+                    _handshakeContext?.Dispose();
                     ChunkStreamContext?.Dispose();
                     _socket.Dispose();
                 }

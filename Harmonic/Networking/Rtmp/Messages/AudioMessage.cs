@@ -7,6 +7,7 @@ using System.Text;
 
 namespace Harmonic.Networking.Rtmp.Messages
 {
+    [RtmpMessage(MessageType.AudioMessage)]
     public class AudioMessage : Message
     {
         public byte[] Data { get; set; }
@@ -14,7 +15,7 @@ namespace Harmonic.Networking.Rtmp.Messages
         public override void Deserialize(SerializationContext context)
         {
             Data = _arrayPool.Rent(context.ReadBuffer.Length);
-            context.ReadBuffer.AsSpan(0, (int)MessageHeader.MessageLength).CopyTo(Data);
+            context.ReadBuffer.Span.Slice(0, (int)MessageHeader.MessageLength).CopyTo(Data);
         }
 
         public override void Serialize(SerializationContext context)

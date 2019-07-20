@@ -2,6 +2,7 @@
 using Harmonic.Networking.Rtmp.Messages.Commands;
 using Harmonic.Networking.Rtmp.Serialization;
 using Harmonic.Networking.Utils;
+using Harmonic.NetWorking.Rtmp.Messages;
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -41,21 +42,21 @@ namespace Harmonic.Networking.Rtmp.Messages.UserControlMessages
             _messageFactories.Add(attr.Name, tType);
         }
 
-        public Message Provide(MessageHeader header, SerializationContext context)
+        public Message Provide(MessageHeader header, SerializationContext context, out int consumed)
         {
             string name = null;
             bool amf3 = false;
             if (header.MessageType == MessageType.Amf0Command)
             {
-                if (!context.Amf0Reader.TryGetString(context.ReadBuffer, out name, out _))
+                if (!context.Amf0Reader.TryGetString(context.ReadBuffer.Span, out name, out consumed))
                 {
                     throw new ProtocolViolationException();
                 }
             }
-            if (header.MessageType == MessageType.Amf3Command)
+            else if (header.MessageType == MessageType.Amf3Command)
             {
                 amf3 = true;
-                if (!context.Amf3Reader.TryGetString(context.ReadBuffer, out name, out _))
+                if (!context.Amf3Reader.TryGetString(context.ReadBuffer.Span, out name, out consumed))
                 {
                     throw new ProtocolViolationException();
                 }
@@ -68,7 +69,9 @@ namespace Harmonic.Networking.Rtmp.Messages.UserControlMessages
             {
                 throw new NotSupportedException();
             }
-            return (Message)Activator.CreateInstance(t, amf3 ? AmfEncodingVersion.Amf3 : AmfEncodingVersion.Amf0);
+            var ret = (CommandMessage)Activator.CreateInstance(t, amf3 ? AmfEncodingVersion.Amf3 : AmfEncodingVersion.Amf0);
+            ret.ProcedureName = name;
+            return ret;
         }
     }
 }

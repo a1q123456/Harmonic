@@ -1,5 +1,6 @@
 ﻿using Harmonic.Networking.Rtmp.Data;
 using Harmonic.Networking.Rtmp.Serialization;
+using Harmonic.NetWorking.Rtmp.Messages;
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -11,12 +12,16 @@ namespace Harmonic.Networking.Rtmp.Messages
     public class DataMessage : Message
     {
         public object Data { get; set; }
+        public DataMessage(AmfEncodingVersion encoding) : base()
+        {
+            MessageHeader.MessageType = encoding == AmfEncodingVersion.Amf0 ? MessageType.Amf0Data : MessageType.Amf3Data;
+        }
 
         public override void Deserialize(SerializationContext context)
         {
             if (MessageHeader.MessageType == MessageType.Amf0Data)
             {
-                if (!context.Amf0Reader.TryGetValue(context.ReadBuffer, out _, out var data, out _))
+                if (!context.Amf0Reader.TryGetValue(context.ReadBuffer.Span, out _, out var data, out _))
                 {
                     throw new ProtocolViolationException();
                 }
@@ -24,7 +29,7 @@ namespace Harmonic.Networking.Rtmp.Messages
             }
             else
             {
-                if (!context.Amf3Reader.TryGetValue(context.ReadBuffer, out var data, out _))
+                if (!context.Amf3Reader.TryGetValue(context.ReadBuffer.Span, out var data, out _))
                 {
                     throw new ProtocolViolationException();
                 }

@@ -58,7 +58,7 @@ namespace Harmonic.Networking.Rtmp.Messages
 
         public override void Deserialize(SerializationContext context)
         {
-            var spanBuffer = context.ReadBuffer.AsSpan();
+            var spanBuffer = context.ReadBuffer.Span;
             while (spanBuffer.Length != 0)
             {
                 Messages.Add(DeserializeMessage(spanBuffer, out var consumed));

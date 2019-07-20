@@ -1,10 +1,14 @@
-﻿using Harmonic.Controllers;
+﻿using Autofac;
+using Harmonic.Controllers;
 using Harmonic.Networking.Rtmp.Data;
 using Harmonic.Networking.Rtmp.Messages;
 using Harmonic.Networking.Rtmp.Messages.Commands;
+using Harmonic.NetWorking;
 using Harmonic.Rpc;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.Contracts;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -19,16 +23,21 @@ namespace Harmonic.Networking.Rtmp
         public RtmpControlMessageStream ControlMessageStream { get; }
         public NetConnection NetConnection { get; }
         private RpcService _rpcService = null;
+        public ConnectionInformation ConnectionInformation { get; internal set; }
+        private object _allocCsidLocker = new object();
+        private SortedList<uint, uint> _allocatedCsid = new SortedList<uint, uint>();
 
         internal RtmpSession(IOPipeLine ioPipeline)
         {
             IOPipeline = ioPipeline;
             ControlChunkStream = new RtmpControlChunkStream(this);
             ControlMessageStream = new RtmpControlMessageStream(this);
+            _messageStreams.Add(ControlMessageStream.MessageStreamId, ControlMessageStream);
             NetConnection = new NetConnection(this);
-            ControlMessageStream.RegisterMessageHandler<SetChunkSizeMessage>(MessageType.SetChunkSize, SetChunkSize);
-            ControlMessageStream.RegisterMessageHandler<WindowAcknowledgementSizeMessage>(MessageType.WindowAcknowledgementSize, WindowAcknowledgementSize);
-            ControlMessageStream.RegisterMessageHandler<SetPeerBandwidthMessage>(MessageType.SetPeerBandwidth, SetPeerBandwidth);
+            ControlMessageStream.RegisterMessageHandler<SetChunkSizeMessage>(SetChunkSize);
+            ControlMessageStream.RegisterMessageHandler<WindowAcknowledgementSizeMessage>(WindowAcknowledgementSize);
+            ControlMessageStream.RegisterMessageHandler<SetPeerBandwidthMessage>(SetPeerBandwidth);
+            _rpcService = ioPipeline._options.ServerLifetime.Resolve<RpcService>();
         }
 
         internal uint MakeUniqueMessageStreamId()
@@ -40,18 +49,49 @@ namespace Harmonic.Networking.Rtmp
         internal uint MakeUniqueChunkStreamId()
         {
             // TBD make csid unique
-            return (uint)_random.Next(3, 65599);
+            lock (_allocCsidLocker)
+            {
+                var next = _allocatedCsid.Any() ? _allocatedCsid.Last().Key : 2;
+                if (uint.MaxValue == next)
+                {
+                    for (uint i = 0; i < uint.MaxValue; i++)
+                    {
+                        if (!_allocatedCsid.ContainsKey(i))
+                        {
+                            _allocatedCsid.Add(i, i);
+                            return i;
+                        }
+                    }
+                    throw new InvalidOperationException("too many chunk stream");
+                }
+                next += 1;
+                _allocatedCsid.Add(next, next);
+                return next;
+            }
+            
         }
 
-        public T CreateNetStream<T>() where T: AbstractController, new()
+        public T CreateNetStream<T>() where T: NetStream, new()
         {
             var ret = new T();
             ret.MessageStream = CreateMessageStream();
-            ret.MessageStream.RegisterMessageHandler<CommandMessage>(MessageType.Amf0Command, c => CommandHandler(ret, c));
-            ret.MessageStream.RegisterMessageHandler<CommandMessage>(MessageType.Amf3Command, c => CommandHandler(ret, c));
+            ret.RtmpSession = this;
             ret.ChunkStream = CreateChunkStream();
+            ret.MessageStream.RegisterMessageHandler<CommandMessage>(c => CommandHandler(ret, c));
             NetConnection._netStreams.Add(ret.MessageStream.MessageStreamId, ret);
             return ret;
+        }
+
+        public T CreateCommandMessage<T>() where T: CommandMessage
+        {
+            var ret = Activator.CreateInstance(typeof(T), ConnectionInformation.AmfEncodingVersion);
+            return ret as T;
+        }
+
+        public T CreateData<T>() where T : DataMessage, new()
+        {
+            var ret = Activator.CreateInstance(typeof(T), ConnectionInformation.AmfEncodingVersion);
+            return ret as T;
         }
 
         internal void CommandHandler(AbstractController controller, CommandMessage command)
@@ -68,7 +108,7 @@ namespace Harmonic.Networking.Rtmp
                 retCommand.TranscationID = command.TranscationID;
                 retCommand.CommandObject = null;
                 retCommand.ReturnValue = e.Message;
-                _ = SendMessageAsync(controller.ChunkStream.ChunkStreamId, retCommand);
+                _ = controller.MessageStream.SendMessageAsync(controller.ChunkStream, retCommand);
                 return;
             }
             if (result != null)
@@ -85,7 +125,7 @@ namespace Harmonic.Networking.Rtmp
                         retCommand.TranscationID = command.TranscationID;
                         retCommand.CommandObject = null;
                         retCommand.ReturnValue = taskResult;
-                        _ = SendMessageAsync(controller.ChunkStream.ChunkStreamId, retCommand);
+                        _ = controller.MessageStream.SendMessageAsync(controller.ChunkStream, retCommand);
                     }, TaskContinuationOptions.OnlyOnRanToCompletion);
                     tsk.ContinueWith(t =>
                     {
@@ -95,7 +135,7 @@ namespace Harmonic.Networking.Rtmp
                         retCommand.TranscationID = command.TranscationID;
                         retCommand.CommandObject = null;
                         retCommand.ReturnValue = exception.Message;
-                        _ = SendMessageAsync(controller.ChunkStream.ChunkStreamId, retCommand);
+                        _ = controller.MessageStream.SendMessageAsync(controller.ChunkStream, retCommand);
                     }, TaskContinuationOptions.OnlyOnFaulted);
                 }
                 else if (resType != typeof(void))
@@ -106,14 +146,14 @@ namespace Harmonic.Networking.Rtmp
                     retCommand.TranscationID = command.TranscationID;
                     retCommand.CommandObject = null;
                     retCommand.ReturnValue = taskResult;
-                    _ = SendMessageAsync(controller.ChunkStream.ChunkStreamId, retCommand);
+                    _ = controller.MessageStream.SendMessageAsync(controller.ChunkStream, retCommand);
                 }
             }
         }
 
         internal bool FindController(string appName, out Type controllerType)
         {
-            return IOPipeline._options.RegisteredControllers.TryGetValue(appName, out controllerType);
+            return IOPipeline._options.RegisteredControllers.TryGetValue(appName.ToLower(), out controllerType);
         }
 
         public void Close()
@@ -135,7 +175,10 @@ namespace Harmonic.Networking.Rtmp
 
         internal void ChunkStreamDestroyed(RtmpChunkStream rtmpChunkStream)
         {
-            // TBD
+            lock (_allocCsidLocker)
+            {
+                _allocatedCsid.Remove(rtmpChunkStream.ChunkStreamId);
+            }
         }
 
         internal Task SendMessageAsync(uint chunkStreamId, Message message)
@@ -158,6 +201,10 @@ namespace Harmonic.Networking.Rtmp
             if (_messageStreams.TryGetValue(message.MessageHeader.MessageStreamId.Value, out var stream))
             {
                 stream.MessageArrived(message);
+            }
+            else
+            {
+                Contract.Assert(false);
             }
         }
 

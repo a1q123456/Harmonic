@@ -1,20 +1,19 @@
 using System;
 using System.Linq;
 using System.Collections.Generic;
-using Harmonic.NetWorking;
+using Harmonic.Controllers.Living;
+using Harmonic.Networking.Rtmp.Messages;
 
 namespace Harmonic.Service
 {
     public class PublisherSessionService
     {
-        private Dictionary<string, IStreamSession> _pathMapToSession = new Dictionary<string, IStreamSession>();
-        private Dictionary<IStreamSession, string> _sessionMapToPath = new Dictionary<IStreamSession, string>();
+        private Dictionary<string, LivingStream> _pathMapToSession = new Dictionary<string, LivingStream>();
+        private Dictionary<LivingStream, string> _sessionMapToPath = new Dictionary<LivingStream, string>();
 
-        public PublisherSessionService() {}
-
-        public void RegisterPublisher(string path, IStreamSession session)
+        internal void RegisterPublisher(string publishingName, LivingStream session)
         {
-            if (_pathMapToSession.ContainsKey(path))
+            if (_pathMapToSession.ContainsKey(publishingName))
             {
                 throw new InvalidOperationException("request instance is publishing");
             }
@@ -22,22 +21,21 @@ namespace Harmonic.Service
             {
                 throw new InvalidOperationException("request session is publishing");
             }
-            _pathMapToSession.Add(path, session);
-            _sessionMapToPath.Add(session, path);
+            _pathMapToSession.Add(publishingName, session);
+            _sessionMapToPath.Add(session, publishingName);
         }
 
-        public void RemovePublisher(IStreamSession session)
+        internal void RemovePublisher(LivingStream session)
         {
-            if (_sessionMapToPath.TryGetValue(session, out var path))
+            if (_sessionMapToPath.TryGetValue(session, out var publishingName))
             {
                 _sessionMapToPath.Remove(session);
-                _pathMapToSession.Remove(path);
+                _pathMapToSession.Remove(publishingName);
             }
         }
-
-        public IStreamSession FindPublisher(string path)
+        public LivingStream FindPublisher(string publishingName)
         {
-            if (_pathMapToSession.TryGetValue(path, out var session))
+            if (_pathMapToSession.TryGetValue(publishingName, out var session))
             {
                 return session;
             }

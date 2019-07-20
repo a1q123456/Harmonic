@@ -19,7 +19,7 @@ namespace Harmonic.Networking.Rtmp.Messages
 
         public override void Deserialize(SerializationContext context)
         {
-            BytesReceived = NetworkBitConverter.ToUInt32(context.ReadBuffer);
+            BytesReceived = NetworkBitConverter.ToUInt32(context.ReadBuffer.Span);
         }
 
         public override void Serialize(SerializationContext context)

@@ -27,8 +27,8 @@ namespace Harmonic.Networking.Rtmp.Messages
 
         public override void Deserialize(SerializationContext context)
         {
-            WindowSize = NetworkBitConverter.ToUInt32(context.ReadBuffer);
-            LimitType = (LimitType)context.ReadBuffer.AsSpan(sizeof(uint))[0];
+            WindowSize = NetworkBitConverter.ToUInt32(context.ReadBuffer.Span);
+            LimitType = (LimitType)context.ReadBuffer.Span.Slice(sizeof(uint))[0];
         }
 
         public override void Serialize(SerializationContext context)

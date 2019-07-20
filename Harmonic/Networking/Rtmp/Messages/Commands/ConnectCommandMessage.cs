@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using Harmonic.Networking.Rtmp.Serialization;
+using Harmonic.NetWorking.Rtmp.Messages;
 
 namespace Harmonic.Networking.Rtmp.Messages.Commands
 {

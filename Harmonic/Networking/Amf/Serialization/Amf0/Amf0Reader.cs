@@ -69,6 +69,10 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             _readDataHandlers = readDataHandlers;
         }
 
+        public void ResetReference()
+        {
+            _referenceTable.Clear();
+        }
         public void RegisterType<T>() where T : new()
         {
             var type = typeof(T);
@@ -293,7 +297,6 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             bytesConsumed = length;
             return true;
         }
-
         public bool TryGetString(Span<byte> buffer, out string value, out int bytesConsumed)
         {
             value = default;
@@ -308,7 +311,6 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             {
                 return false;
             }
-
 
             if (!TryGetStringImpl(buffer.Slice(Amf0CommonValues.MARKER_LENGTH), Amf0CommonValues.STRING_HEADER_LENGTH, out value, out bytesConsumed))
             {

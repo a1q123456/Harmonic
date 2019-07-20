@@ -11,7 +11,7 @@ namespace Harmonic.Networking.Rtmp.Data
         SetChunkSize = 1,
         AbortMessage = 2,
         Acknowledgement = 3,
-        WindowAcknowledgementSize = 4,
+        WindowAcknowledgementSize = 5,
         SetPeerBandwidth = 6,
 
         #endregion

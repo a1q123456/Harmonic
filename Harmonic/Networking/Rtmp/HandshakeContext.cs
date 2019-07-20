@@ -7,7 +7,7 @@ using System.Text;
 
 namespace Harmonic.Networking.Rtmp
 {
-    class HandshakeContext
+    sealed class HandshakeContext : IDisposable
     {
         private uint _readerTimestampEpoch = 0;
         private uint _writerTimestampEpoch = 0;
@@ -24,6 +24,18 @@ namespace Harmonic.Networking.Rtmp
             _ioPipeline._bufferProcessors.Add(ProcessState.HandshakeC2, ProcessHandshakeC2);
         }
 
+        public void Dispose()
+        {
+            if (_s1Data != null)
+            {
+                _arrayPool.Return(_s1Data);
+            }
+            if (_c1Data != null)
+            {
+                _arrayPool.Return(_c1Data);
+            }
+        }
+
         private bool ProcessHandshakeC0C1(ReadOnlySequence<byte> buffer, ref int consumed)
         {
             if (buffer.Length - consumed < 1537)
@@ -35,7 +47,6 @@ namespace Harmonic.Networking.Rtmp
             buffer.Slice(consumed, 1537).CopyTo(arr);
             consumed += 1537;
             var version = arr[0];
-            _arrayPool.Return(arr);
 
             if (version < 3)
             {
@@ -57,7 +68,7 @@ namespace Harmonic.Networking.Rtmp
 
             arr.AsSpan(9).CopyTo(_c1Data);
             _s1Data = _arrayPool.Rent(1528);
-            _random.NextBytes(_s1Data.AsSpan(1528));
+            _random.NextBytes(_s1Data.AsSpan(0, 1528));
 
             arr.AsSpan().Clear();
             arr[0] = 3;
@@ -85,8 +96,7 @@ namespace Harmonic.Networking.Rtmp
                 {
                     throw new ProtocolViolationException();
                 }
-
-                if (!arr.AsSpan(8, 1528).SequenceEqual(_s1Data))
+                if (!arr.AsSpan(8, 1528).SequenceEqual(_s1Data.AsSpan(0, 1528)))
                 {
                     throw new ProtocolViolationException();
                 }
@@ -96,7 +106,6 @@ namespace Harmonic.Networking.Rtmp
                 _c1Data.AsSpan(0, 1528).CopyTo(arr.AsSpan(8));
                 _ioPipeline.SendRawData(arr, 1536);
                 _ioPipeline.OnHandshakeSuccessful();
-                _ioPipeline._nextProcessState = ProcessState.FirstByteBasicHeader;
                 return true;
             }
             finally
@@ -104,6 +113,7 @@ namespace Harmonic.Networking.Rtmp
                 _arrayPool.Return(_c1Data);
                 _arrayPool.Return(_s1Data);
                 _s1Data = null;
+                _c1Data = null;
             }
 
         }

@@ -21,7 +21,7 @@ namespace Harmonic.Networking.Rtmp.Messages.UserControlMessages
 
         public override void Deserialize(SerializationContext context)
         {
-            var span = context.ReadBuffer.AsSpan();
+            var span = context.ReadBuffer.Span;
             var eventType = (UserControlEventType)NetworkBitConverter.ToUInt16(span);
             span = span.Slice(sizeof(ushort));
             Contract.Assert(eventType == UserControlEventType.StreamIsRecorded);

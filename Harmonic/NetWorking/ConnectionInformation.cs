@@ -1,5 +1,8 @@
 
 
+using Harmonic.Networking.Rtmp.Messages.Commands;
+using Harmonic.NetWorking.Rtmp.Messages;
+
 namespace Harmonic.NetWorking
 {
     public class ConnectionInformation
@@ -13,6 +16,6 @@ namespace Harmonic.NetWorking
         public int VideoCodecs { get; set; }
         int VideoFunction { get; set; }
         public string PageUrl { get; set; }
-        public ObjectEncoding ObjectEncoding { get; set; }
+        public AmfEncodingVersion AmfEncodingVersion { get; set; }
     }
 }

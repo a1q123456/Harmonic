@@ -7,23 +7,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Hosting\IStartup.cs" />
-    <Compile Remove="Hosting\RtmpOptions.cs" />
-    <Compile Remove="Hosting\RtmpServerBuilder.cs" />
-    <Compile Remove="Hosting\WebsocketOptions.cs" />
-    <Compile Remove="Networking\ConnectionInformation.cs" />
     <Compile Remove="Networking\IStreamSession.cs" />
     <Compile Remove="Networking\Rtmp\Supervisor.cs" />
     <Compile Remove="Networking\StreamHelper.cs" />
-    <Compile Remove="Service\PublisherSessionService.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Autofac" Version="4.9.2" />
     <PackageReference Include="Fleck" Version="1.1.0" />
     <PackageReference Include="System.IO.Pipelines" Version="4.5.3" />
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Hosting\" />
-    <Folder Include="Service\" />
   </ItemGroup>
 </Project>

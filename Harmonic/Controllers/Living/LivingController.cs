@@ -4,12 +4,10 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Controllers
+namespace Harmonic.Controllers.Living
 {
     public class LivingController : AbstractController
     {
-
-
         [RpcMethod("createStream")]
         public uint CreateStream()
         {

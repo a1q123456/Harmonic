@@ -38,6 +38,7 @@ namespace Harmonic.Networking.Rtmp
                 _controller = value ?? throw new InvalidOperationException("controller cannot be null");
                 _controller.MessageStream = _controlMessageStream;
                 _controller.ChunkStream = _rtmpChunkStream;
+                _controller.RtmpSession = _rtmpSession;
             }
         }
 
@@ -46,8 +47,7 @@ namespace Harmonic.Networking.Rtmp
             _rtmpSession = rtmpSession;
             _rtmpChunkStream = _rtmpSession.CreateChunkStream();
             _controlMessageStream = _rtmpSession.ControlMessageStream;
-            _controlMessageStream.RegisterMessageHandler<CommandMessage>(MessageType.Amf0Command, CommandHandler);
-            _controlMessageStream.RegisterMessageHandler<CommandMessage>(MessageType.Amf3Command, CommandHandler);
+            _controlMessageStream.RegisterMessageHandler<CommandMessage>(CommandHandler);
         }
 
         private void CommandHandler(CommandMessage command)
@@ -69,18 +69,54 @@ namespace Harmonic.Networking.Rtmp
                 _rtmpSession.Close();
             }
         }
-        
+
         public void Connect(CommandMessage command)
         {
             var commandObj = command.CommandObject;
-            if (_rtmpSession.FindController(commandObj.Fields["app"] as string, out var controllerType))
+            _rtmpSession.ConnectionInformation = new NetWorking.ConnectionInformation();
+            var props = _rtmpSession.ConnectionInformation.GetType().GetProperties();
+            foreach (var prop in props)
+            {
+                var sb = new StringBuilder(prop.Name);
+                sb[0] = char.ToLower(sb[0]);
+                var asPropName = sb.ToString();
+                if (commandObj.Fields.ContainsKey(asPropName))
+                {
+                    var commandObjectValue = commandObj.Fields[asPropName];
+                    if (commandObjectValue.GetType() == prop.PropertyType)
+                    {
+                        prop.SetValue(_rtmpSession.ConnectionInformation, commandObjectValue);
+                    }
+                }
+
+            }
+            if (_rtmpSession.FindController(_rtmpSession.ConnectionInformation.App, out var controllerType))
             {
                 Controller = Activator.CreateInstance(controllerType) as AbstractController;
             }
             else
             {
                 _rtmpSession.Close();
+                return;
             }
+            AmfObject param = new AmfObject
+            {
+                { "code", "NetConnection.Connect.Success" },
+                { "description", "Connection succeeded." },
+                { "level", "status" },
+            };
+
+            var msg = _rtmpSession.CreateCommandMessage<ReturnResultCommandMessage>();
+            msg.CommandObject = new AmfObject {
+                    { "capabilities", 255.00 },
+                    { "fmsVer", "FMS/4,5,1,484" },
+                    { "mode", 1.0 }
+
+                };
+            msg.ReturnValue = param;
+            msg.Success = true;
+            msg.TranscationID = command.TranscationID;
+            _rtmpSession.ControlMessageStream.SendMessageAsync(_rtmpChunkStream, msg);
         }
 
         public void Close()
@@ -92,7 +128,7 @@ namespace Harmonic.Networking.Rtmp
         {
             _netStreams.Remove(stream.MessageStream.MessageStreamId);
         }
-        
+
 
         #region IDisposable Support
         private bool disposedValue = false; // 要检测冗余调用

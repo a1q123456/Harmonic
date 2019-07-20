@@ -51,7 +51,7 @@ namespace Harmonic.Networking.Utils
             {
                 var memory = owner.Memory.Slice(0, 4);
                 memory.Span.Clear();
-                buffer.CopyTo(memory.Span);
+                buffer.CopyTo(memory.Span.Slice(1));
                 if (!littleEndian)
                 {
                     memory.Span.Reverse();

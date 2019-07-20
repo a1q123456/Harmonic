@@ -19,7 +19,7 @@ namespace Harmonic.Networking.Rtmp.Messages
 
         public override void Deserialize(SerializationContext context)
         {
-            WindowSize = NetworkBitConverter.ToUInt32(context.ReadBuffer);
+            WindowSize = NetworkBitConverter.ToUInt32(context.ReadBuffer.Span);
         }
 
         public override void Serialize(SerializationContext context)

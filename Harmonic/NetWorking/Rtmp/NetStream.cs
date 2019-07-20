@@ -9,16 +9,7 @@ namespace Harmonic.Networking.Rtmp
 {
     public class NetStream : AbstractController, IDisposable
     {
-        [RpcMethod("play")]
-        public void Play(
-            [FromOptionalArgument] string streamName, 
-            [FromOptionalArgument] double start = -1, 
-            [FromOptionalArgument] double duration = -1, 
-            [FromOptionalArgument] bool reset = false)
-        {
-
-        }
-
+        [RpcMethod("deleteStream")]
         public void DeleteStream()
         {
             Dispose();

@@ -23,13 +23,14 @@ namespace Harmonic.Networking.Rtmp.Messages.UserControlMessages
             _messageFactories.Add(attr.Type, tType);
         }
 
-        public Message Provide(MessageHeader header, SerializationContext context)
+        public Message Provide(MessageHeader header, SerializationContext context, out int consumed)
         {
-            var type = (UserControlEventType)NetworkBitConverter.ToUInt16(context.ReadBuffer);
+            var type = (UserControlEventType)NetworkBitConverter.ToUInt16(context.ReadBuffer.Span);
             if (!_messageFactories.TryGetValue(type, out var t))
             {
                 throw new NotSupportedException();
             }
+            consumed = 0;
             return (Message)Activator.CreateInstance(t);
         }
     }

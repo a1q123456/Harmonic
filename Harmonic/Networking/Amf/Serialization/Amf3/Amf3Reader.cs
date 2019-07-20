@@ -79,6 +79,13 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             _readerHandlers = readerHandlers;
         }
 
+        public void ResetReference()
+        {
+            _objectReferenceTable.Clear();
+            _objectTraitsReferenceTable.Clear();
+            _stringReferenceTable.Clear();
+        }
+
         private ReaderHandler ReaderHandlerWrapper<T>(ReaderHandler<T> handler)
         {
             return (Span<byte> b, out object value, out int consumed) =>
@@ -327,7 +334,6 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             consumed = Amf3CommonValues.MARKER_LENGTH + sizeof(double);
             return true;
         }
-
         public bool TryGetString(Span<byte> buffer, out string value, out int consumed)
         {
             value = default;

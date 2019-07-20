@@ -1,7 +1,10 @@
 ﻿using Harmonic.Networking.Rtmp.Data;
 using Harmonic.Networking.Rtmp.Messages;
+using Harmonic.Networking.Rtmp.Serialization;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -36,16 +39,24 @@ namespace Harmonic.Networking.Rtmp
             return RtmpSession.SendMessageAsync(chunkStream.ChunkStreamId, message);
         }
 
-        internal void RegisterMessageHandler<T>(MessageType messageType, Action<T> handler) where T: Message
+        internal void RegisterMessageHandler<T>(Action<T> handler) where T: Message
         {
-            if (_messageHandlers.ContainsKey(messageType))
+            var attr = typeof(T).GetCustomAttribute<RtmpMessageAttribute>();
+            if (attr == null || !attr.MessageTypes.Any())
             {
-                throw new InvalidOperationException("message type already registered");
+                throw new InvalidOperationException("unsupported message type");
             }
-            _messageHandlers[messageType] = m =>
+            foreach (var messageType in attr.MessageTypes)
             {
-                handler(m as T);
-            };
+                if (_messageHandlers.ContainsKey(messageType))
+                {
+                    throw new InvalidOperationException("message type already registered");
+                }
+                _messageHandlers[messageType] = m =>
+                {
+                    handler(m as T);
+                };
+            }
         }
 
         protected void RemoveMessageHandler(MessageType messageType)

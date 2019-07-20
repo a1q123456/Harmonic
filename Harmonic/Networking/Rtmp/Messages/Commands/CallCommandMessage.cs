@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text;
 using Harmonic.Networking.Rtmp.Data;
 using Harmonic.Networking.Rtmp.Serialization;
+using Harmonic.NetWorking.Rtmp.Messages;
 
 namespace Harmonic.Networking.Rtmp.Messages.Commands
 {
