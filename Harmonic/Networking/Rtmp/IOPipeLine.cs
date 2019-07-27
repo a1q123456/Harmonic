@@ -66,7 +66,7 @@ namespace Harmonic.Networking.Rtmp
             _handshakeContext = new HandshakeContext(this);
         }
 
-        public async Task StartAsync(CancellationToken ct = default)
+        public Task StartAsync(CancellationToken ct = default)
         {
             //var d = PipeOptions.Default;
             //var opt = new PipeOptions(
@@ -77,9 +77,9 @@ namespace Harmonic.Networking.Rtmp
             //    d.ResumeWriterThreshold,
             //    d.MinimumSegmentSize,
             //    d.UseSynchronizationContext);
-            //var pipe = new Pipe(opt);
-            //var t1 = Producer(_socket, pipe.Writer, ct);
-            //var t2 = Consumer(pipe.Reader, ct);
+            var pipe = new Pipe(/*opt*/);
+            var t1 = Producer(_socket, pipe.Writer, ct);
+            var t2 = Consumer(pipe.Reader, ct);
             var t3 = Writer();
             ct.Register(() =>
             {
@@ -87,109 +87,44 @@ namespace Harmonic.Networking.Rtmp
                 ChunkStreamContext = null;
             });
 
-
-            var required = 1537;
-            var arr = new byte[1537];
-            do
-            {
-                var rec = await _socket.ReceiveAsync(arr, SocketFlags.None);
-                required -= rec;
-            } while (required != 0);
-
-            int consumed = 0;
-            _handshakeContext.ProcessHandshakeC0C1(arr, ref consumed);
-            required = 1536;
-            arr = new byte[1536];
-            do
-            {
-                var rec = await _socket.ReceiveAsync(arr, SocketFlags.None);
-                required -= rec;
-            } while (required != 0);
-            consumed = 0;
-            _handshakeContext.ProcessHandshakeC2(arr, ref consumed);
-            var ms = new MemoryStream();
-            arr = new byte[65535];
-            var tmp = new byte[65535];
-            consumed = 0;
-            var arrDataLen = 0;
-            //arrDataLen += await _socket.ReceiveAsync(arr.AsMemory(arrDataLen), SocketFlags.None);
-            while (true)
-            {
-                while (!ChunkStreamContext.ProcessFirstByteBasicHeader(arr.AsSpan(0, arrDataLen), ref consumed))
-                {
-                    var received2 = await _socket.ReceiveAsync(arr.AsMemory(arrDataLen), SocketFlags.None);
-                    if (received2 == 0)
-                    {
-                        break;
-                    }
-                    arrDataLen += received2;
-                }
-                while (!ChunkStreamContext.ProcessChunkMessageHeader(arr.AsSpan(0, arrDataLen), ref consumed))
-                {
-                    var received2 = await _socket.ReceiveAsync(arr.AsMemory(arrDataLen), SocketFlags.None);
-                    if (received2 == 0)
-                    {
-                        break;
-                    }
-                    arrDataLen += received2;
-                }
-                while (!ChunkStreamContext.ProcessCompleteMessage(arr.AsSpan(0, arrDataLen), ref consumed))
-                {
-                    var received2 = await _socket.ReceiveAsync(arr.AsMemory(arrDataLen), SocketFlags.None);
-                    if (received2 == 0)
-                    {
-                        break;
-                    }
-                    arrDataLen += received2;
-                }
-
-                //tmp.AsMemory().Span.Clear();
-                arr.AsMemory(consumed).CopyTo(tmp);
-                tmp.AsMemory().CopyTo(arr);
-                arrDataLen -= consumed;
-                consumed = 0;
-
-            }
-
-
             var tcs = new TaskCompletionSource<int>();
-            //t1.ContinueWith(_ =>
-            //{
-            //    tcs.TrySetException(t1.Exception.InnerException);
-            //}, TaskContinuationOptions.OnlyOnFaulted);
-            //t2.ContinueWith(_ =>
-            //{
-            //    tcs.TrySetException(t2.Exception.InnerException);
-            //}, TaskContinuationOptions.OnlyOnFaulted);
+            t1.ContinueWith(_ =>
+            {
+                tcs.TrySetException(t1.Exception.InnerException);
+            }, TaskContinuationOptions.OnlyOnFaulted);
+            t2.ContinueWith(_ =>
+            {
+                tcs.TrySetException(t2.Exception.InnerException);
+            }, TaskContinuationOptions.OnlyOnFaulted);
             t3.ContinueWith(_ =>
             {
                 tcs.TrySetException(t3.Exception.InnerException);
             }, TaskContinuationOptions.OnlyOnFaulted);
-            //t1.ContinueWith(_ =>
-            //{
-            //    tcs.TrySetCanceled();
-            //}, TaskContinuationOptions.OnlyOnCanceled);
-            //t2.ContinueWith(_ =>
-            //{
-            //    tcs.TrySetCanceled();
-            //}, TaskContinuationOptions.OnlyOnCanceled);
+            t1.ContinueWith(_ =>
+            {
+                tcs.TrySetCanceled();
+            }, TaskContinuationOptions.OnlyOnCanceled);
+            t2.ContinueWith(_ =>
+            {
+                tcs.TrySetCanceled();
+            }, TaskContinuationOptions.OnlyOnCanceled);
             t3.ContinueWith(_ =>
             {
                 tcs.TrySetCanceled();
             }, TaskContinuationOptions.OnlyOnCanceled);
-            //t1.ContinueWith(_ =>
-            //{
-            //    tcs.TrySetResult(1);
-            //}, TaskContinuationOptions.OnlyOnRanToCompletion);
-            //t2.ContinueWith(_ =>
-            //{
-            //    tcs.TrySetResult(1);
-            //}, TaskContinuationOptions.OnlyOnRanToCompletion);
+            t1.ContinueWith(_ =>
+            {
+                tcs.TrySetResult(1);
+            }, TaskContinuationOptions.OnlyOnRanToCompletion);
+            t2.ContinueWith(_ =>
+            {
+                tcs.TrySetResult(1);
+            }, TaskContinuationOptions.OnlyOnRanToCompletion);
             t3.ContinueWith(_ =>
             {
                 tcs.TrySetResult(1);
             }, TaskContinuationOptions.OnlyOnRanToCompletion);
-            await tcs.Task;
+            return tcs.Task;
         }
 
         internal void OnHandshakeSuccessful()
