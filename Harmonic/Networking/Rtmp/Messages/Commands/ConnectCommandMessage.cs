@@ -14,7 +14,6 @@ namespace Harmonic.Networking.Rtmp.Messages.Commands
 
         public ConnectCommandMessage(AmfEncodingVersion encoding) : base(encoding)
         {
-            ProcedureName = "connect";
         }
     }
 }

@@ -23,6 +23,7 @@ using System.Reflection;
 using Harmonic.Networking.Rtmp.Messages.UserControlMessages;
 using Harmonic.Networking.Rtmp.Messages.Commands;
 using Harmonic.Hosting;
+using System.Linq;
 
 namespace Harmonic.Networking.Rtmp
 {
@@ -47,11 +48,11 @@ namespace Harmonic.Networking.Rtmp
         private Socket _socket;
         private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
         private MemoryPool<byte> _memoryPool = MemoryPool<byte>.Shared;
-        internal ProcessState _nextProcessState = ProcessState.HandshakeC0C1;
         private readonly int _resumeWriterThreshole;
         internal Dictionary<ProcessState, BufferProcessor> _bufferProcessors;
 
         internal Queue<WriteState> _writerQueue = new Queue<WriteState>();
+        internal ProcessState NextProcessState { get; set; } = ProcessState.HandshakeC0C1;
         internal ChunkStreamContext ChunkStreamContext { get; set; } = null;
         private HandshakeContext _handshakeContext = null;
         internal RtmpServerOptions _options = null;
@@ -65,64 +66,130 @@ namespace Harmonic.Networking.Rtmp
             _handshakeContext = new HandshakeContext(this);
         }
 
-        public Task StartAsync(CancellationToken ct = default)
+        public async Task StartAsync(CancellationToken ct = default)
         {
-            var d = PipeOptions.Default;
-            var opt = new PipeOptions(
-                MemoryPool<byte>.Shared,
-                d.ReaderScheduler,
-                d.WriterScheduler,
-                _resumeWriterThreshole,
-                d.ResumeWriterThreshold,
-                d.MinimumSegmentSize,
-                d.UseSynchronizationContext);
-            var pipe = new Pipe(opt);
-            var t1 = Producer(_socket, pipe.Writer, ct);
-            var t2 = Consumer(pipe.Reader, ct);
+            //var d = PipeOptions.Default;
+            //var opt = new PipeOptions(
+            //    d.Pool,
+            //    d.ReaderScheduler,
+            //    d.WriterScheduler,
+            //    _resumeWriterThreshole,
+            //    d.ResumeWriterThreshold,
+            //    d.MinimumSegmentSize,
+            //    d.UseSynchronizationContext);
+            //var pipe = new Pipe(opt);
+            //var t1 = Producer(_socket, pipe.Writer, ct);
+            //var t2 = Consumer(pipe.Reader, ct);
             var t3 = Writer();
             ct.Register(() =>
             {
                 ChunkStreamContext?.Dispose();
                 ChunkStreamContext = null;
             });
+
+
+            var required = 1537;
+            var arr = new byte[1537];
+            do
+            {
+                var rec = await _socket.ReceiveAsync(arr, SocketFlags.None);
+                required -= rec;
+            } while (required != 0);
+
+            int consumed = 0;
+            _handshakeContext.ProcessHandshakeC0C1(arr, ref consumed);
+            required = 1536;
+            arr = new byte[1536];
+            do
+            {
+                var rec = await _socket.ReceiveAsync(arr, SocketFlags.None);
+                required -= rec;
+            } while (required != 0);
+            consumed = 0;
+            _handshakeContext.ProcessHandshakeC2(arr, ref consumed);
+            var ms = new MemoryStream();
+            arr = new byte[65535];
+            var tmp = new byte[65535];
+            consumed = 0;
+            var arrDataLen = 0;
+            //arrDataLen += await _socket.ReceiveAsync(arr.AsMemory(arrDataLen), SocketFlags.None);
+            while (true)
+            {
+                while (!ChunkStreamContext.ProcessFirstByteBasicHeader(arr.AsSpan(0, arrDataLen), ref consumed))
+                {
+                    var received2 = await _socket.ReceiveAsync(arr.AsMemory(arrDataLen), SocketFlags.None);
+                    if (received2 == 0)
+                    {
+                        break;
+                    }
+                    arrDataLen += received2;
+                }
+                while (!ChunkStreamContext.ProcessChunkMessageHeader(arr.AsSpan(0, arrDataLen), ref consumed))
+                {
+                    var received2 = await _socket.ReceiveAsync(arr.AsMemory(arrDataLen), SocketFlags.None);
+                    if (received2 == 0)
+                    {
+                        break;
+                    }
+                    arrDataLen += received2;
+                }
+                while (!ChunkStreamContext.ProcessCompleteMessage(arr.AsSpan(0, arrDataLen), ref consumed))
+                {
+                    var received2 = await _socket.ReceiveAsync(arr.AsMemory(arrDataLen), SocketFlags.None);
+                    if (received2 == 0)
+                    {
+                        break;
+                    }
+                    arrDataLen += received2;
+                }
+
+                //tmp.AsMemory().Span.Clear();
+                arr.AsMemory(consumed).CopyTo(tmp);
+                tmp.AsMemory().CopyTo(arr);
+                arrDataLen -= consumed;
+                consumed = 0;
+
+            }
+
+
             var tcs = new TaskCompletionSource<int>();
-            t1.ContinueWith(_ =>
-            {
-                tcs.TrySetException(t1.Exception.InnerException);
-            }, TaskContinuationOptions.OnlyOnFaulted);
-            t2.ContinueWith(_ =>
-            {
-                tcs.TrySetException(t2.Exception.InnerException);
-            }, TaskContinuationOptions.OnlyOnFaulted);
+            //t1.ContinueWith(_ =>
+            //{
+            //    tcs.TrySetException(t1.Exception.InnerException);
+            //}, TaskContinuationOptions.OnlyOnFaulted);
+            //t2.ContinueWith(_ =>
+            //{
+            //    tcs.TrySetException(t2.Exception.InnerException);
+            //}, TaskContinuationOptions.OnlyOnFaulted);
             t3.ContinueWith(_ =>
             {
                 tcs.TrySetException(t3.Exception.InnerException);
             }, TaskContinuationOptions.OnlyOnFaulted);
-            t1.ContinueWith(_ =>
-            {
-                tcs.TrySetCanceled();
-            }, TaskContinuationOptions.OnlyOnCanceled);
-            t2.ContinueWith(_ =>
-            {
-                tcs.TrySetCanceled();
-            }, TaskContinuationOptions.OnlyOnCanceled);
+            //t1.ContinueWith(_ =>
+            //{
+            //    tcs.TrySetCanceled();
+            //}, TaskContinuationOptions.OnlyOnCanceled);
+            //t2.ContinueWith(_ =>
+            //{
+            //    tcs.TrySetCanceled();
+            //}, TaskContinuationOptions.OnlyOnCanceled);
             t3.ContinueWith(_ =>
             {
                 tcs.TrySetCanceled();
             }, TaskContinuationOptions.OnlyOnCanceled);
-            t1.ContinueWith(_ =>
-            {
-                tcs.TrySetResult(1);
-            }, TaskContinuationOptions.OnlyOnRanToCompletion);
-            t2.ContinueWith(_ =>
-            {
-                tcs.TrySetResult(1);
-            }, TaskContinuationOptions.OnlyOnRanToCompletion);
+            //t1.ContinueWith(_ =>
+            //{
+            //    tcs.TrySetResult(1);
+            //}, TaskContinuationOptions.OnlyOnRanToCompletion);
+            //t2.ContinueWith(_ =>
+            //{
+            //    tcs.TrySetResult(1);
+            //}, TaskContinuationOptions.OnlyOnRanToCompletion);
             t3.ContinueWith(_ =>
             {
                 tcs.TrySetResult(1);
             }, TaskContinuationOptions.OnlyOnRanToCompletion);
-            return tcs.Task;
+            await tcs.Task;
         }
 
         internal void OnHandshakeSuccessful()
@@ -191,7 +258,7 @@ namespace Harmonic.Networking.Rtmp
                 
                 while (true)
                 {
-                    if (!_bufferProcessors[_nextProcessState](buffer, ref consumed))
+                    if (!_bufferProcessors[NextProcessState](buffer, ref consumed))
                     {
                         break;
                     }
@@ -236,8 +303,9 @@ namespace Harmonic.Networking.Rtmp
         }
         #endregion
 
+
         #region IDisposable Support
-        private bool disposedValue = false; // 要检测冗余调用
+        private bool disposedValue = false;
 
         protected virtual void Dispose(bool disposing)
         {
@@ -250,25 +318,18 @@ namespace Harmonic.Networking.Rtmp
                     _socket.Dispose();
                 }
 
-                // TODO: 释放未托管的资源(未托管的对象)并在以下内容中替代终结器。
-                // TODO: 将大型字段设置为 null。
 
                 disposedValue = true;
             }
         }
 
-        // TODO: 仅当以上 Dispose(bool disposing) 拥有用于释放未托管资源的代码时才替代终结器。
         // ~IOPipeline() {
-        //   // 请勿更改此代码。将清理代码放入以上 Dispose(bool disposing) 中。
         //   Dispose(false);
         // }
 
-        // 添加此代码以正确实现可处置模式。
         public void Dispose()
         {
-            // 请勿更改此代码。将清理代码放入以上 Dispose(bool disposing) 中。
             Dispose(true);
-            // TODO: 如果在以上内容中替代了终结器，则取消注释以下行。
             // GC.SuppressFinalize(this);
         }
         #endregion

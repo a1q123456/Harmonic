@@ -11,7 +11,7 @@ namespace Harmonic.Controllers.Living
         [RpcMethod("createStream")]
         public uint CreateStream()
         {
-            var stream = RtmpSession.CreateNetStream<NetStream>();
+            var stream = RtmpSession.CreateNetStream<LivingStream>();
             return stream.MessageStream.MessageStreamId;
         }
     }

@@ -1,5 +1,7 @@
 ﻿using Autofac;
 using Harmonic.Controllers;
+using Harmonic.Controllers.Living;
+using Harmonic.Networking.Rtmp;
 using Harmonic.Networking.Rtmp.Data;
 using Harmonic.Networking.Rtmp.Messages;
 using Harmonic.Networking.Rtmp.Messages.Commands;
@@ -21,6 +23,7 @@ namespace Harmonic.Hosting
         internal Dictionary<MessageType, MessageFactory> _messageFactories = new Dictionary<MessageType, MessageFactory>();
         public delegate Message MessageFactory(MessageHeader header, Networking.Rtmp.Serialization.SerializationContext context, out int consumed);
         private Dictionary<string, Type> _registeredControllers = new Dictionary<string, Type>();
+        private ContainerBuilder _builder = null;
         private RpcService _rpcService = null;
         internal IStartup _startup = null;
         internal IStartup Startup
@@ -32,13 +35,10 @@ namespace Harmonic.Hosting
             set
             {
                 _startup = value;
-                var builder = new ContainerBuilder();
-                _startup.ConfigureServices(builder);
+                _builder = new ContainerBuilder();
+                _startup.ConfigureServices(_builder);
                 SessionScopedServices = new List<Type>(_startup.SessionScopedServices);
-                RegisterCommonServices(builder);
-                ServiceContainer = builder.Build();
-                ServerLifetime = ServiceContainer.BeginLifetimeScope();
-                _rpcService = ServerLifetime.Resolve<RpcService>();
+                RegisterCommonServices(_builder);
             }
         }
         public List<Type> SessionScopedServices { get; private set; }
@@ -67,9 +67,17 @@ namespace Harmonic.Hosting
                 consumed = 0;
                 return new DataMessage(header.MessageType == MessageType.Amf0Data ? AmfEncodingVersion.Amf0 : AmfEncodingVersion.Amf3);
             });
+            RegisterMessage<VideoMessage>();
+            RegisterMessage<AudioMessage>();
             RegisterMessage<UserControlMessage>(userControlMessageFactory.Provide);
             RegisterMessage<CommandMessage>(commandMessageFactory.Provide);
+            _rpcService = new RpcService();
+        }
 
+        internal void BuildContainer()
+        {
+            ServiceContainer = _builder.Build();
+            ServerLifetime = ServiceContainer.BeginLifetimeScope();
         }
 
         public void RegisterMessage<T>(MessageFactory factory) where T : Message
@@ -115,20 +123,35 @@ namespace Harmonic.Hosting
             var name = appName ?? controllerType.Name.Replace("Controller", "");
             _registeredControllers.Add(name.ToLower(), controllerType);
             _rpcService.RegeisterController(controllerType);
+            _builder.RegisterType(controllerType).AsSelf();
+        }
+        public void RegisterStream(Type streamType)
+        {
+            if (!typeof(NetStream).IsAssignableFrom(streamType))
+            {
+                throw new InvalidOperationException("streamType must inherit from NetStream");
+            }
+            _rpcService.RegeisterController(streamType);
+            _builder.RegisterType(streamType).AsSelf();
         }
         private void RegisterCommonServices(ContainerBuilder builder)
         {
             builder.Register(c => new PublisherSessionService())
                 .AsSelf()
                 .InstancePerLifetimeScope();
-            builder.Register(c => new RpcService())
+            builder.Register(c => _rpcService)
                 .AsSelf()
-                .InstancePerLifetimeScope();
+                .SingleInstance();
+
         }
 
         public void RegisterController<T>(string appName = null) where T : AbstractController
         {
             RegisterController(typeof(T), appName);
+        }
+        public void RegisterStream<T>() where T : NetStream
+        {
+            RegisterStream(typeof(T));
         }
     }
 }

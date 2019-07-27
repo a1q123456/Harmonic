@@ -74,6 +74,10 @@ namespace Harmonic.Networking.Rtmp.Messages.Commands
         {
             using (var writeContext = new Amf.Serialization.Amf0.SerializationContext(context.WriteBuffer))
             {
+                if (ProcedureName == null)
+                {
+                    ProcedureName = GetType().GetCustomAttribute<RtmpCommandAttribute>().Name;
+                }
                 context.Amf0Writer.WriteBytes(ProcedureName, writeContext);
                 context.Amf0Writer.WriteBytes(TranscationID, writeContext);
                 context.Amf0Writer.WriteValueBytes(CommandObject, writeContext);

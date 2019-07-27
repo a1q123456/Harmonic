@@ -1,7 +1,9 @@
 ﻿using Harmonic.Buffers;
 using Harmonic.Networking.Amf.Attributes;
+using Harmonic.Networking.Amf.Common;
 using Harmonic.Networking.Amf.Data;
 using Harmonic.Networking.Amf.Serialization.Amf3;
+using Harmonic.Networking.Amf.Serialization.Attributes;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using System.Collections.Generic;
@@ -286,7 +288,7 @@ namespace UnitTest
             var reader = new Amf3Reader();
             var writer = new Amf3Writer();
 
-            var obj = new Amf3Object
+            var obj = new AmfObject
             {
                 { "t1", (uint)2 },
                 { "t2", 3.1 }
@@ -300,7 +302,7 @@ namespace UnitTest
                 sc.GetMessage(buffer);
 
                 Assert.IsTrue(reader.TryGetObject(buffer, out var readVal, out var consumed));
-                var readObj = (Amf3Object)readVal;
+                var readObj = (AmfObject)readVal;
                 Assert.AreEqual(readObj.Fields["t1"], (uint)2);
                 Assert.AreEqual(readObj.Fields["t2"], 3.1);
                 Assert.AreEqual(readObj.DynamicFields["t3"], new Vector<int>() { 2, 3, 4 });

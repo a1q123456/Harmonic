@@ -16,7 +16,7 @@ namespace UnitTest
 
             Assert.ThrowsException<ArgumentOutOfRangeException>(() => new UnlimitedBuffer(0));
 
-            for (int i = 0; i < 100000; i++)
+            for (int i = 0; i < 10000; i++)
             {
                 var size = random.Next(1, 3000);
                 var len1 = random.Next(0, 3000);
@@ -103,6 +103,35 @@ namespace UnitTest
                 buffer.TakeOutMemory(outBuffer);
                 Assert.IsTrue(outBuffer.AsSpan(0, 1024).SequenceEqual(bytes1));
                 Assert.AreEqual(outBuffer[1024], data);
+            }
+        }
+
+        [TestMethod]
+        public void TestWriteToBuffer5DifferentBufferSegmentSize()
+        {
+            for (int i = 0; i < 10000; i++)
+            {
+                var random = new Random();
+                var buffer = new UnlimitedBuffer(512);
+                var bytes1 = new byte[4096];
+                var data = (byte)random.Next(byte.MinValue, byte.MaxValue);
+                random.NextBytes(bytes1);
+                buffer.WriteToBuffer(bytes1);
+                buffer.WriteToBuffer(data);
+
+                var length = buffer.BufferLength;
+                var outBuffer = ArrayPool<byte>.Shared.Rent(length);
+                var test1 = new byte[2];
+                var test2 = new byte[3];
+                var test3 = new byte[1024];
+                buffer.TakeOutMemory(test1.AsSpan());
+                buffer.TakeOutMemory(test2.AsSpan());
+                buffer.TakeOutMemory(test3);
+                buffer.TakeOutMemory(outBuffer);
+                Assert.IsTrue(test1.AsSpan().SequenceEqual(bytes1.AsSpan(0, 2)));
+                Assert.IsTrue(test2.AsSpan().SequenceEqual(bytes1.AsSpan(2, 3)));
+                Assert.IsTrue(test3.AsSpan().SequenceEqual(bytes1.AsSpan(5, 1024)));
+                Assert.IsTrue(outBuffer.AsSpan(0, 4096 - 5 - 1024).SequenceEqual(bytes1.AsSpan(5 + 1024)));
             }
         }
 

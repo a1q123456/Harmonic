@@ -41,7 +41,7 @@ namespace Harmonic.Controllers.Living
         }
 
         [RpcMethod(Name = "publish")]
-        public void Publish(string publishingName, string publishingType)
+        public void Publish([FromOptionalArgument] string publishingName, [FromOptionalArgument] string publishingType)
         {
             var publishingTypeMap = new Dictionary<string, PublishingType>()
             {

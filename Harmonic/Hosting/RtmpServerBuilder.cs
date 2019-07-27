@@ -1,5 +1,6 @@
 using Harmonic.Controllers;
 using Harmonic.Controllers.Living;
+using Harmonic.Networking.Rtmp;
 using System;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
@@ -47,7 +48,7 @@ namespace Harmonic.Hosting
 
             foreach (var type in types)
             {
-                if (typeof(AbstractController).IsAssignableFrom(type))
+                if (typeof(AbstractController).IsAssignableFrom(type) && !type.IsAbstract)
                 {
                     _options.RegisterController(type);
                 }
@@ -60,7 +61,10 @@ namespace Harmonic.Hosting
             if (registerInternalControllers)
             {
                 _options.RegisterController<LivingController>();
+                _options.RegisterStream<LivingStream>();
             }
+            
+            _options.BuildContainer();
             var ret = new RtmpServer(_options);
             return ret;
         }

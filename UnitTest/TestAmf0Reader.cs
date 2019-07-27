@@ -233,7 +233,7 @@ namespace UnitTest
                 f.Read(data);
 
                 Assert.IsTrue(reader.TryGetObject(data, out var dataRead, out var consumed));
-                Assert.IsTrue(dataRead.SequenceEqual(new Dictionary<string, object>() { ["a"] = "b", ["c"] = 1.0 }));
+                Assert.IsTrue(dataRead.Fields.SequenceEqual(new Dictionary<string, object>() { ["a"] = "b", ["c"] = 1.0 }));
                 Assert.AreEqual(consumed, data.Length);
             }
         }

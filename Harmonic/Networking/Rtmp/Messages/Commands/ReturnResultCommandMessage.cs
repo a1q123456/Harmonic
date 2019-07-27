@@ -16,7 +16,7 @@ namespace Harmonic.Networking.Rtmp.Messages.Commands
         [OptionalArgument]
         public object ReturnValue { get; set; }
         private bool _success = true;
-        public bool Success
+        public bool IsSuccess
         {
             get
             {
@@ -38,6 +38,7 @@ namespace Harmonic.Networking.Rtmp.Messages.Commands
 
         public ReturnResultCommandMessage(AmfEncodingVersion encoding) : base(encoding)
         {
+            IsSuccess = true;
         }
     }
 }

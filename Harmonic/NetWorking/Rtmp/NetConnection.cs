@@ -1,4 +1,5 @@
-﻿using Harmonic.Controllers;
+﻿using Autofac;
+using Harmonic.Controllers;
 using Harmonic.Networking.Amf.Common;
 using Harmonic.Networking.Rtmp.Data;
 using Harmonic.Networking.Rtmp.Messages;
@@ -92,7 +93,7 @@ namespace Harmonic.Networking.Rtmp
             }
             if (_rtmpSession.FindController(_rtmpSession.ConnectionInformation.App, out var controllerType))
             {
-                Controller = Activator.CreateInstance(controllerType) as AbstractController;
+                Controller = _rtmpSession.IOPipeline._options.ServerLifetime.Resolve(controllerType) as AbstractController;
             }
             else
             {
@@ -114,7 +115,7 @@ namespace Harmonic.Networking.Rtmp
 
                 };
             msg.ReturnValue = param;
-            msg.Success = true;
+            msg.IsSuccess = true;
             msg.TranscationID = command.TranscationID;
             _rtmpSession.ControlMessageStream.SendMessageAsync(_rtmpChunkStream, msg);
         }
@@ -131,7 +132,7 @@ namespace Harmonic.Networking.Rtmp
 
 
         #region IDisposable Support
-        private bool disposedValue = false; // 要检测冗余调用
+        private bool disposedValue = false;
 
         protected virtual void Dispose(bool disposing)
         {
@@ -139,8 +140,9 @@ namespace Harmonic.Networking.Rtmp
             {
                 if (disposing)
                 {
-                    foreach ((var streamId, var stream) in _netStreams)
+                    while (_netStreams.Any())
                     {
+                        (_, var stream) = _netStreams.First();
                         if (stream is IDisposable disp)
                         {
                             disp.Dispose();
@@ -149,25 +151,17 @@ namespace Harmonic.Networking.Rtmp
                     _rtmpChunkStream.Dispose();
                 }
 
-                // TODO: 释放未托管的资源(未托管的对象)并在以下内容中替代终结器。
-                // TODO: 将大型字段设置为 null。
-
                 disposedValue = true;
             }
         }
 
-        // TODO: 仅当以上 Dispose(bool disposing) 拥有用于释放未托管资源的代码时才替代终结器。
         // ~NetConnection() {
-        //   // 请勿更改此代码。将清理代码放入以上 Dispose(bool disposing) 中。
         //   Dispose(false);
         // }
 
-        // 添加此代码以正确实现可处置模式。
         public void Dispose()
         {
-            // 请勿更改此代码。将清理代码放入以上 Dispose(bool disposing) 中。
             Dispose(true);
-            // TODO: 如果在以上内容中替代了终结器，则取消注释以下行。
             // GC.SuppressFinalize(this);
         }
         #endregion
