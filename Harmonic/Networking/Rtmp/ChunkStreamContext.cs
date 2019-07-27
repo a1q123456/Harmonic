@@ -262,7 +262,7 @@ namespace Harmonic.Networking.Rtmp
         }
 
 
-        private bool ProcessFirstByteBasicHeader(ReadOnlySequence<byte> buffer, ref int consumed)
+        public bool ProcessFirstByteBasicHeader(ReadOnlySequence<byte> buffer, ref int consumed)
         {
             if (buffer.Length - consumed < 1)
             {
@@ -295,7 +295,7 @@ namespace Harmonic.Networking.Rtmp
             return true;
         }
 
-        private bool ProcessChunkMessageHeader(ReadOnlySequence<byte> buffer, ref int consumed)
+        public bool ProcessChunkMessageHeader(ReadOnlySequence<byte> buffer, ref int consumed)
         {
             int bytesNeed = 0;
             switch (_processingChunk.ChunkBasicHeader.ChunkStreamId)
@@ -381,7 +381,7 @@ namespace Harmonic.Networking.Rtmp
             return true;
         }
 
-        private bool ProcessExtendedTimestamp(ReadOnlySequence<byte> buffer, ref int consumed)
+        public bool ProcessExtendedTimestamp(ReadOnlySequence<byte> buffer, ref int consumed)
         {
             if (buffer.Length - consumed < 4)
             {
@@ -396,7 +396,7 @@ namespace Harmonic.Networking.Rtmp
             return true;
         }
 
-        private bool ProcessCompleteMessage(ReadOnlySequence<byte> buffer, ref int consumed)
+        public bool ProcessCompleteMessage(ReadOnlySequence<byte> buffer, ref int consumed)
         {
             var header = _processingChunk;
             if (!_incompleteMessageState.TryGetValue(header.ChunkBasicHeader.ChunkStreamId, out var state))

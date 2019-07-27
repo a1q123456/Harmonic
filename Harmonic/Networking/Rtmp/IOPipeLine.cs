@@ -30,7 +30,6 @@ namespace Harmonic.Networking.Rtmp
     enum ProcessState
     {
         HandshakeC0C1,
-        HandshakeC1,
         HandshakeC2,
         FirstByteBasicHeader,
         ChunkMessageHeader,
@@ -190,12 +189,57 @@ namespace Harmonic.Networking.Rtmp
                 var result = await reader.ReadAsync(ct);
                 var buffer = result.Buffer;
                 int consumed = 0;
-                
+
                 while (true)
                 {
-                    if (!_bufferProcessors[NextProcessState](buffer, ref consumed))
+                    //if (!_bufferProcessors[NextProcessState](buffer, ref consumed))
+                    //{
+                    //    break;
+                    //}
+
+                    if (NextProcessState == ProcessState.HandshakeC0C1)
                     {
-                        break;
+                        if (!_handshakeContext.ProcessHandshakeC0C1(buffer, ref consumed))
+                        {
+                            break;
+                        }
+                    }
+
+                    if (NextProcessState == ProcessState.HandshakeC2)
+                    {
+                        if (!_handshakeContext.ProcessHandshakeC2(buffer, ref consumed))
+                        {
+                            break;
+                        }
+                    }
+
+                    if (NextProcessState == ProcessState.FirstByteBasicHeader)
+                    {
+                        if (!ChunkStreamContext.ProcessFirstByteBasicHeader(buffer, ref consumed))
+                        {
+                            break;
+                        }
+                    }
+                    if (NextProcessState == ProcessState.ExtendedTimestamp)
+                    {
+                        if (!ChunkStreamContext.ProcessExtendedTimestamp(buffer, ref consumed))
+                        {
+                            break;
+                        }
+                    }
+                    if (NextProcessState == ProcessState.ChunkMessageHeader)
+                    {
+                        if (!ChunkStreamContext.ProcessChunkMessageHeader(buffer, ref consumed))
+                        {
+                            break;
+                        }
+                    }
+                    if (NextProcessState == ProcessState.CompleteMessage)
+                    {
+                        if (!ChunkStreamContext.ProcessCompleteMessage(buffer, ref consumed))
+                        {
+                            break;
+                        }
                     }
                 }
                 buffer = buffer.Slice(consumed);

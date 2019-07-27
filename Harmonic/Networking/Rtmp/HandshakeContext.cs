@@ -36,7 +36,7 @@ namespace Harmonic.Networking.Rtmp
             }
         }
 
-        private bool ProcessHandshakeC0C1(ReadOnlySequence<byte> buffer, ref int consumed)
+        public bool ProcessHandshakeC0C1(ReadOnlySequence<byte> buffer, ref int consumed)
         {
             if (buffer.Length - consumed < 1537)
             {
@@ -80,7 +80,7 @@ namespace Harmonic.Networking.Rtmp
             return true;
         }
 
-        private bool ProcessHandshakeC2(ReadOnlySequence<byte> buffer, ref int consumed)
+        public bool ProcessHandshakeC2(ReadOnlySequence<byte> buffer, ref int consumed)
         {
             if (buffer.Length - consumed < 1536)
             {
