@@ -14,7 +14,7 @@ namespace Harmonic.Networking.Rtmp.Serialization
         public Amf0Reader Amf0Reader { get; internal set; } = null;
         public Amf0Writer Amf0Writer { get; internal set; } = null;
 
-        public UnlimitedBuffer WriteBuffer { get; internal set; } = null;
+        public ByteBuffer WriteBuffer { get; internal set; } = null;
         public Memory<byte> ReadBuffer { get; internal set; } = null;
 
     }

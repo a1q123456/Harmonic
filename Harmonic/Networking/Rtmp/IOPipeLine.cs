@@ -41,9 +41,10 @@ namespace Harmonic.Networking.Rtmp
     class IOPipeLine : IDisposable
     {
 
-        internal delegate bool BufferProcessor(ReadOnlySequence<byte> buffer, ref int consumed);
+        internal delegate Task BufferProcessor(ByteBuffer buffer, CancellationToken ct);
         internal SemaphoreSlim _writerSignal = new SemaphoreSlim(0);
 
+        private ByteBuffer _socketBuffer = new ByteBuffer(2048, 32767);
         private Socket _socket;
         private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
         private MemoryPool<byte> _memoryPool = MemoryPool<byte>.Shared;
@@ -67,18 +68,8 @@ namespace Harmonic.Networking.Rtmp
 
         public Task StartAsync(CancellationToken ct = default)
         {
-            //var d = PipeOptions.Default;
-            //var opt = new PipeOptions(
-            //    d.Pool,
-            //    d.ReaderScheduler,
-            //    d.WriterScheduler,
-            //    _resumeWriterThreshole,
-            //    d.ResumeWriterThreshold,
-            //    d.MinimumSegmentSize,
-            //    d.UseSynchronizationContext);
-            var pipe = new Pipe(/*opt*/);
-            var t1 = Producer(_socket, pipe.Writer, ct);
-            var t2 = Consumer(pipe.Reader, ct);
+            var t1 = Producer(_socket, ct);
+            var t2 = Consumer(ct);
             var t3 = Writer();
             ct.Register(() =>
             {
@@ -149,111 +140,43 @@ namespace Harmonic.Networking.Rtmp
         #endregion
 
         #region Receiver
-        private async Task Producer(Socket s, PipeWriter writer, CancellationToken ct = default)
+        private async Task Producer(Socket s, CancellationToken ct = default)
         {
             while (!ct.IsCancellationRequested)
             {
-                var memory = writer.GetMemory(ChunkStreamContext == null ? 1536 : ChunkStreamContext.ReadMinimumBufferSize);
-                var bytesRead = await s.ReceiveAsync(memory, SocketFlags.None);
-                if (bytesRead == 0)
+                //var memory = writer.GetMemory(ChunkStreamContext == null ? 1536 : ChunkStreamContext.ReadMinimumBufferSize);
+                using (var owner = _memoryPool.Rent(2048))
                 {
-                    break;
-                }
-                if (ChunkStreamContext != null)
-                {
-                    ChunkStreamContext.ReadWindowSize += (uint)bytesRead;
-                    if (ChunkStreamContext.ReadWindowAcknowledgementSize.HasValue)
+                    var memory = owner.Memory;
+                    var bytesRead = await s.ReceiveAsync(memory, SocketFlags.None);
+                    if (bytesRead == 0)
                     {
-                        if (ChunkStreamContext.ReadWindowSize >= ChunkStreamContext.ReadWindowAcknowledgementSize)
+                        break;
+                    }
+                    if (ChunkStreamContext != null)
+                    {
+                        ChunkStreamContext.ReadWindowSize += (uint)bytesRead;
+                        if (ChunkStreamContext.ReadWindowAcknowledgementSize.HasValue)
                         {
-                            ChunkStreamContext._rtmpSession.Acknowledgement(ChunkStreamContext.ReadWindowAcknowledgementSize.Value);
-                            ChunkStreamContext.ReadWindowSize -= ChunkStreamContext.ReadWindowAcknowledgementSize.Value;
+                            if (ChunkStreamContext.ReadWindowSize >= ChunkStreamContext.ReadWindowAcknowledgementSize)
+                            {
+                                ChunkStreamContext._rtmpSession.Acknowledgement(ChunkStreamContext.ReadWindowAcknowledgementSize.Value);
+                                ChunkStreamContext.ReadWindowSize -= ChunkStreamContext.ReadWindowAcknowledgementSize.Value;
+                            }
                         }
                     }
-                }
-                writer.Advance(bytesRead);
-                var result = await writer.FlushAsync(ct);
-                if (result.IsCompleted || result.IsCanceled)
-                {
-                    break;
+                    await _socketBuffer.WriteToBufferAsync(memory);
                 }
             }
 
-            writer.Complete();
         }
 
-        private async Task Consumer(PipeReader reader, CancellationToken ct = default)
+        private async Task Consumer(CancellationToken ct = default)
         {
-            while (true)
+            while (ct.IsCancellationRequested)
             {
-                var result = await reader.ReadAsync(ct);
-                var buffer = result.Buffer;
-                int consumed = 0;
-
-                while (true)
-                {
-                    //if (!_bufferProcessors[NextProcessState](buffer, ref consumed))
-                    //{
-                    //    break;
-                    //}
-
-                    if (NextProcessState == ProcessState.HandshakeC0C1)
-                    {
-                        if (!_handshakeContext.ProcessHandshakeC0C1(buffer, ref consumed))
-                        {
-                            break;
-                        }
-                    }
-
-                    if (NextProcessState == ProcessState.HandshakeC2)
-                    {
-                        if (!_handshakeContext.ProcessHandshakeC2(buffer, ref consumed))
-                        {
-                            break;
-                        }
-                    }
-
-                    if (NextProcessState == ProcessState.FirstByteBasicHeader)
-                    {
-                        if (!ChunkStreamContext.ProcessFirstByteBasicHeader(buffer, ref consumed))
-                        {
-                            break;
-                        }
-                    }
-                    if (NextProcessState == ProcessState.ExtendedTimestamp)
-                    {
-                        if (!ChunkStreamContext.ProcessExtendedTimestamp(buffer, ref consumed))
-                        {
-                            break;
-                        }
-                    }
-                    if (NextProcessState == ProcessState.ChunkMessageHeader)
-                    {
-                        if (!ChunkStreamContext.ProcessChunkMessageHeader(buffer, ref consumed))
-                        {
-                            break;
-                        }
-                    }
-                    if (NextProcessState == ProcessState.CompleteMessage)
-                    {
-                        if (!ChunkStreamContext.ProcessCompleteMessage(buffer, ref consumed))
-                        {
-                            break;
-                        }
-                    }
-                }
-                buffer = buffer.Slice(consumed);
-
-                reader.AdvanceTo(buffer.Start, buffer.End);
-
-                if (result.IsCompleted || result.IsCanceled)
-                {
-                    break;
-                }
+                await _bufferProcessors[NextProcessState](_socketBuffer, ct);
             }
-
-            // Mark the PipeReader as complete
-            reader.Complete();
         }
 
         internal void Disconnect()

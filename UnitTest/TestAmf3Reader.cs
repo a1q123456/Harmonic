@@ -56,7 +56,7 @@ namespace UnitTest
         public double v1;
         public int v2;
 
-        public bool TryEncodeData(UnlimitedBuffer buffer)
+        public bool TryEncodeData(ByteBuffer buffer)
         {
             var b1 = BitConverter.GetBytes(v1);
             var b2 = BitConverter.GetBytes(v2);

@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using static Harmonic.Networking.Rtmp.IOPipeLine;
 
@@ -70,7 +71,7 @@ namespace Harmonic.Networking.Rtmp
             var ret = new TaskCompletionSource<int>();
             byte[] buffer = null;
             uint length = 0;
-            using (var writeBuffer = new UnlimitedBuffer())
+            using (var writeBuffer = new ByteBuffer())
             {
                 var context = new Serialization.SerializationContext()
                 {
@@ -81,7 +82,7 @@ namespace Harmonic.Networking.Rtmp
                     WriteBuffer = writeBuffer
                 };
                 message.Serialize(context);
-                length = (uint)writeBuffer.BufferLength;
+                length = (uint)writeBuffer.Length;
                 buffer = _arrayPool.Rent((int)length);
                 writeBuffer.TakeOutMemory(buffer);
             }
@@ -262,13 +263,8 @@ namespace Harmonic.Networking.Rtmp
         }
 
 
-        public bool ProcessFirstByteBasicHeader(ReadOnlySequence<byte> buffer, ref int consumed)
+        public async Task ProcessFirstByteBasicHeader(ByteBuffer buffer, CancellationToken ct)
         {
-            if (buffer.Length - consumed < 1)
-            {
-                return false;
-            }
-
             var header = new ChunkHeader()
             {
                 ChunkBasicHeader = new ChunkBasicHeader(),
@@ -276,26 +272,27 @@ namespace Harmonic.Networking.Rtmp
             };
             _processingChunk = header;
             var arr = _arrayPool.Rent(1);
-            buffer.Slice(consumed, 1).CopyTo(arr);
-            consumed += 1;
+            await buffer.TakeOutMemoryAsync(arr.AsMemory(0, 1));
             var basicHeader = arr[0];
             _arrayPool.Return(arr);
             header.ChunkBasicHeader.RtmpChunkHeaderType = (ChunkHeaderType)(basicHeader >> 6);
             header.ChunkBasicHeader.ChunkStreamId = (uint)basicHeader & 0x3F;
+            if (header.ChunkBasicHeader.ChunkStreamId > 4)
+            {
+                throw new InvalidOperationException();
+            }
             if (header.ChunkBasicHeader.ChunkStreamId != 0 && header.ChunkBasicHeader.ChunkStreamId != 0x3F)
             {
                 if (header.ChunkBasicHeader.RtmpChunkHeaderType == ChunkHeaderType.Type3)
                 {
                     FillHeader(header);
                     _ioPipeline.NextProcessState = ProcessState.CompleteMessage;
-                    return true;
                 }
             }
             _ioPipeline.NextProcessState = ProcessState.ChunkMessageHeader;
-            return true;
         }
 
-        public bool ProcessChunkMessageHeader(ReadOnlySequence<byte> buffer, ref int consumed)
+        private async Task ProcessChunkMessageHeader(ByteBuffer buffer, CancellationToken ct)
         {
             int bytesNeed = 0;
             switch (_processingChunk.ChunkBasicHeader.ChunkStreamId)
@@ -320,23 +317,18 @@ namespace Harmonic.Networking.Rtmp
                     break;
             }
 
-            if (buffer.Length - consumed <= bytesNeed)
-            {
-                return false;
-            }
-
             byte[] arr = null;
             if (_processingChunk.ChunkBasicHeader.ChunkStreamId == 0)
             {
                 arr = _arrayPool.Rent(1);
-                buffer.Slice(consumed, 1).CopyTo(arr);
+                await buffer.TakeOutMemoryAsync(arr.AsMemory(0, 1), ct);
                 _processingChunk.ChunkBasicHeader.ChunkStreamId = (uint)arr[0] + 64;
                 _arrayPool.Return(arr);
             }
             else if (_processingChunk.ChunkBasicHeader.ChunkStreamId == 0x3F)
             {
                 arr = _arrayPool.Rent(2);
-                buffer.Slice(consumed, 2).CopyTo(arr);
+                await buffer.TakeOutMemoryAsync(arr.AsMemory(0, 2), ct);
                 _processingChunk.ChunkBasicHeader.ChunkStreamId = (uint)arr[1] * 256 + arr[0] + 64;
                 _arrayPool.Return(arr);
             }
@@ -345,7 +337,7 @@ namespace Harmonic.Networking.Rtmp
             {
                 case ChunkHeaderType.Type0:
                     arr = _arrayPool.Rent(TYPE0_SIZE);
-                    buffer.Slice(consumed, TYPE0_SIZE).CopyTo(arr);
+                    await buffer.TakeOutMemoryAsync(arr.AsMemory(0, TYPE0_SIZE), ct);
                     header.MessageHeader.Timestamp = NetworkBitConverter.ToUInt24(arr.AsSpan(0, 3));
                     header.MessageHeader.MessageLength = NetworkBitConverter.ToUInt24(arr.AsSpan(3, 3));
                     header.MessageHeader.MessageType = (MessageType)arr[6];
@@ -353,14 +345,14 @@ namespace Harmonic.Networking.Rtmp
                     break;
                 case ChunkHeaderType.Type1:
                     arr = _arrayPool.Rent(TYPE1_SIZE);
-                    buffer.Slice(consumed, TYPE1_SIZE).CopyTo(arr);
+                    await buffer.TakeOutMemoryAsync(arr.AsMemory(0, TYPE1_SIZE), ct);
                     header.MessageHeader.Timestamp = NetworkBitConverter.ToUInt24(arr.AsSpan(0, 3));
                     header.MessageHeader.MessageLength = NetworkBitConverter.ToUInt24(arr.AsSpan(3, 3));
                     header.MessageHeader.MessageType = (MessageType)arr[6];
                     break;
                 case ChunkHeaderType.Type2:
                     arr = _arrayPool.Rent(TYPE2_SIZE);
-                    buffer.Slice(consumed, TYPE2_SIZE).CopyTo(arr);
+                    await buffer.TakeOutMemoryAsync(arr.AsMemory(0, TYPE2_SIZE), ct);
                     header.MessageHeader.Timestamp = NetworkBitConverter.ToUInt24(arr.AsSpan(0, 3));
                     break;
             }
@@ -377,26 +369,19 @@ namespace Harmonic.Networking.Rtmp
             {
                 _ioPipeline.NextProcessState = ProcessState.CompleteMessage;
             }
-            consumed += bytesNeed;
-            return true;
         }
 
-        public bool ProcessExtendedTimestamp(ReadOnlySequence<byte> buffer, ref int consumed)
+        public async Task ProcessExtendedTimestamp(ByteBuffer buffer, CancellationToken ct)
         {
-            if (buffer.Length - consumed < 4)
-            {
-                return false;
-            }
             var arr = _arrayPool.Rent(4);
-            buffer.Slice(consumed, 4).CopyTo(arr);
+            await buffer.TakeOutMemoryAsync(arr.AsMemory(0, 4), ct);
             var extendedTimestamp = NetworkBitConverter.ToUInt32(arr.AsSpan(0, 4));
             _processingChunk.ExtendedTimestamp = extendedTimestamp;
             _processingChunk.MessageHeader.Timestamp = extendedTimestamp;
             _ioPipeline.NextProcessState = ProcessState.CompleteMessage;
-            return true;
         }
 
-        public bool ProcessCompleteMessage(ReadOnlySequence<byte> buffer, ref int consumed)
+        public async Task ProcessCompleteMessage(ByteBuffer buffer, CancellationToken ct)
         {
             var header = _processingChunk;
             if (!_incompleteMessageState.TryGetValue(header.ChunkBasicHeader.ChunkStreamId, out var state))
@@ -412,11 +397,6 @@ namespace Harmonic.Networking.Rtmp
 
             var bytesNeed = (int)(state.RemainBytes >= ReadChunkSize ? ReadChunkSize : state.RemainBytes);
 
-            if (buffer.Length - consumed < bytesNeed)
-            {
-                return false;
-            }
-
             if (_previousReadMessageHeader.TryGetValue(header.ChunkBasicHeader.ChunkStreamId, out var prevHeader))
             {
                 if (prevHeader.MessageStreamId != header.MessageHeader.MessageStreamId)
@@ -428,8 +408,7 @@ namespace Harmonic.Networking.Rtmp
             _previousReadMessageHeader[_processingChunk.ChunkBasicHeader.ChunkStreamId] = _processingChunk.MessageHeader;
             _processingChunk = null;
 
-            buffer.Slice(consumed, bytesNeed).CopyTo(state.Body.AsSpan(state.CurrentIndex));
-            consumed += bytesNeed;
+            await buffer.TakeOutMemoryAsync(state.Body.AsMemory(state.CurrentIndex, bytesNeed));
             state.CurrentIndex = state.CurrentIndex + bytesNeed;
 
             if (state.IsCompleted)
@@ -508,259 +487,6 @@ namespace Harmonic.Networking.Rtmp
                 }
             }
             _ioPipeline.NextProcessState = ProcessState.FirstByteBasicHeader;
-            return true;
-        }
-
-
-
-
-        public bool ProcessFirstByteBasicHeader(Span<byte> buffer, ref int consumed)
-        {
-            if (buffer.Length - consumed < 1)
-            {
-                return false;
-            }
-
-            var header = new ChunkHeader()
-            {
-                ChunkBasicHeader = new ChunkBasicHeader(),
-                MessageHeader = new MessageHeader()
-            };
-            _processingChunk = header;
-            var arr = _arrayPool.Rent(1);
-            buffer.Slice(consumed, 1).CopyTo(arr);
-            consumed += 1;
-            var basicHeader = arr[0];
-            _arrayPool.Return(arr);
-            header.ChunkBasicHeader.RtmpChunkHeaderType = (ChunkHeaderType)(basicHeader >> 6);
-            header.ChunkBasicHeader.ChunkStreamId = (uint)basicHeader & 0x3F;
-            if (header.ChunkBasicHeader.ChunkStreamId != 0 && header.ChunkBasicHeader.ChunkStreamId != 0x3F)
-            {
-                if (header.ChunkBasicHeader.RtmpChunkHeaderType == ChunkHeaderType.Type3)
-                {
-                    FillHeader(header);
-                    _ioPipeline.NextProcessState = ProcessState.CompleteMessage;
-                    return true;
-                }
-            }
-            _ioPipeline.NextProcessState = ProcessState.ChunkMessageHeader;
-            return true;
-        }
-
-        public bool ProcessChunkMessageHeader(Span<byte> buffer, ref int consumed)
-        {
-            int bytesNeed = 0;
-            switch (_processingChunk.ChunkBasicHeader.ChunkStreamId)
-            {
-                case 0:
-                    bytesNeed = 1;
-                    break;
-                case 0x3F:
-                    bytesNeed = 2;
-                    break;
-            }
-            switch (_processingChunk.ChunkBasicHeader.RtmpChunkHeaderType)
-            {
-                case ChunkHeaderType.Type0:
-                    bytesNeed += TYPE0_SIZE;
-                    break;
-                case ChunkHeaderType.Type1:
-                    bytesNeed += TYPE1_SIZE;
-                    break;
-                case ChunkHeaderType.Type2:
-                    bytesNeed += TYPE2_SIZE;
-                    break;
-            }
-
-            if (buffer.Length - consumed <= bytesNeed)
-            {
-                return false;
-            }
-
-            byte[] arr = null;
-            if (_processingChunk.ChunkBasicHeader.ChunkStreamId == 0)
-            {
-                arr = _arrayPool.Rent(1);
-                buffer.Slice(consumed, 1).CopyTo(arr);
-                _processingChunk.ChunkBasicHeader.ChunkStreamId = (uint)arr[0] + 64;
-                _arrayPool.Return(arr);
-            }
-            else if (_processingChunk.ChunkBasicHeader.ChunkStreamId == 0x3F)
-            {
-                arr = _arrayPool.Rent(2);
-                buffer.Slice(consumed, 2).CopyTo(arr);
-                _processingChunk.ChunkBasicHeader.ChunkStreamId = (uint)arr[1] * 256 + arr[0] + 64;
-                _arrayPool.Return(arr);
-            }
-            var header = _processingChunk;
-            switch (header.ChunkBasicHeader.RtmpChunkHeaderType)
-            {
-                case ChunkHeaderType.Type0:
-                    arr = _arrayPool.Rent(TYPE0_SIZE);
-                    buffer.Slice(consumed, TYPE0_SIZE).CopyTo(arr);
-                    header.MessageHeader.Timestamp = NetworkBitConverter.ToUInt24(arr.AsSpan(0, 3));
-                    header.MessageHeader.MessageLength = NetworkBitConverter.ToUInt24(arr.AsSpan(3, 3));
-                    header.MessageHeader.MessageType = (MessageType)arr[6];
-                    header.MessageHeader.MessageStreamId = NetworkBitConverter.ToUInt32(arr.AsSpan(7, 4), true);
-                    break;
-                case ChunkHeaderType.Type1:
-                    arr = _arrayPool.Rent(TYPE1_SIZE);
-                    buffer.Slice(consumed, TYPE1_SIZE).CopyTo(arr);
-                    header.MessageHeader.Timestamp = NetworkBitConverter.ToUInt24(arr.AsSpan(0, 3));
-                    header.MessageHeader.MessageLength = NetworkBitConverter.ToUInt24(arr.AsSpan(3, 3));
-                    header.MessageHeader.MessageType = (MessageType)arr[6];
-                    break;
-                case ChunkHeaderType.Type2:
-                    arr = _arrayPool.Rent(TYPE2_SIZE);
-                    buffer.Slice(consumed, TYPE2_SIZE).CopyTo(arr);
-                    header.MessageHeader.Timestamp = NetworkBitConverter.ToUInt24(arr.AsSpan(0, 3));
-                    break;
-            }
-            if (arr != null)
-            {
-                _arrayPool.Return(arr);
-            }
-            FillHeader(header);
-            if (header.MessageHeader.Timestamp == 0x00FFFFFF)
-            {
-                _ioPipeline.NextProcessState = ProcessState.ExtendedTimestamp;
-            }
-            else
-            {
-                _ioPipeline.NextProcessState = ProcessState.CompleteMessage;
-            }
-            consumed += bytesNeed;
-            return true;
-        }
-
-        public bool ProcessExtendedTimestamp(Span<byte> buffer, ref int consumed)
-        {
-            if (buffer.Length - consumed < 4)
-            {
-                return false;
-            }
-            var arr = _arrayPool.Rent(4);
-            buffer.Slice(consumed, 4).CopyTo(arr);
-            var extendedTimestamp = NetworkBitConverter.ToUInt32(arr.AsSpan(0, 4));
-            _processingChunk.ExtendedTimestamp = extendedTimestamp;
-            _processingChunk.MessageHeader.Timestamp = extendedTimestamp;
-            _ioPipeline.NextProcessState = ProcessState.CompleteMessage;
-            return true;
-        }
-
-        public bool ProcessCompleteMessage(Span<byte> buffer, ref int consumed)
-        {
-            var header = _processingChunk;
-            if (!_incompleteMessageState.TryGetValue(header.ChunkBasicHeader.ChunkStreamId, out var state))
-            {
-                state = new MessageReadingState()
-                {
-                    CurrentIndex = 0,
-                    MessageLength = header.MessageHeader.MessageLength,
-                    Body = _arrayPool.Rent((int)header.MessageHeader.MessageLength)
-                };
-                _incompleteMessageState.Add(header.ChunkBasicHeader.ChunkStreamId, state);
-            }
-
-            var bytesNeed = (int)(state.RemainBytes >= ReadChunkSize ? ReadChunkSize : state.RemainBytes);
-
-            if (buffer.Length - consumed < bytesNeed)
-            {
-                return false;
-            }
-
-            if (_previousReadMessageHeader.TryGetValue(header.ChunkBasicHeader.ChunkStreamId, out var prevHeader))
-            {
-                if (prevHeader.MessageStreamId != header.MessageHeader.MessageStreamId)
-                {
-                    // inform user previous message will never be received
-                    prevHeader = null;
-                }
-            }
-            _previousReadMessageHeader[_processingChunk.ChunkBasicHeader.ChunkStreamId] = _processingChunk.MessageHeader;
-            _processingChunk = null;
-
-            buffer.Slice(consumed, bytesNeed).CopyTo(state.Body.AsSpan(state.CurrentIndex));
-            consumed += bytesNeed;
-            state.CurrentIndex = state.CurrentIndex + bytesNeed;
-
-            if (state.IsCompleted)
-            {
-                _incompleteMessageState.Remove(header.ChunkBasicHeader.ChunkStreamId);
-                try
-                {
-                    var context = new Serialization.SerializationContext()
-                    {
-                        Amf0Reader = _amf0Reader,
-                        Amf0Writer = _amf0Writer,
-                        Amf3Reader = _amf3Reader,
-                        Amf3Writer = _amf3Writer,
-                        ReadBuffer = state.Body.AsMemory(0, (int)state.MessageLength)
-                    };
-                    if (header.MessageHeader.MessageType == MessageType.AggregateMessage)
-                    {
-                        var agg = new AggregateMessage()
-                        {
-                            MessageHeader = header.MessageHeader
-                        };
-                        agg.Deserialize(context);
-                        foreach (var message in agg.Messages)
-                        {
-                            if (!_ioPipeline._options._messageFactories.TryGetValue(message.Header.MessageType, out var factory))
-                            {
-                                continue;
-                            }
-                            var msgContext = new Serialization.SerializationContext()
-                            {
-                                Amf0Reader = context.Amf0Reader,
-                                Amf3Reader = context.Amf3Reader,
-                                Amf0Writer = context.Amf0Writer,
-                                Amf3Writer = context.Amf3Writer,
-                                ReadBuffer = context.ReadBuffer.Slice(message.DataOffset, (int)message.DataLength)
-                            };
-                            try
-                            {
-                                var msg = factory(header.MessageHeader, msgContext, out var factoryConsumed);
-                                msg.MessageHeader = header.MessageHeader;
-                                msg.Deserialize(msgContext);
-                                context.Amf0Reader.ResetReference();
-                                context.Amf3Reader.ResetReference();
-                                _rtmpSession.MessageArrived(msg);
-                            }
-                            catch (NotSupportedException)
-                            {
-
-                            }
-                        }
-                    }
-                    else
-                    {
-                        if (_ioPipeline._options._messageFactories.TryGetValue(header.MessageHeader.MessageType, out var factory))
-                        {
-                            try
-                            {
-                                var message = factory(header.MessageHeader, context, out var factoryConsumed);
-                                message.MessageHeader = header.MessageHeader;
-                                context.ReadBuffer = context.ReadBuffer.Slice(factoryConsumed);
-                                message.Deserialize(context);
-                                context.Amf0Reader.ResetReference();
-                                context.Amf3Reader.ResetReference();
-                                _rtmpSession.MessageArrived(message);
-                            }
-                            catch (NotSupportedException)
-                            {
-
-                            }
-                        }
-                    }
-                }
-                finally
-                {
-                    _arrayPool.Return(state.Body);
-                }
-            }
-            _ioPipeline.NextProcessState = ProcessState.FirstByteBasicHeader;
-            return true;
         }
 
     }

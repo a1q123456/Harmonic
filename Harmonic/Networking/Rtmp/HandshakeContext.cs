@@ -1,9 +1,12 @@
-﻿using Harmonic.Networking.Utils;
+﻿using Harmonic.Buffers;
+using Harmonic.Networking.Utils;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Net;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Harmonic.Networking.Rtmp
 {
@@ -36,16 +39,11 @@ namespace Harmonic.Networking.Rtmp
             }
         }
 
-        public bool ProcessHandshakeC0C1(ReadOnlySequence<byte> buffer, ref int consumed)
+        private async Task ProcessHandshakeC0C1(ByteBuffer buffer, CancellationToken ct)
         {
-            if (buffer.Length - consumed < 1537)
-            {
-                return false;
-            }
             var arr = _arrayPool.Rent(1537);
 
-            buffer.Slice(consumed, 1537).CopyTo(arr);
-            consumed += 1537;
+            await buffer.TakeOutMemoryAsync(arr.AsMemory(0, 1537), ct);
             var version = arr[0];
 
             if (version < 3)
@@ -59,8 +57,8 @@ namespace Harmonic.Networking.Rtmp
 
             _readerTimestampEpoch = NetworkBitConverter.ToUInt32(arr.AsSpan(1, 4));
             _writerTimestampEpoch = 0;
-            var allZero = arr.AsSpan(5, 4);
-            if (allZero[0] != 0 || allZero[1] != 0 || allZero[2] != 0 || allZero[3] != 0)
+            var allZero = arr.AsMemory(5, 4);
+            if (allZero.Span[0] != 0 || allZero.Span[1] != 0 || allZero.Span[2] != 0 || allZero.Span[3] != 0)
             {
                 throw new ProtocolViolationException();
             }
@@ -74,23 +72,17 @@ namespace Harmonic.Networking.Rtmp
             arr[0] = 3;
             NetworkBitConverter.TryGetBytes(_writerTimestampEpoch, arr.AsSpan(1, 4));
             _s1Data.AsSpan(0, 1528).CopyTo(arr.AsSpan(9));
-            _ioPipeline.SendRawData(arr, 1537);
+            await _ioPipeline.SendRawData(arr, 1537);
 
             _ioPipeline.NextProcessState = ProcessState.HandshakeC2;
-            return true;
         }
 
-        public bool ProcessHandshakeC2(ReadOnlySequence<byte> buffer, ref int consumed)
+        private async Task ProcessHandshakeC2(ByteBuffer buffer, CancellationToken ct)
         {
-            if (buffer.Length - consumed < 1536)
-            {
-                return false;
-            }
             byte[] arr = _arrayPool.Rent(1536);
             try
             {
-                buffer.Slice(consumed, 1536).CopyTo(arr);
-                consumed += 1536;
+                await buffer.TakeOutMemoryAsync(arr.AsMemory(0, 1536), ct);
                 var s1Timestamp = NetworkBitConverter.ToUInt32(arr.AsSpan(0, 4));
                 if (s1Timestamp != _writerTimestampEpoch)
                 {
@@ -104,93 +96,8 @@ namespace Harmonic.Networking.Rtmp
                 NetworkBitConverter.TryGetBytes(_readerTimestampEpoch, arr.AsSpan(0, 4));
                 NetworkBitConverter.TryGetBytes((uint)0, arr.AsSpan(4, 4));
                 _c1Data.AsSpan(0, 1528).CopyTo(arr.AsSpan(8));
-                _ioPipeline.SendRawData(arr, 1536);
+                await _ioPipeline.SendRawData(arr, 1536);
                 _ioPipeline.OnHandshakeSuccessful();
-                return true;
-            }
-            finally
-            {
-                _arrayPool.Return(_c1Data);
-                _arrayPool.Return(_s1Data);
-                _s1Data = null;
-                _c1Data = null;
-            }
-
-        }
-
-
-
-        public bool ProcessHandshakeC0C1(Span<byte> buffer, ref int consumed)
-        {
-            if (buffer.Length - consumed < 1537)
-            {
-                return false;
-            }
-            var arr = _arrayPool.Rent(1537);
-
-            buffer.Slice(consumed, 1537).CopyTo(arr);
-            consumed += 1537;
-            var version = arr[0];
-
-            if (version < 3)
-            {
-                throw new NotSupportedException();
-            }
-            if (version > 31)
-            {
-                throw new ProtocolViolationException();
-            }
-
-            _readerTimestampEpoch = NetworkBitConverter.ToUInt32(arr.AsSpan(1, 4));
-            _writerTimestampEpoch = 0;
-            var allZero = arr.AsSpan(5, 4);
-            if (allZero[0] != 0 || allZero[1] != 0 || allZero[2] != 0 || allZero[3] != 0)
-            {
-                throw new ProtocolViolationException();
-            }
-            _c1Data = _arrayPool.Rent(1528);
-
-            arr.AsSpan(9).CopyTo(_c1Data);
-            _s1Data = _arrayPool.Rent(1528);
-            _random.NextBytes(_s1Data.AsSpan(0, 1528));
-
-            arr.AsSpan().Clear();
-            arr[0] = 3;
-            NetworkBitConverter.TryGetBytes(_writerTimestampEpoch, arr.AsSpan(1, 4));
-            _s1Data.AsSpan(0, 1528).CopyTo(arr.AsSpan(9));
-            _ioPipeline.SendRawData(arr, 1537);
-
-            _ioPipeline.NextProcessState = ProcessState.HandshakeC2;
-            return true;
-        }
-
-        public bool ProcessHandshakeC2(Span<byte> buffer, ref int consumed)
-        {
-            if (buffer.Length - consumed < 1536)
-            {
-                return false;
-            }
-            byte[] arr = _arrayPool.Rent(1536);
-            try
-            {
-                buffer.Slice(consumed, 1536).CopyTo(arr);
-                consumed += 1536;
-                var s1Timestamp = NetworkBitConverter.ToUInt32(arr.AsSpan(0, 4));
-                if (s1Timestamp != _writerTimestampEpoch)
-                {
-                    throw new ProtocolViolationException();
-                }
-                if (!arr.AsSpan(8, 1528).SequenceEqual(_s1Data.AsSpan(0, 1528)))
-                {
-                    throw new ProtocolViolationException();
-                }
-
-                NetworkBitConverter.TryGetBytes(_readerTimestampEpoch, arr.AsSpan(0, 4));
-                NetworkBitConverter.TryGetBytes((uint)0, arr.AsSpan(4, 4));
-                _c1Data.AsSpan(0, 1528).CopyTo(arr.AsSpan(8));
-                _ioPipeline.SendRawData(arr, 1536);
-                _ioPipeline.OnHandshakeSuccessful();
-                return true;
             }
             finally
             {
