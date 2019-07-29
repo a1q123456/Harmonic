@@ -8,7 +8,7 @@ using System.Text;
 namespace Harmonic.Networking.Rtmp.Messages
 {
     [RtmpMessage(MessageType.VideoMessage)]
-    public sealed class VideoMessage : Message, IDisposable
+    public sealed class VideoMessage : Message
     {
         public byte[] Data { get; set; }
 
@@ -23,9 +23,5 @@ namespace Harmonic.Networking.Rtmp.Messages
             context.WriteBuffer.WriteToBuffer(Data.AsSpan(0, (int)MessageHeader.MessageLength));
         }
 
-        public void Dispose()
-        {
-            //_arrayPool.Return(Data);
-        }
     }
 }

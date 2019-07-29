@@ -182,7 +182,7 @@ namespace Harmonic.Networking.Rtmp
 
         internal Task SendMessageAsync(uint chunkStreamId, Message message)
         {
-            return IOPipeline.MultiplexMessageAsync(chunkStreamId, message);
+            return IOPipeline.ChunkStreamContext.MultiplexMessageAsync(chunkStreamId, message);
         }
 
         internal void MessageStreamCreated(RtmpMessageStream messageStream)

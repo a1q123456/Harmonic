@@ -33,7 +33,7 @@ namespace Harmonic.Networking.Rtmp.Messages.UserControlMessages
         public override void Serialize(SerializationContext context)
         {
             var length = sizeof(ushort) + sizeof(uint) + sizeof(uint);
-            var buffer = new byte[length];
+            var buffer = _arrayPool.Rent(length);
             try
             {
                 var span = buffer.AsSpan();
@@ -45,7 +45,7 @@ namespace Harmonic.Networking.Rtmp.Messages.UserControlMessages
             }
             finally
             {
-                //_arrayPool.Return(buffer);
+                _arrayPool.Return(buffer);
             }
             context.WriteBuffer.WriteToBuffer(buffer.AsSpan(0, length));
         }

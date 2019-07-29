@@ -8,7 +8,7 @@ using System.Text;
 namespace Harmonic.Networking.Rtmp.Messages
 {
     [RtmpMessage(MessageType.AudioMessage)]
-    public sealed class AudioMessage : Message, IDisposable
+    public sealed class AudioMessage : Message
     {
         public byte[] Data { get; set; }
 
@@ -21,11 +21,6 @@ namespace Harmonic.Networking.Rtmp.Messages
         public override void Serialize(SerializationContext context)
         {
             context.WriteBuffer.WriteToBuffer(Data.AsSpan(0, (int)MessageHeader.MessageLength));
-        }
-
-        public void Dispose()
-        {
-            //_arrayPool.Return(Data);
         }
     }
 }

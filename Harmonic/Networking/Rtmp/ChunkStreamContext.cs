@@ -19,7 +19,7 @@ namespace Harmonic.Networking.Rtmp
 {
     class ChunkStreamContext : IDisposable
     {
-        //private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
+        private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
         internal ChunkHeader _processingChunk = null;
         internal int ReadMinimumBufferSize { get => (ReadChunkSize + TYPE0_SIZE) * 4; }
         internal Dictionary<uint, MessageHeader> _previousWriteMessageHeader = new Dictionary<uint, MessageHeader>();
@@ -68,7 +68,6 @@ namespace Harmonic.Networking.Rtmp
             {
                 throw new InvalidOperationException("cannot send message that has not attached to a message stream");
             }
-            var ret = new TaskCompletionSource<int>();
             byte[] buffer = null;
             uint length = 0;
             using (var writeBuffer = new ByteBuffer())
@@ -83,8 +82,7 @@ namespace Harmonic.Networking.Rtmp
                 };
                 message.Serialize(context);
                 length = (uint)writeBuffer.Length;
-                //buffer = new byte[(int)length];
-                buffer = new byte[(int)length];
+                buffer = _arrayPool.Rent((int)length);
                 writeBuffer.TakeOutMemory(buffer);
             }
 
@@ -95,7 +93,8 @@ namespace Harmonic.Networking.Rtmp
                 {
                     message.MessageHeader.MessageType = message.GetType().GetCustomAttribute<RtmpMessageAttribute>().MessageTypes.First();
                 }
-                
+
+                Task ret = null;
                 // chunking
                 for (int i = 0; i < message.MessageHeader.MessageLength;)
                 {
@@ -106,35 +105,27 @@ namespace Harmonic.Networking.Rtmp
                     _previousWriteMessageHeader[chunkStreamId] = message.MessageHeader;
                     var headerLength = basicHeaderLength + messageHeaderLength;
                     var bodySize = (int)(length - i >= _writeChunkSize ? _writeChunkSize : length - i);
-                    //var chunkBuffer = _arrayPool.Rent(headerLength + bodySize);
-                    var chunkBuffer = new byte[headerLength + bodySize];
+                    var chunkBuffer = _arrayPool.Rent(headerLength + bodySize);
                     basicHeader.AsSpan(0, basicHeaderLength).CopyTo(chunkBuffer);
                     messageHeader.AsSpan(0, messageHeaderLength).CopyTo(chunkBuffer.AsSpan(basicHeaderLength));
-                    ////_arrayPool.Return(basicHeader);
-                    ////_arrayPool.Return(messageHeader);
+                    _arrayPool.Return(basicHeader);
+                    _arrayPool.Return(messageHeader);
                     buffer.AsSpan(i, bodySize).CopyTo(chunkBuffer.AsSpan(headerLength));
                     i += bodySize;
                     var isLastChunk = message.MessageHeader.MessageLength - i == 0;
-                    TaskCompletionSource<int> tcs = null;
+                    var tsk = _ioPipeline.SendRawData(chunkBuffer.AsSpan(0, headerLength + bodySize));
                     if (isLastChunk)
                     {
-                        tcs = ret;
+                        ret = tsk;
                     }
-                    _ioPipeline._writerQueue.Enqueue(new WriteState()
-                    {
-                        Buffer = chunkBuffer,
-                        Length = headerLength + bodySize,
-                        TaskSource = tcs
-                    });
-                    _ioPipeline._writerSignal.Release();
                 }
+                return ret;
             }
             finally
             {
-                ////_arrayPool.Return(buffer);
+                _arrayPool.Return(buffer);
             }
 
-            return ret.Task;
         }
 
         private void GenerateMesesageHeader(ChunkHeaderType chunkHeaderType, MessageHeader header, MessageHeader prevHeader, out byte[] buffer, out int length)
@@ -143,8 +134,7 @@ namespace Harmonic.Networking.Rtmp
             switch (chunkHeaderType)
             {
                 case ChunkHeaderType.Type0:
-                    //buffer = _arrayPool.Rent(TYPE0_SIZE + EXTENDED_TIMESTAMP_LENGTH);
-                    buffer = new byte[TYPE0_SIZE + EXTENDED_TIMESTAMP_LENGTH];
+                    buffer = _arrayPool.Rent(TYPE0_SIZE + EXTENDED_TIMESTAMP_LENGTH);
                     NetworkBitConverter.TryGetUInt24Bytes(timestamp >= 0xFFFFFF ? 0xFFFFFF : timestamp, buffer.AsSpan(0, 3));
                     NetworkBitConverter.TryGetUInt24Bytes(header.MessageLength, buffer.AsSpan(3, 3));
                     NetworkBitConverter.TryGetBytes((byte)header.MessageType, buffer.AsSpan(6, 1));
@@ -152,8 +142,7 @@ namespace Harmonic.Networking.Rtmp
                     length = TYPE0_SIZE;
                     break;
                 case ChunkHeaderType.Type1:
-                    //buffer = _arrayPool.Rent(TYPE1_SIZE + EXTENDED_TIMESTAMP_LENGTH);
-                    buffer = new byte[TYPE1_SIZE + EXTENDED_TIMESTAMP_LENGTH];
+                    buffer = _arrayPool.Rent(TYPE1_SIZE + EXTENDED_TIMESTAMP_LENGTH);
                     timestamp = prevHeader.Timestamp - timestamp;
                     NetworkBitConverter.TryGetUInt24Bytes(timestamp >= 0xFFFFFF ? 0xFFFFFF : timestamp, buffer.AsSpan(0, 3));
                     NetworkBitConverter.TryGetUInt24Bytes(header.MessageLength, buffer.AsSpan(3, 3));
@@ -161,15 +150,13 @@ namespace Harmonic.Networking.Rtmp
                     length = TYPE1_SIZE;
                     break;
                 case ChunkHeaderType.Type2:
-                    //buffer = _arrayPool.Rent(TYPE2_SIZE + EXTENDED_TIMESTAMP_LENGTH);
-                    buffer = new byte[TYPE2_SIZE + EXTENDED_TIMESTAMP_LENGTH];
+                    buffer = _arrayPool.Rent(TYPE2_SIZE + EXTENDED_TIMESTAMP_LENGTH);
                     timestamp = prevHeader.Timestamp - timestamp;
                     NetworkBitConverter.TryGetUInt24Bytes(timestamp >= 0xFFFFFF ? 0xFFFFFF : timestamp, buffer.AsSpan(0, 3));
                     length = TYPE2_SIZE;
                     break;
                 case ChunkHeaderType.Type3:
-                    //buffer = _arrayPool.Rent(EXTENDED_TIMESTAMP_LENGTH);
-                    buffer = new byte[EXTENDED_TIMESTAMP_LENGTH];
+                    buffer = _arrayPool.Rent(EXTENDED_TIMESTAMP_LENGTH);
                     length = 0;
                     break;
                 default:
@@ -187,23 +174,20 @@ namespace Harmonic.Networking.Rtmp
             byte fmt = (byte)chunkHeaderType;
             if (chunkStreamId >= 2 && chunkStreamId <= 63)
             {
-                //buffer = new byte[1];
-                buffer = new byte[1];
+                buffer = _arrayPool.Rent(1);
                 buffer[0] = (byte)((byte)(fmt << 6) | chunkStreamId);
                 length = 1;
             }
             else if (chunkStreamId >= 64 && chunkStreamId <= 319)
             {
-                //buffer = new byte[2];
-                buffer = new byte[2];
+                buffer = _arrayPool.Rent(2);
                 buffer[0] = (byte)(fmt << 6);
                 buffer[1] = (byte)(chunkStreamId - 64);
                 length = 2;
             }
             else if (chunkStreamId >= 320 && chunkStreamId <= 65599)
             {
-                //buffer = new byte[3];
-                buffer = new byte[3];
+                buffer = _arrayPool.Rent(3);
                 buffer[0] = (byte)((fmt << 6) | 1);
                 buffer[1] = (byte)((chunkStreamId - 64) & 0xff);
                 buffer[2] = (byte)((chunkStreamId - 64) >> 8);
@@ -272,37 +256,39 @@ namespace Harmonic.Networking.Rtmp
         }
 
 
-        public async Task ProcessFirstByteBasicHeader(ByteBuffer buffer, CancellationToken ct)
+        public bool ProcessFirstByteBasicHeader(ReadOnlySequence<byte> buffer, ref int consumed)
         {
+            if (buffer.Length - consumed < 1)
+            {
+                return false;
+            }
             var header = new ChunkHeader()
             {
                 ChunkBasicHeader = new ChunkBasicHeader(),
                 MessageHeader = new MessageHeader()
             };
             _processingChunk = header;
-            //var arr = new byte[1];
-            var arr = new byte[1];
-            await buffer.TakeOutMemoryAsync(arr.AsMemory(0, 1));
+            var arr = _arrayPool.Rent(1);
+            buffer.Slice(consumed, 1).CopyTo(arr);
+            consumed += 1;
             var basicHeader = arr[0];
-            ////_arrayPool.Return(arr);
+            _arrayPool.Return(arr);
             header.ChunkBasicHeader.RtmpChunkHeaderType = (ChunkHeaderType)(basicHeader >> 6);
             header.ChunkBasicHeader.ChunkStreamId = (uint)basicHeader & 0x3F;
-            if (header.ChunkBasicHeader.ChunkStreamId > 4)
-            {
-                throw new InvalidOperationException();
-            }
             if (header.ChunkBasicHeader.ChunkStreamId != 0 && header.ChunkBasicHeader.ChunkStreamId != 0x3F)
             {
                 if (header.ChunkBasicHeader.RtmpChunkHeaderType == ChunkHeaderType.Type3)
                 {
                     FillHeader(header);
                     _ioPipeline.NextProcessState = ProcessState.CompleteMessage;
+                    return true;
                 }
             }
             _ioPipeline.NextProcessState = ProcessState.ChunkMessageHeader;
+            return true;
         }
 
-        private async Task ProcessChunkMessageHeader(ByteBuffer buffer, CancellationToken ct)
+        private bool ProcessChunkMessageHeader(ReadOnlySequence<byte> buffer, ref int consumed)
         {
             int bytesNeed = 0;
             switch (_processingChunk.ChunkBasicHeader.ChunkStreamId)
@@ -327,53 +313,58 @@ namespace Harmonic.Networking.Rtmp
                     break;
             }
 
+            if (buffer.Length - consumed <= bytesNeed)
+            {
+                return false;
+            }
+
             byte[] arr = null;
             if (_processingChunk.ChunkBasicHeader.ChunkStreamId == 0)
             {
-                //arr = new byte[1];
-                arr = new byte[1];
-                await buffer.TakeOutMemoryAsync(arr.AsMemory(0, 1), ct);
+                arr = _arrayPool.Rent(1);
+                buffer.Slice(consumed, 1).CopyTo(arr);
+                consumed += 1;
                 _processingChunk.ChunkBasicHeader.ChunkStreamId = (uint)arr[0] + 64;
-                ////_arrayPool.Return(arr);
+                _arrayPool.Return(arr);
             }
             else if (_processingChunk.ChunkBasicHeader.ChunkStreamId == 0x3F)
             {
-                //arr = new byte[2];
-                arr = new byte[2];
-                await buffer.TakeOutMemoryAsync(arr.AsMemory(0, 2), ct);
+                arr = _arrayPool.Rent(2);
+                buffer.Slice(consumed, 2).CopyTo(arr);
+                consumed += 2;
                 _processingChunk.ChunkBasicHeader.ChunkStreamId = (uint)arr[1] * 256 + arr[0] + 64;
-                ////_arrayPool.Return(arr);
+                _arrayPool.Return(arr);
             }
             var header = _processingChunk;
             switch (header.ChunkBasicHeader.RtmpChunkHeaderType)
             {
                 case ChunkHeaderType.Type0:
-                    //arr = _arrayPool.Rent(TYPE0_SIZE);
-                    arr = new byte[TYPE0_SIZE];
-                    await buffer.TakeOutMemoryAsync(arr.AsMemory(0, TYPE0_SIZE), ct);
+                    arr = _arrayPool.Rent(TYPE0_SIZE);
+                    buffer.Slice(consumed, TYPE0_SIZE).CopyTo(arr);
+                    consumed += TYPE0_SIZE;
                     header.MessageHeader.Timestamp = NetworkBitConverter.ToUInt24(arr.AsSpan(0, 3));
                     header.MessageHeader.MessageLength = NetworkBitConverter.ToUInt24(arr.AsSpan(3, 3));
                     header.MessageHeader.MessageType = (MessageType)arr[6];
                     header.MessageHeader.MessageStreamId = NetworkBitConverter.ToUInt32(arr.AsSpan(7, 4), true);
                     break;
                 case ChunkHeaderType.Type1:
-                    //arr = _arrayPool.Rent(TYPE1_SIZE);
-                    arr = new byte[TYPE1_SIZE];
-                    await buffer.TakeOutMemoryAsync(arr.AsMemory(0, TYPE1_SIZE), ct);
+                    arr = _arrayPool.Rent(TYPE1_SIZE);
+                    buffer.Slice(consumed, TYPE1_SIZE).CopyTo(arr);
+                    consumed += TYPE1_SIZE;
                     header.MessageHeader.Timestamp = NetworkBitConverter.ToUInt24(arr.AsSpan(0, 3));
                     header.MessageHeader.MessageLength = NetworkBitConverter.ToUInt24(arr.AsSpan(3, 3));
                     header.MessageHeader.MessageType = (MessageType)arr[6];
                     break;
                 case ChunkHeaderType.Type2:
-                    //arr = _arrayPool.Rent(TYPE2_SIZE);
-                    arr = new byte[TYPE2_SIZE];
-                    await buffer.TakeOutMemoryAsync(arr.AsMemory(0, TYPE2_SIZE), ct);
+                    arr = _arrayPool.Rent(TYPE2_SIZE);
+                    buffer.Slice(consumed, TYPE2_SIZE).CopyTo(arr);
+                    consumed += TYPE2_SIZE;
                     header.MessageHeader.Timestamp = NetworkBitConverter.ToUInt24(arr.AsSpan(0, 3));
                     break;
             }
             if (arr != null)
             {
-                ////_arrayPool.Return(arr);
+                _arrayPool.Return(arr);
             }
             FillHeader(header);
             if (header.MessageHeader.Timestamp == 0x00FFFFFF)
@@ -384,20 +375,26 @@ namespace Harmonic.Networking.Rtmp
             {
                 _ioPipeline.NextProcessState = ProcessState.CompleteMessage;
             }
+            return true;
         }
 
-        public async Task ProcessExtendedTimestamp(ByteBuffer buffer, CancellationToken ct)
+        private bool ProcessExtendedTimestamp(ReadOnlySequence<byte> buffer, ref int consumed)
         {
-            //var arr = new byte[4];
-            var arr = new byte[4];
-            await buffer.TakeOutMemoryAsync(arr.AsMemory(0, 4), ct);
+            if (buffer.Length - consumed < 4)
+            {
+                return false;
+            }
+            var arr = _arrayPool.Rent(4);
+            buffer.Slice(consumed, 4).CopyTo(arr);
+            consumed += 4;
             var extendedTimestamp = NetworkBitConverter.ToUInt32(arr.AsSpan(0, 4));
             _processingChunk.ExtendedTimestamp = extendedTimestamp;
             _processingChunk.MessageHeader.Timestamp = extendedTimestamp;
             _ioPipeline.NextProcessState = ProcessState.CompleteMessage;
+            return true;
         }
 
-        public async Task ProcessCompleteMessage(ByteBuffer buffer, CancellationToken ct)
+        private bool ProcessCompleteMessage(ReadOnlySequence<byte> buffer, ref int consumed)
         {
             var header = _processingChunk;
             if (!_incompleteMessageState.TryGetValue(header.ChunkBasicHeader.ChunkStreamId, out var state))
@@ -406,13 +403,17 @@ namespace Harmonic.Networking.Rtmp
                 {
                     CurrentIndex = 0,
                     MessageLength = header.MessageHeader.MessageLength,
-                    //Body = new byte[(int]header.MessageHeader.MessageLength)
-                    Body = new byte[(int)header.MessageHeader.MessageLength]
+                    Body = _arrayPool.Rent((int)header.MessageHeader.MessageLength)
                 };
                 _incompleteMessageState.Add(header.ChunkBasicHeader.ChunkStreamId, state);
             }
 
             var bytesNeed = (int)(state.RemainBytes >= ReadChunkSize ? ReadChunkSize : state.RemainBytes);
+
+            if (buffer.Length - consumed < bytesNeed)
+            {
+                return false;
+            }
 
             if (_previousReadMessageHeader.TryGetValue(header.ChunkBasicHeader.ChunkStreamId, out var prevHeader))
             {
@@ -425,7 +426,8 @@ namespace Harmonic.Networking.Rtmp
             _previousReadMessageHeader[_processingChunk.ChunkBasicHeader.ChunkStreamId] = _processingChunk.MessageHeader;
             _processingChunk = null;
 
-            await buffer.TakeOutMemoryAsync(state.Body.AsMemory(state.CurrentIndex, bytesNeed));
+            buffer.Slice(consumed, bytesNeed).CopyTo(state.Body.AsSpan(state.CurrentIndex));
+            consumed += bytesNeed;
             state.CurrentIndex = state.CurrentIndex + bytesNeed;
 
             if (state.IsCompleted)
@@ -500,10 +502,11 @@ namespace Harmonic.Networking.Rtmp
                 }
                 finally
                 {
-                    ////_arrayPool.Return(state.Body);
+                    _arrayPool.Return(state.Body);
                 }
             }
             _ioPipeline.NextProcessState = ProcessState.FirstByteBasicHeader;
+            return true;
         }
 
     }

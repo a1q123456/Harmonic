@@ -181,7 +181,6 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             {
                 return false;
             }
-            buffer = buffer.Slice(contentConsumed);
             consumed = targetUriConsumed + responseUriConsumed + sizeof(uint) + contentConsumed;
             message = new Message()
             {
