@@ -4,6 +4,7 @@ using Harmonic.Networking.Rtmp.Serialization;
 using Harmonic.NetWorking.Rtmp.Messages;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.Contracts;
 using System.Linq;
 using System.Reflection;
@@ -78,6 +79,7 @@ namespace Harmonic.Networking.Rtmp.Messages.Commands
                 {
                     ProcedureName = GetType().GetCustomAttribute<RtmpCommandAttribute>().Name;
                 }
+                Debug.Assert(!string.IsNullOrEmpty(ProcedureName));
                 context.Amf0Writer.WriteBytes(ProcedureName, writeContext);
                 context.Amf0Writer.WriteBytes(TranscationID, writeContext);
                 context.Amf0Writer.WriteValueBytes(CommandObject, writeContext);
@@ -93,6 +95,11 @@ namespace Harmonic.Networking.Rtmp.Messages.Commands
         {
             using (var writeContext = new Amf.Serialization.Amf3.SerializationContext(context.WriteBuffer))
             {
+                if (ProcedureName == null)
+                {
+                    ProcedureName = GetType().GetCustomAttribute<RtmpCommandAttribute>().Name;
+                }
+                Debug.Assert(!string.IsNullOrEmpty(ProcedureName));
                 context.Amf3Writer.WriteBytes(ProcedureName, writeContext);
                 context.Amf3Writer.WriteBytes(TranscationID, writeContext);
                 context.Amf3Writer.WriteValueBytes(CommandObject, writeContext);

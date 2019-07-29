@@ -1,5 +1,6 @@
 ﻿using Harmonic.Networking.Amf.Common;
 using Harmonic.Networking.Rtmp;
+using Harmonic.Networking.Rtmp.Data;
 using Harmonic.Networking.Rtmp.Messages;
 using Harmonic.Networking.Rtmp.Messages.Commands;
 using Harmonic.Networking.Rtmp.Messages.UserControlMessages;
@@ -8,6 +9,7 @@ using Harmonic.Service;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace Harmonic.Controllers.Living
 {
@@ -20,10 +22,14 @@ namespace Harmonic.Controllers.Living
 
     public class LivingStream : NetStream
     {
-        private PublishingType PublishingType { get; set; }
+        private List<Action> _cleanupActions = new List<Action>();
+        private PublishingType _publishingType;
         private PublisherSessionService _publisherSessionService = null;
+        private DataMessage FlvMetadata = null;
         private AudioMessage AACConfigureRecord = null;
         private VideoMessage AVCConfigureRecord = null;
+        private event Action<VideoMessage> OnVideoMessage;
+        private event Action<AudioMessage> OnAudioMessage;
 
         public LivingStream(PublisherSessionService publisherSessionService)
         {
@@ -31,13 +37,100 @@ namespace Harmonic.Controllers.Living
         }
 
         [RpcMethod("play")]
-        public void Play(
+        public async Task Play(
             [FromOptionalArgument] string streamName,
             [FromOptionalArgument] double start = -1,
             [FromOptionalArgument] double duration = -1,
             [FromOptionalArgument] bool reset = false)
         {
+            var publisher = _publisherSessionService.FindPublisher(streamName);
+            if (publisher == null)
+            {
+                throw new KeyNotFoundException();
+            }
+            var resetData = new AmfObject
+            {
+                {"level", "status" },
+                {"code", "NetStream.Play.Reset" },
+                {"description", "Resetting and playing stream." },
+                {"details", streamName }
+            };
+            var resetStatus = RtmpSession.CreateCommandMessage<OnStatusCommandMessage>();
+            resetStatus.InfoObject = resetData;
+            await MessageStream.SendMessageAsync(ChunkStream, resetStatus);
 
+            var startData = new AmfObject
+            {
+                {"level", "status" },
+                {"code", "NetStream.Play.Start" },
+                {"description", "Started playing." },
+                {"details", streamName }
+            };
+            var startStatus = RtmpSession.CreateCommandMessage<OnStatusCommandMessage>();
+            startStatus.InfoObject = startData;
+            await MessageStream.SendMessageAsync(ChunkStream, startStatus);
+
+            var flvMetadata = RtmpSession.CreateData<DataMessage>();
+            flvMetadata.MessageHeader = (MessageHeader)publisher.FlvMetadata.MessageHeader.Clone();
+            flvMetadata.Data = publisher.FlvMetadata.Data;
+            await MessageStream.SendMessageAsync(ChunkStream, flvMetadata);
+
+            if (publisher.AACConfigureRecord != null)
+            {
+                await MessageStream.SendMessageAsync(ChunkStream, publisher.AACConfigureRecord);
+            }
+            if (publisher.AVCConfigureRecord != null)
+            {
+                await MessageStream.SendMessageAsync(ChunkStream, publisher.AVCConfigureRecord);
+            }
+
+            publisher.OnAudioMessage += SendAudio;
+            publisher.OnVideoMessage += SendVideo;
+            _cleanupActions.Add(() =>
+            {
+                publisher.OnVideoMessage -= SendVideo;
+                publisher.OnAudioMessage -= SendAudio;
+            });
+        }
+
+        private async void SendVideo(VideoMessage message)
+        {
+            try
+            {
+                var video = new VideoMessage();
+                video.MessageHeader.Timestamp = message.MessageHeader.Timestamp;
+                video.Data = message.Data;
+
+                await MessageStream.SendMessageAsync(ChunkStream, video);
+            }
+            catch
+            {
+                foreach (var a in _cleanupActions)
+                {
+                    a();
+                }
+                RtmpSession.Close();
+            }
+        }
+
+        private async void SendAudio(AudioMessage message)
+        {
+            try
+            {
+                var audio = new AudioMessage();
+                audio.MessageHeader.Timestamp = message.MessageHeader.Timestamp;
+                audio.Data = message.Data;
+                
+                await MessageStream.SendMessageAsync(ChunkStream, audio);
+            }
+            catch (Exception e)
+            {
+                foreach (var a in _cleanupActions)
+                {
+                    a();
+                }
+                RtmpSession.Close();
+            }
         }
 
         [RpcMethod(Name = "publish")]
@@ -58,14 +151,15 @@ namespace Harmonic.Controllers.Living
                 throw new InvalidOperationException($"not supported publishing type {publishingType}");
             }
 
-            PublishingType = publishingTypeMap[publishingType];
+            _publishingType = publishingTypeMap[publishingType];
 
             _publisherSessionService.RegisterPublisher(publishingName, this);
 
             RtmpSession.SendControlMessageAsync(new StreamBeginMessage() { StreamID = MessageStream.MessageStreamId });
             var onStatus = RtmpSession.CreateCommandMessage<OnStatusCommandMessage>();
-            MessageStream.RegisterMessageHandler<AudioMessage>(OnAudio);
-            MessageStream.RegisterMessageHandler<VideoMessage>(OnVideo);
+            MessageStream.RegisterMessageHandler<DataMessage>(HandleDataMessage);
+            MessageStream.RegisterMessageHandler<AudioMessage>(HandleAudioMessage);
+            MessageStream.RegisterMessageHandler<VideoMessage>(HandleVideoMessage);
             onStatus.InfoObject = new AmfObject
             {
                 {"level", "status" },
@@ -76,22 +170,28 @@ namespace Harmonic.Controllers.Living
             MessageStream.SendMessageAsync(ChunkStream, onStatus);
         }
 
-        public void OnAudio(AudioMessage audioData)
+        private void HandleDataMessage(DataMessage msg)
+        {
+            FlvMetadata = msg;
+        }
+
+        public void HandleAudioMessage(AudioMessage audioData)
         {
             if (AACConfigureRecord == null && audioData.Data.Length >= 2)
             {
                 AACConfigureRecord = audioData;
                 return;
             }
+            OnAudioMessage?.Invoke(audioData);
         }
 
-        public void OnVideo(VideoMessage videoData)
+        public void HandleVideoMessage(VideoMessage videoData)
         {
             if (AVCConfigureRecord == null && videoData.Data.Length >= 2)
             {
                 AVCConfigureRecord = videoData;
-                return;
             }
+            OnVideoMessage?.Invoke(videoData);
         }
 
         #region Disposable Support
@@ -104,6 +204,8 @@ namespace Harmonic.Controllers.Living
             {
                 base.Dispose(disposing);
                 _publisherSessionService.RemovePublisher(this);
+
+
                 disposedValue = true;
             }
         }

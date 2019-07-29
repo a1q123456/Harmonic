@@ -24,6 +24,7 @@ using Harmonic.Networking.Rtmp.Messages.UserControlMessages;
 using Harmonic.Networking.Rtmp.Messages.Commands;
 using Harmonic.Hosting;
 using System.Linq;
+using System.Diagnostics;
 
 namespace Harmonic.Networking.Rtmp
 {
@@ -48,7 +49,7 @@ namespace Harmonic.Networking.Rtmp
         private readonly int _resumeWriterThreshole;
         internal Dictionary<ProcessState, BufferProcessor> _bufferProcessors;
 
-        private Queue<WriteState> _writerQueue = new Queue<WriteState>();
+        private ConcurrentQueue<WriteState> _writerQueue = new ConcurrentQueue<WriteState>();
         internal ProcessState NextProcessState { get; set; } = ProcessState.HandshakeC0C1;
         internal ChunkStreamContext ChunkStreamContext { get; set; } = null;
         private HandshakeContext _handshakeContext = null;
@@ -77,7 +78,7 @@ namespace Harmonic.Networking.Rtmp
             var pipe = new Pipe(opt);
             var t1 = Producer(_socket, pipe.Writer, ct);
             var t2 = Consumer(pipe.Reader, ct);
-            var t3 = Writer();
+            var t3 = Writer(ct);
             ct.Register(() =>
             {
                 ChunkStreamContext?.Dispose();
@@ -132,15 +133,44 @@ namespace Harmonic.Networking.Rtmp
         }
 
         #region Sender
-        private async Task Writer()
+        private int test = 0;
+        internal Task SendRawData(ReadOnlySpan<byte> data)
         {
-            while (true)
+            var tcs = new TaskCompletionSource<int>();
+            var buffer = _arrayPool.Rent(data.Length);
+            data.CopyTo(buffer);
+            _writerQueue.Enqueue(new WriteState()
             {
-                await _writerSignal.WaitAsync();
-                var data = _writerQueue.Dequeue();
-                await _socket.SendAsync(data.Buffer.AsMemory(0, data.Length), SocketFlags.None);
-                _arrayPool.Return(data.Buffer);
-                data.TaskSource?.SetResult(1);
+                Buffer = buffer,
+                TaskSource = tcs,
+                Length = data.Length
+            });
+            Debug.Assert(test >= 0);
+            Interlocked.Increment(ref test);
+            _writerSignal.Release();
+            return tcs.Task;
+        }
+
+        private async Task Writer(CancellationToken ct)
+        {
+            while (!ct.IsCancellationRequested && !disposedValue)
+            {
+                await _writerSignal.WaitAsync(ct);
+                if (_writerQueue.TryDequeue(out var data))
+                {
+                    Interlocked.Decrement(ref test);
+                    Debug.Assert(test >= 0);
+                    Debug.Assert(data != null);
+                    Debug.Assert(_socket != null);
+                    await _socket.SendAsync(data.Buffer.AsMemory(0, data.Length), SocketFlags.None, ct);
+                    _arrayPool.Return(data.Buffer);
+                    data.TaskSource?.SetResult(1);
+                }
+                else
+                {
+                    Debug.Assert(false);
+                }
+
             }
         }
         #endregion
@@ -148,7 +178,7 @@ namespace Harmonic.Networking.Rtmp
         #region Receiver
         private async Task Producer(Socket s, PipeWriter writer, CancellationToken ct = default)
         {
-            while (!ct.IsCancellationRequested)
+            while (!ct.IsCancellationRequested && !disposedValue)
             {
                 var memory = writer.GetMemory(ChunkStreamContext == null ? 1536 : ChunkStreamContext.ReadMinimumBufferSize);
                 var bytesRead = await s.ReceiveAsync(memory, SocketFlags.None);
@@ -181,7 +211,7 @@ namespace Harmonic.Networking.Rtmp
 
         private async Task Consumer(PipeReader reader, CancellationToken ct = default)
         {
-            while (true)
+            while (!ct.IsCancellationRequested && !disposedValue)
             {
                 var result = await reader.ReadAsync(ct);
                 var buffer = result.Buffer;
@@ -211,27 +241,10 @@ namespace Harmonic.Networking.Rtmp
         internal void Disconnect()
         {
             _socket.Close();
+            Dispose();
         }
         #endregion
 
-        #region Multiplexing
-        internal Task SendRawData(ReadOnlySpan<byte> data)
-        {
-            var tcs = new TaskCompletionSource<int>();
-            var buffer = _arrayPool.Rent(data.Length);
-            data.CopyTo(buffer);
-            _writerQueue.Enqueue(new WriteState()
-            {
-                Buffer = buffer,
-                TaskSource = tcs,
-                Length = data.Length
-            });
-            _writerSignal.Release();
-            return tcs.Task;
-        }
-
-
-        #endregion
 
 
         #region IDisposable Support
@@ -246,6 +259,8 @@ namespace Harmonic.Networking.Rtmp
                     _handshakeContext?.Dispose();
                     ChunkStreamContext?.Dispose();
                     _socket.Dispose();
+                    _writerSignal.Dispose();
+
                 }
 
 

@@ -3,11 +3,13 @@ using Harmonic.Networking.Amf.Serialization.Amf0;
 using Harmonic.Networking.Amf.Serialization.Amf3;
 using Harmonic.Networking.Rtmp.Data;
 using Harmonic.Networking.Rtmp.Messages;
+using Harmonic.Networking.Rtmp.Messages.Commands;
 using Harmonic.Networking.Rtmp.Serialization;
 using Harmonic.Networking.Utils;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -82,6 +84,7 @@ namespace Harmonic.Networking.Rtmp
                 };
                 message.Serialize(context);
                 length = (uint)writeBuffer.Length;
+                Debug.Assert(length != 0);
                 buffer = _arrayPool.Rent((int)length);
                 writeBuffer.TakeOutMemory(buffer);
             }
@@ -89,11 +92,12 @@ namespace Harmonic.Networking.Rtmp
             try
             {
                 message.MessageHeader.MessageLength = length;
+                Debug.Assert(message.MessageHeader.MessageLength != 0);
                 if (message.MessageHeader.MessageType == 0)
                 {
                     message.MessageHeader.MessageType = message.GetType().GetCustomAttribute<RtmpMessageAttribute>().MessageTypes.First();
                 }
-
+                Debug.Assert(message.MessageHeader.MessageType != 0);
                 Task ret = null;
                 // chunking
                 for (int i = 0; i < message.MessageHeader.MessageLength;)
@@ -119,6 +123,7 @@ namespace Harmonic.Networking.Rtmp
                         ret = tsk;
                     }
                 }
+                Debug.Assert(ret != null);
                 return ret;
             }
             finally
@@ -394,6 +399,8 @@ namespace Harmonic.Networking.Rtmp
             return true;
         }
 
+        private List<AudioMessage> messages = new List<AudioMessage>();
+
         private bool ProcessCompleteMessage(ReadOnlySequence<byte> buffer, ref int consumed)
         {
             var header = _processingChunk;
@@ -469,6 +476,10 @@ namespace Harmonic.Networking.Rtmp
                                 var msg = factory(header.MessageHeader, msgContext, out var factoryConsumed);
                                 msg.MessageHeader = header.MessageHeader;
                                 msg.Deserialize(msgContext);
+                                if (msg.MessageHeader.MessageType == MessageType.AudioMessage)
+                                {
+                                    messages.Add(msg as AudioMessage);
+                                }
                                 context.Amf0Reader.ResetReference();
                                 context.Amf3Reader.ResetReference();
                                 _rtmpSession.MessageArrived(msg);
@@ -489,6 +500,10 @@ namespace Harmonic.Networking.Rtmp
                                 message.MessageHeader = header.MessageHeader;
                                 context.ReadBuffer = context.ReadBuffer.Slice(factoryConsumed);
                                 message.Deserialize(context);
+                                if (message.MessageHeader.MessageType == MessageType.AudioMessage)
+                                {
+                                    messages.Add(message as AudioMessage);
+                                }
                                 context.Amf0Reader.ResetReference();
                                 context.Amf3Reader.ResetReference();
                                 _rtmpSession.MessageArrived(message);

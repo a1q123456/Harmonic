@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.Contracts;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -34,9 +35,9 @@ namespace Harmonic.Networking.Rtmp
             ControlMessageStream = new RtmpControlMessageStream(this);
             _messageStreams.Add(ControlMessageStream.MessageStreamId, ControlMessageStream);
             NetConnection = new NetConnection(this);
-            ControlMessageStream.RegisterMessageHandler<SetChunkSizeMessage>(SetChunkSize);
-            ControlMessageStream.RegisterMessageHandler<WindowAcknowledgementSizeMessage>(WindowAcknowledgementSize);
-            ControlMessageStream.RegisterMessageHandler<SetPeerBandwidthMessage>(SetPeerBandwidth);
+            ControlMessageStream.RegisterMessageHandler<SetChunkSizeMessage>(HandleSetChunkSize);
+            ControlMessageStream.RegisterMessageHandler<WindowAcknowledgementSizeMessage>(HandleWindowAcknowledgementSize);
+            ControlMessageStream.RegisterMessageHandler<SetPeerBandwidthMessage>(HandleSetPeerBandwidth);
             _rpcService = ioPipeline._options.ServerLifetime.Resolve<RpcService>();
         }
 
@@ -88,7 +89,7 @@ namespace Harmonic.Networking.Rtmp
             return ret as T;
         }
 
-        public T CreateData<T>() where T : DataMessage, new()
+        public T CreateData<T>() where T : DataMessage
         {
             var ret = Activator.CreateInstance(typeof(T), ConnectionInformation.AmfEncodingVersion);
             return ret as T;
@@ -96,10 +97,63 @@ namespace Harmonic.Networking.Rtmp
 
         internal void CommandHandler(AbstractController controller, CommandMessage command)
         {
-            object result = null;
+            MethodInfo method = null;
+            object[] arguments = null;
             try
             {
-                result = _rpcService.InvokeMethod(controller, command);
+                _rpcService.PrepareMethod(controller, command, out method, out arguments);
+                var result = method.Invoke(controller, arguments);
+                if (result != null)
+                {
+                    var resType = method.ReturnType;
+                    if (resType.IsGenericType && resType.GetGenericTypeDefinition() == typeof(Task<>))
+                    {
+                        var tsk = result as Task;
+                        tsk.ContinueWith(t =>
+                        {
+                            var taskResult = resType.GetProperty("Result").GetValue(result);
+                            var retCommand = new ReturnResultCommandMessage(command.AmfEncodingVersion);
+                            retCommand.IsSuccess = true;
+                            retCommand.TranscationID = command.TranscationID;
+                            retCommand.CommandObject = null;
+                            retCommand.ReturnValue = taskResult;
+                            _ = controller.MessageStream.SendMessageAsync(controller.ChunkStream, retCommand);
+                        }, TaskContinuationOptions.OnlyOnRanToCompletion);
+                        tsk.ContinueWith(t =>
+                        {
+                            var exception = tsk.Exception;
+                            var retCommand = new ReturnResultCommandMessage(command.AmfEncodingVersion);
+                            retCommand.IsSuccess = false;
+                            retCommand.TranscationID = command.TranscationID;
+                            retCommand.CommandObject = null;
+                            retCommand.ReturnValue = exception.Message;
+                            _ = controller.MessageStream.SendMessageAsync(controller.ChunkStream, retCommand);
+                        }, TaskContinuationOptions.OnlyOnFaulted);
+                    }
+                    else if (resType == typeof(Task))
+                    {
+                        var tsk = result as Task;
+                        tsk.ContinueWith(t =>
+                        {
+                            var exception = tsk.Exception;
+                            var retCommand = new ReturnResultCommandMessage(command.AmfEncodingVersion);
+                            retCommand.IsSuccess = false;
+                            retCommand.TranscationID = command.TranscationID;
+                            retCommand.CommandObject = null;
+                            retCommand.ReturnValue = exception.Message;
+                            _ = controller.MessageStream.SendMessageAsync(controller.ChunkStream, retCommand);
+                        }, TaskContinuationOptions.OnlyOnFaulted);
+                    }
+                    else if (resType != typeof(void))
+                    {
+                        var retCommand = new ReturnResultCommandMessage(command.AmfEncodingVersion);
+                        retCommand.IsSuccess = true;
+                        retCommand.TranscationID = command.TranscationID;
+                        retCommand.CommandObject = null;
+                        retCommand.ReturnValue = result;
+                        _ = controller.MessageStream.SendMessageAsync(controller.ChunkStream, retCommand);
+                    }
+                }
             }
             catch (Exception e)
             {
@@ -110,43 +164,6 @@ namespace Harmonic.Networking.Rtmp
                 retCommand.ReturnValue = e.Message;
                 _ = controller.MessageStream.SendMessageAsync(controller.ChunkStream, retCommand);
                 return;
-            }
-            if (result != null)
-            {
-                var resType = result.GetType();
-                if (resType.IsGenericType && resType.GetGenericTypeDefinition() == typeof(Task<>))
-                {
-                    var tsk = result as Task;
-                    tsk.ContinueWith(t =>
-                    {
-                        var taskResult = resType.GetProperty("Result").GetValue(result);
-                        var retCommand = new ReturnResultCommandMessage(command.AmfEncodingVersion);
-                        retCommand.IsSuccess = true;
-                        retCommand.TranscationID = command.TranscationID;
-                        retCommand.CommandObject = null;
-                        retCommand.ReturnValue = taskResult;
-                        _ = controller.MessageStream.SendMessageAsync(controller.ChunkStream, retCommand);
-                    }, TaskContinuationOptions.OnlyOnRanToCompletion);
-                    tsk.ContinueWith(t =>
-                    {
-                        var exception = tsk.Exception;
-                        var retCommand = new ReturnResultCommandMessage(command.AmfEncodingVersion);
-                        retCommand.IsSuccess = false;
-                        retCommand.TranscationID = command.TranscationID;
-                        retCommand.CommandObject = null;
-                        retCommand.ReturnValue = exception.Message;
-                        _ = controller.MessageStream.SendMessageAsync(controller.ChunkStream, retCommand);
-                    }, TaskContinuationOptions.OnlyOnFaulted);
-                }
-                else if (resType != typeof(void))
-                {
-                    var retCommand = new ReturnResultCommandMessage(command.AmfEncodingVersion);
-                    retCommand.IsSuccess = true;
-                    retCommand.TranscationID = command.TranscationID;
-                    retCommand.CommandObject = null;
-                    retCommand.ReturnValue = result;
-                    _ = controller.MessageStream.SendMessageAsync(controller.ChunkStream, retCommand);
-                }
             }
         }
 
@@ -215,7 +232,7 @@ namespace Harmonic.Networking.Rtmp
             });
         }
 
-        private void SetPeerBandwidth(SetPeerBandwidthMessage message)
+        private void HandleSetPeerBandwidth(SetPeerBandwidthMessage message)
         {
             IOPipeline.ChunkStreamContext.ReadWindowAcknowledgementSize = message.WindowSize;
             SendControlMessageAsync(new AcknowledgementMessage()
@@ -226,8 +243,9 @@ namespace Harmonic.Networking.Rtmp
             IOPipeline.ChunkStreamContext.BandwidthLimited = true;
         }
 
-        private void WindowAcknowledgementSize(WindowAcknowledgementSizeMessage message)
+        private void HandleWindowAcknowledgementSize(WindowAcknowledgementSizeMessage message)
         {
+            return;
             IOPipeline.ChunkStreamContext.ReadWindowAcknowledgementSize = message.WindowSize;
             SendControlMessageAsync(new AcknowledgementMessage()
             {
@@ -236,7 +254,7 @@ namespace Harmonic.Networking.Rtmp
             IOPipeline.ChunkStreamContext.ReadWindowSize = 0;
         }
 
-        private void SetChunkSize(SetChunkSizeMessage setChunkSize)
+        private void HandleSetChunkSize(SetChunkSizeMessage setChunkSize)
         {
             IOPipeline.ChunkStreamContext.ReadChunkSize = (int)setChunkSize.ChunkSize;
         }

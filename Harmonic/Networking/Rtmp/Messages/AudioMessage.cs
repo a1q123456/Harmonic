@@ -20,7 +20,7 @@ namespace Harmonic.Networking.Rtmp.Messages
 
         public override void Serialize(SerializationContext context)
         {
-            context.WriteBuffer.WriteToBuffer(Data.AsSpan(0, (int)MessageHeader.MessageLength));
+            context.WriteBuffer.WriteToBuffer(Data.AsSpan(0, Data.Length));
         }
     }
 }

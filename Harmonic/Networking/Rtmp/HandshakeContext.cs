@@ -65,11 +65,11 @@ namespace Harmonic.Networking.Rtmp
 
                 _readerTimestampEpoch = NetworkBitConverter.ToUInt32(arr.AsSpan(1, 4));
                 _writerTimestampEpoch = 0;
-                var allZero = arr.AsMemory(5, 4);
-                if (allZero.Span[0] != 0 || allZero.Span[1] != 0 || allZero.Span[2] != 0 || allZero.Span[3] != 0)
-                {
-                    throw new ProtocolViolationException();
-                }
+                //var allZero = arr.AsMemory(5, 4);
+                //if (allZero.Span[0] != 0 || allZero.Span[1] != 0 || allZero.Span[2] != 0 || allZero.Span[3] != 0)
+                //{
+                //    throw new ProtocolViolationException();
+                //}
                 _c1Data = _arrayPool.Rent(1528);
 
                 arr.AsSpan(9, 1528).CopyTo(_c1Data);

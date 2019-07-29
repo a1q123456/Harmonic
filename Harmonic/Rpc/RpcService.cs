@@ -24,9 +24,8 @@ namespace Harmonic.Rpc
 
     internal class RpcMethod
     {
-        public delegate object MethodDelegate(object inst, object[] param);
         public string MethodName;
-        public MethodDelegate Method;
+        public MethodInfo Method;
 
         public List<RpcParameter> Parameters = new List<RpcParameter>();
     }
@@ -35,7 +34,7 @@ namespace Harmonic.Rpc
     {
         public Dictionary<Type, List<RpcMethod>> Controllers = new Dictionary<Type, List<RpcMethod>>();
 
-        public object InvokeMethod<T>(T instance, CommandMessage command) where T: AbstractController
+        public void PrepareMethod<T>(T instance, CommandMessage command, out MethodInfo methodInfo, out object[] callArguments) where T: AbstractController
         {
             if (!Controllers.TryGetValue(instance.GetType(), out var methods))
             {
@@ -116,7 +115,9 @@ namespace Harmonic.Rpc
 
                 if (i == arguments.Length)
                 {
-                    return method.Method(instance, arguments);
+                    methodInfo = method.Method;
+                    callArguments = arguments;
+                    return;
                 }
             }
 
@@ -179,7 +180,7 @@ namespace Harmonic.Rpc
                     }
                     if (canInvoke || !parameters.Any())
                     {
-                        rpcMethod.Method = method.Invoke;
+                        rpcMethod.Method = method;
                         rpcMethod.MethodName = methodName;
                         if (!Controllers.TryGetValue(controllerType, out var mapping))
                         {
