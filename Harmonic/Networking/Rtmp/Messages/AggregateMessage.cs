@@ -69,7 +69,7 @@ namespace Harmonic.Networking.Rtmp.Messages
         public override void Serialize(SerializationContext context)
         {
             int bytesNeed = (int)(Messages.Count * 11 + Messages.Sum(m => m.DataLength));
-            var buffer = _arrayPool.Rent(bytesNeed);
+            var buffer = new byte[bytesNeed];
             try
             {
                 var span = buffer.AsSpan(0, bytesNeed);
@@ -92,7 +92,7 @@ namespace Harmonic.Networking.Rtmp.Messages
             }
             finally
             {
-                _arrayPool.Return(buffer);
+                //_arrayPool.Return(buffer);
             }
         }
     }

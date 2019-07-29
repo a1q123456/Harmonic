@@ -21,7 +21,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
         private delegate void WriteHandler<T>(T value, SerializationContext context);
         private delegate void WriteHandler(object value, SerializationContext context);
 
-        private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
+        //private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
 
         private Dictionary<Type, WriteHandler> _writeHandlers = new Dictionary<Type, WriteHandler>();
         
@@ -202,7 +202,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
         public void WriteBytes(double value, SerializationContext context)
         {
             context.Buffer.WriteToBuffer((byte)Amf3Type.Double);
-            var backend = _arrayPool.Rent(sizeof(double));
+            var backend = new byte[sizeof(double)];
             try
             {
                 Contract.Assert(NetworkBitConverter.TryGetBytes(value, backend));
@@ -210,7 +210,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             }
             finally
             {
-                _arrayPool.Return(backend);
+                //_arrayPool.Return(backend);
             }
 
         }
@@ -231,7 +231,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                     var byteCount = (uint)Encoding.UTF8.GetByteCount(value);
                     var header = (byteCount << 1) | 0x01;
                     WriteU29BytesImpl(header, context);
-                    var backend = _arrayPool.Rent((int)byteCount);
+                    var backend = new byte[(int)byteCount];
                     try
                     {
                         Encoding.UTF8.GetBytes(value, backend);
@@ -239,7 +239,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                     }
                     finally
                     {
-                        _arrayPool.Return(backend);
+                        //_arrayPool.Return(backend);
                     }
 
                     if (value.Any())
@@ -287,7 +287,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             var timestamp = timeOffset.ToUnixTimeMilliseconds();
             header = 0x01;
             WriteU29BytesImpl(header, context);
-            var backend = _arrayPool.Rent(sizeof(double));
+            var backend = new byte[sizeof(double)];
             try
             {
                 Contract.Assert(NetworkBitConverter.TryGetBytes(timestamp, backend));
@@ -295,7 +295,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             }
             finally
             {
-                _arrayPool.Return(backend);
+                //_arrayPool.Return(backend);
             }
 
         }
@@ -506,7 +506,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 var header = ((uint)value.Count << 1) | 0x01;
                 WriteU29BytesImpl(header, context);
                 context.Buffer.WriteToBuffer(value.IsFixedSize ? (byte)0x01 : (byte)0x00);
-                var buffer = _arrayPool.Rent(sizeof(uint));
+                var buffer = new byte[sizeof(uint)];
                 try
                 {
                     foreach (var i in value)
@@ -517,7 +517,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 }
                 finally
                 {
-                    _arrayPool.Return(buffer);
+                    //_arrayPool.Return(buffer);
                 }
             }
         }
@@ -539,7 +539,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 var header = ((uint)value.Count << 1) | 0x01;
                 WriteU29BytesImpl(header, context);
                 context.Buffer.WriteToBuffer(value.IsFixedSize ? (byte)0x01 : (byte)0x00);
-                var buffer = _arrayPool.Rent(sizeof(int));
+                var buffer = new byte[sizeof(int)];
                 try
                 {
 
@@ -551,7 +551,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 }
                 finally
                 {
-                    _arrayPool.Return(buffer);
+                    //_arrayPool.Return(buffer);
                 }
                 return;
             }
@@ -574,7 +574,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 var header = ((uint)value.Count << 1) | 0x01;
                 WriteU29BytesImpl(header, context);
                 context.Buffer.WriteToBuffer(value.IsFixedSize ? (byte)0x01 : (byte)0x00);
-                var buffer = _arrayPool.Rent(sizeof(double));
+                var buffer = new byte[sizeof(double)];
                 try
                 {
                     foreach (var i in value)
@@ -585,7 +585,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 }
                 finally
                 {
-                    _arrayPool.Return(buffer);
+                    //_arrayPool.Return(buffer);
                 }
                 return;
             }

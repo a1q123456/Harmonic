@@ -56,7 +56,9 @@ namespace Harmonic.Buffers
 
         private void AddNewBufferSegment()
         {
-            _buffers.Add(_arrayPool.Rent(BufferSegmentSize));
+            var arr = _arrayPool.Rent(BufferSegmentSize);
+            Debug.Assert(_buffers.IndexOf(arr) == -1);
+            _buffers.Add(arr);
             _bufferEnd = 0;
         }
 
@@ -117,9 +119,8 @@ namespace Harmonic.Buffers
                     bytes.CopyTo(buffer.AsSpan(_bufferEnd));
                     _bufferEnd += bytes.Length;
                 }
-
-                _dataWritten?.Invoke();
             }
+            _dataWritten?.Invoke();
         }
         class _source : IValueTaskSource
         {
@@ -298,6 +299,10 @@ namespace Harmonic.Buffers
             {
                 var discardBuffers = new List<byte[]>();
                 bool prevDiscarded = false;
+                if (Length < buffer.Length && _maxiumBufferSize >= 0)
+                {
+                    throw new InvalidProgramException();
+                }
                 foreach (var b in _buffers)
                 {
                     if (buffer.Length == 0)
@@ -319,7 +324,14 @@ namespace Harmonic.Buffers
                     var length = end - start;
                     var needToCopy = Math.Min(buffer.Length, length);
 
-                    b.AsSpan(start, needToCopy).CopyTo(buffer);
+                    try
+                    {
+                        b.AsSpan(start, needToCopy).CopyTo(buffer);
+                    }
+                    catch (ArgumentOutOfRangeException e)
+                    {
+                        throw;
+                    }
 
                     start += needToCopy;
                     if (isFirst)
@@ -346,9 +358,8 @@ namespace Harmonic.Buffers
                     }
 
                     buffer = buffer.Slice(needToCopy);
-
-
                 }
+                //Console.WriteLine(Length);
                 Debug.Assert(buffer.Length == 0 || _maxiumBufferSize < 0);
                 while (discardBuffers.Any())
                 {
@@ -361,10 +372,10 @@ namespace Harmonic.Buffers
                 {
                     AddNewBufferSegment();
                 }
-                if (Length <= _maxiumBufferSize && _maxiumBufferSize >= 0)
-                {
-                    _memoryUnderLimit?.Invoke();
-                }
+            }
+            if (Length <= _maxiumBufferSize && _maxiumBufferSize >= 0)
+            {
+                _memoryUnderLimit?.Invoke();
             }
         }
 
@@ -382,15 +393,15 @@ namespace Harmonic.Buffers
                     Action ac = null;
                     ac = () =>
                     {
-                        if (buffer.Length > Length)
+                        if (buffer.Length <= Length)
                         {
                             _dataWritten -= ac;
-                            TakeOutMemoryNoCheck(buffer.Span);
                             reg.Dispose();
+                            TakeOutMemoryNoCheck(buffer.Span);
                             source.Success();
                         }
                     };
-
+                    _dataWritten += ac;
                     return new ValueTask(source, 0);
                 }
             }

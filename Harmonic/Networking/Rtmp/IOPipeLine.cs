@@ -44,10 +44,11 @@ namespace Harmonic.Networking.Rtmp
         internal delegate Task BufferProcessor(ByteBuffer buffer, CancellationToken ct);
         internal SemaphoreSlim _writerSignal = new SemaphoreSlim(0);
 
+        private bool _readerCompleted = false;
         private ByteBuffer _socketBuffer = new ByteBuffer(2048, 32767);
         private Socket _socket;
-        private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
-        private MemoryPool<byte> _memoryPool = MemoryPool<byte>.Shared;
+        //private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
+        //private MemoryPool<byte> _memoryPool = MemoryPool<byte>.Shared;
         private readonly int _resumeWriterThreshole;
         internal Dictionary<ProcessState, BufferProcessor> _bufferProcessors;
 
@@ -133,7 +134,7 @@ namespace Harmonic.Networking.Rtmp
                 await _writerSignal.WaitAsync();
                 var data = _writerQueue.Dequeue();
                 await _socket.SendAsync(data.Buffer.AsMemory(0, data.Length), SocketFlags.None);
-                _arrayPool.Return(data.Buffer);
+                ////_arrayPool.Return(data.Buffer);
                 data.TaskSource?.SetResult(1);
             }
         }
@@ -145,12 +146,15 @@ namespace Harmonic.Networking.Rtmp
             while (!ct.IsCancellationRequested)
             {
                 //var memory = writer.GetMemory(ChunkStreamContext == null ? 1536 : ChunkStreamContext.ReadMinimumBufferSize);
-                using (var owner = _memoryPool.Rent(2048))
+                //using (var owner = _memoryPool.Rent(2048))
                 {
-                    var memory = owner.Memory;
+                    //var memory = owner.Memory;
+                    var arr = new byte[2048];
+                    var memory = arr.AsMemory();
                     var bytesRead = await s.ReceiveAsync(memory, SocketFlags.None);
                     if (bytesRead == 0)
                     {
+                        _readerCompleted = true;
                         break;
                     }
                     if (ChunkStreamContext != null)
@@ -165,7 +169,7 @@ namespace Harmonic.Networking.Rtmp
                             }
                         }
                     }
-                    await _socketBuffer.WriteToBufferAsync(memory);
+                    await _socketBuffer.WriteToBufferAsync(memory.Slice(0, bytesRead));
                 }
             }
 
@@ -173,7 +177,7 @@ namespace Harmonic.Networking.Rtmp
 
         private async Task Consumer(CancellationToken ct = default)
         {
-            while (ct.IsCancellationRequested)
+            while (!ct.IsCancellationRequested && !_readerCompleted)
             {
                 await _bufferProcessors[NextProcessState](_socketBuffer, ct);
             }

@@ -33,7 +33,7 @@ namespace Harmonic.Networking.Rtmp.Messages
 
         public override void Serialize(SerializationContext context)
         {
-            var buffer = _arrayPool.Rent(sizeof(uint) + sizeof(byte));
+            var buffer = new byte[sizeof(uint) + sizeof(byte)];
             try
             {
                 NetworkBitConverter.TryGetBytes(WindowSize, buffer);
@@ -42,7 +42,7 @@ namespace Harmonic.Networking.Rtmp.Messages
             }
             finally
             {
-                _arrayPool.Return(buffer);
+                //_arrayPool.Return(buffer);
             }
         }
     }

@@ -14,7 +14,7 @@ namespace Harmonic.Networking.Rtmp.Messages
 
         public override void Deserialize(SerializationContext context)
         {
-            Data = _arrayPool.Rent(context.ReadBuffer.Length);
+            Data = new byte[context.ReadBuffer.Length];
             context.ReadBuffer.Span.Slice(0, (int)MessageHeader.MessageLength).CopyTo(Data);
         }
 
@@ -25,7 +25,7 @@ namespace Harmonic.Networking.Rtmp.Messages
 
         public void Dispose()
         {
-            _arrayPool.Return(Data);
+            //_arrayPool.Return(Data);
         }
     }
 }

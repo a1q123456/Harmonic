@@ -14,7 +14,7 @@ namespace Harmonic.Networking.Rtmp
     {
         private uint _readerTimestampEpoch = 0;
         private uint _writerTimestampEpoch = 0;
-        private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
+        //private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
         private Random _random = new Random();
         private byte[] _s1Data = null;
         private byte[] _c1Data = null;
@@ -29,19 +29,22 @@ namespace Harmonic.Networking.Rtmp
 
         public void Dispose()
         {
-            if (_s1Data != null)
-            {
-                _arrayPool.Return(_s1Data);
-            }
-            if (_c1Data != null)
-            {
-                _arrayPool.Return(_c1Data);
-            }
+            _s1Data = null;
+            _c1Data = null;
+            //if (_s1Data != null)
+            //{
+            //    //_arrayPool.Return(_s1Data);
+            //}
+            //if (_c1Data != null)
+            //{
+            //    //_arrayPool.Return(_c1Data);
+            //}
         }
 
         private async Task ProcessHandshakeC0C1(ByteBuffer buffer, CancellationToken ct)
         {
-            var arr = _arrayPool.Rent(1537);
+            //var arr = new byte[1537];
+            var arr = new byte[1537];
 
             await buffer.TakeOutMemoryAsync(arr.AsMemory(0, 1537), ct);
             var version = arr[0];
@@ -62,10 +65,12 @@ namespace Harmonic.Networking.Rtmp
             {
                 throw new ProtocolViolationException();
             }
-            _c1Data = _arrayPool.Rent(1528);
+            //_c1Data = new byte[1528];
+            _c1Data = new byte[1528];
 
             arr.AsSpan(9).CopyTo(_c1Data);
-            _s1Data = _arrayPool.Rent(1528);
+            //_s1Data = new byte[1528];
+            _s1Data = new byte[1528];
             _random.NextBytes(_s1Data.AsSpan(0, 1528));
 
             arr.AsSpan().Clear();
@@ -79,7 +84,8 @@ namespace Harmonic.Networking.Rtmp
 
         private async Task ProcessHandshakeC2(ByteBuffer buffer, CancellationToken ct)
         {
-            byte[] arr = _arrayPool.Rent(1536);
+            //byte[] arr = new byte[1536];
+            var arr = new byte[1536];
             try
             {
                 await buffer.TakeOutMemoryAsync(arr.AsMemory(0, 1536), ct);
@@ -101,8 +107,8 @@ namespace Harmonic.Networking.Rtmp
             }
             finally
             {
-                _arrayPool.Return(_c1Data);
-                _arrayPool.Return(_s1Data);
+                ////_arrayPool.Return(_c1Data);
+                ////_arrayPool.Return(_s1Data);
                 _s1Data = null;
                 _c1Data = null;
             }
