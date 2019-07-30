@@ -1,11 +1,16 @@
+﻿using Autofac;
+using Harmonic.Hosting;
 using System;
-using Autofac;
-using RtmpSharp.Hosting;
+using System.Collections.Generic;
+using System.Text;
 
-class Startup : IStartup
+namespace demo
 {
-    public void ConfigureServices(ContainerBuilder builder)
+    class Startup : IStartup
     {
+        public void ConfigureServices(ContainerBuilder builder)
+        {
+
+        }
     }
-    public Type[] SessionScopedServices { get; } = new Type[0] {};
 }
