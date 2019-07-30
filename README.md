@@ -7,7 +7,7 @@ a high performance RTMP streaming application framework
 - [x] Rtmp muxer/demuxer
 - [x] Amf0 serializer/deserializer
 - [x] Amf3 serialzier/deserializer
-- [ ] Rtmp message serializier/deserializer
+- [x] Rtmp message serializier/deserializer
 - [ ] IStreamSession interface
 - [ ] Flv muxer/demuxer
 - [ ] Live Streaming
