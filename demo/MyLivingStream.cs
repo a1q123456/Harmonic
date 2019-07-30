@@ -21,14 +21,9 @@ namespace demo
             [FromOptionalArgument] double duration = -1,
             [FromOptionalArgument] bool reset = false)
         {
-            if (streamName == "a2")
-            {
-                await base.Play(streamName, start, duration, reset);
-            }
-            else
-            {
-                throw new NotSupportedException();
-            }
+            // Do some check or other stuff
+
+            await base.Play(streamName, start, duration, reset);
         }
     }
 }
