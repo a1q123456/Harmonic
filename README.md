@@ -62,7 +62,7 @@ RtmpServer server = new RtmpServerBuilder()
 
 ```
 
-# Expansibility
+# Scalability
 
 Harmonic will scan your assembly and try to find classes that inherit from `RtmpController` or `WebSocketController` then register them into Harmonic, and map controller by url `rtmp://<address>/<controller_name>/<streamName>` for rtmp and `ws://<address>/<controller_name>/<streamName>`. the controller_name is controller class's name then remove the `Controller` suffix, for example `Living` is controller_name of `LivingController`.
 
