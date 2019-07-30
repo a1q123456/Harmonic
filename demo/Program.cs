@@ -1,12 +1,6 @@
-﻿using RtmpSharp.Net;
+﻿using Harmonic.Hosting;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using RtmpSharp.Controller;
-using RtmpSharp.Hosting;
+using System.Net;
 
 namespace demo
 {
@@ -14,8 +8,13 @@ namespace demo
     {
         static void Main(string[] args)
         {
-            RtmpServer server = new RtmpServer(new Startup(), new RtmpSharp.IO.SerializationContext());
-            server.RegisterController<LivingController>();
+            RtmpServer server = new RtmpServerBuilder()
+                .UseStartup<Startup>()
+                .UseWebSocket(c =>
+                {
+                    c.BindEndPoint = new IPEndPoint(IPAddress.Parse("0.0.0.0"), 8080);
+                })
+                .Build();
             var tsk = server.StartAsync();
             tsk.Wait();
         }
