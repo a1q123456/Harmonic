@@ -246,7 +246,11 @@ namespace Harmonic.NetWorking.Amf.Serialization.Amf0
         public void WriteValueBytes(object value, SerializationContext context)
         {
             var valueType = value != null ? value.GetType() : typeof(object);
-            Contract.Assert(_getBytesHandlers.TryGetValue(valueType, out var handler));
+            if (!_getBytesHandlers.TryGetValue(valueType, out var handler))
+            {
+                throw new InvalidOperationException();
+            }
+
 
             handler(value, context);
         }

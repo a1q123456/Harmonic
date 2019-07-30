@@ -30,7 +30,11 @@ namespace Harmonic.NetWorking.Rtmp.Messages.Commands
         public void DeserializeAmf0(SerializationContext context)
         {
             var buffer = context.ReadBuffer.Span;
-            Contract.Assert(context.Amf0Reader.TryGetNumber(buffer, out var txid, out var consumed));
+            if (!context.Amf0Reader.TryGetNumber(buffer, out var txid, out var consumed))
+            {
+                throw new InvalidOperationException();
+            }
+
             TranscationID = txid;
             buffer = buffer.Slice(consumed);
             context.Amf0Reader.TryGetObject(buffer, out var commandObj, out consumed);
@@ -56,7 +60,10 @@ namespace Harmonic.NetWorking.Rtmp.Messages.Commands
         public void DeserializeAmf3(SerializationContext context)
         {
             var buffer = context.ReadBuffer.Span;
-            Contract.Assert(context.Amf3Reader.TryGetDouble(buffer, out var txid, out var consumed));
+            if (!context.Amf3Reader.TryGetDouble(buffer, out var txid, out var consumed))
+            {
+                throw new InvalidOperationException();
+            }
             TranscationID = txid;
             buffer = buffer.Slice(consumed);
             context.Amf3Reader.TryGetObject(buffer, out var commandObj, out consumed);
