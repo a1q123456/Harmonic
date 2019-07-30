@@ -7,7 +7,6 @@ using Harmonic.NetWorking.Amf.Serialization.Amf0;
 using Harmonic.NetWorking.Amf.Serialization.Amf3;
 using Harmonic.NetWorking.Rtmp.Messages;
 using Harmonic.NetWorking.Rtmp.Serialization;
-using Harmonic.NetWorking.Rtmp.Messages;
 using System;
 using System.Collections.Generic;
 using System.Text;
