@@ -41,16 +41,16 @@ namespace Harmonic.Hosting
                 RegisterCommonServices(_builder);
             }
         }
-        public IContainer ServiceContainer { get; private set; }
-        public ILifetimeScope ServerLifetime { get; private set; }
+        internal IContainer ServiceContainer { get; private set; }
+        internal ILifetimeScope ServerLifetime { get; private set; }
 
-        public IReadOnlyDictionary<string, Type> RegisteredControllers => _registeredControllers;
-        public IPEndPoint RtmpEndPoint { get; set; } = new IPEndPoint(IPAddress.Any, 1935);
-        public bool UseUdp { get; set; } = true;
-        public bool UseWebsocket { get; set; } = true;
-        public X509Certificate2 Cert { get; internal set; }
+        internal IReadOnlyDictionary<string, Type> RegisteredControllers => _registeredControllers;
+        internal IPEndPoint RtmpEndPoint { get; set; } = new IPEndPoint(IPAddress.Any, 1935);
+        internal bool UseUdp { get; set; } = true;
+        internal bool UseWebsocket { get; set; } = true;
+        internal X509Certificate2 Cert { get; set; }
 
-        public RtmpServerOptions()
+        internal RtmpServerOptions()
         {
             var userControlMessageFactory = new UserControlMessageFactory();
             var commandMessageFactory = new CommandMessageFactory();
@@ -111,7 +111,7 @@ namespace Harmonic.Hosting
             }
         }
 
-        public void RegisterController(Type controllerType, string appName = null)
+        internal void RegisterController(Type controllerType, string appName = null)
         {
             if (!typeof(RtmpController).IsAssignableFrom(controllerType))
             {
@@ -122,7 +122,7 @@ namespace Harmonic.Hosting
             _rpcService.RegeisterController(controllerType);
             _builder.RegisterType(controllerType).AsSelf();
         }
-        public void RegisterStream(Type streamType)
+        internal void RegisterStream(Type streamType)
         {
             if (!typeof(NetStream).IsAssignableFrom(streamType))
             {
@@ -130,6 +130,11 @@ namespace Harmonic.Hosting
             }
             _rpcService.RegeisterController(streamType);
             _builder.RegisterType(streamType).AsSelf();
+        }
+
+        internal void CleanupRpcRegistration()
+        {
+            _rpcService.CleanupRegistration();
         }
         private void RegisterCommonServices(ContainerBuilder builder)
         {
@@ -141,11 +146,11 @@ namespace Harmonic.Hosting
                 .SingleInstance();
         }
 
-        public void RegisterController<T>(string appName = null) where T : RtmpController
+        internal void RegisterController<T>(string appName = null) where T : RtmpController
         {
             RegisterController(typeof(T), appName);
         }
-        public void RegisterStream<T>() where T : NetStream
+        internal void RegisterStream<T>() where T : NetStream
         {
             RegisterStream(typeof(T));
         }

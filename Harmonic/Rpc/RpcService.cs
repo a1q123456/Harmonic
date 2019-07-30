@@ -124,6 +124,25 @@ namespace Harmonic.Rpc
             throw new EntryPointNotFoundException();
         }
 
+        internal void CleanupRegistration()
+        {
+            foreach (var controller in Controllers)
+            {
+                var gps = controller.Value.GroupBy(m => m.MethodName).Where(gp => gp.Count() > 1);
+
+                var hiddenMethods = new List<RpcMethod>();
+
+                foreach (var gp in gps)
+                {
+                    hiddenMethods.AddRange(gp.Where(m => m.Method.DeclaringType != controller.Key));
+                }
+                foreach (var m in hiddenMethods)
+                {
+                    controller.Value.Remove(m);
+                }
+            }
+        }
+
         internal void RegeisterController(Type controllerType)
         {
             var methods = controllerType.GetMethods();
