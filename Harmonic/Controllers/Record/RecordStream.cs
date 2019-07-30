@@ -15,6 +15,7 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Harmonic.Controllers.Record
@@ -29,6 +30,10 @@ namespace Harmonic.Controllers.Record
         private Amf0Reader _amf0Reader = new Amf0Reader();
         private Amf3Reader _amf3Reader = new Amf3Reader();
         private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
+        private DataMessage _metaData = null;
+        private uint _maxTimestamp = 0;
+        private SemaphoreSlim _playLock = new SemaphoreSlim(1);
+
         private RtmpChunkStream VideoChunkStream { get; set; } = null;
         private RtmpChunkStream AudioChunkStream { get; set; } = null;
 
@@ -37,6 +42,14 @@ namespace Harmonic.Controllers.Record
             base.Dispose(disposing);
             if (disposing)
             {
+                if (_publishingType != PublishingType.None && _recordFile != null)
+                {
+                    var metadata = _metaData.Data[2] as Dictionary<string, object>;
+                    metadata["duration"] = ((double)_maxTimestamp) / 1000;
+                    _recordFile.Seek(0, SeekOrigin.Begin);
+                    SaveMessage(_metaData);
+                }
+
                 _recordFile?.Dispose();
             }
         }
@@ -63,7 +76,7 @@ namespace Harmonic.Controllers.Record
             RtmpSession.SendControlMessageAsync(new StreamIsRecordedMessage() { StreamID = MessageStream.MessageStreamId });
             RtmpSession.SendControlMessageAsync(new StreamBeginMessage() { StreamID = MessageStream.MessageStreamId });
             var onStatus = RtmpSession.CreateCommandMessage<OnStatusCommandMessage>();
-            MessageStream.RegisterMessageHandler<DataMessage>(SaveMessage);
+            MessageStream.RegisterMessageHandler<DataMessage>(HandleData);
             MessageStream.RegisterMessageHandler<AudioMessage>(SaveMessage);
             MessageStream.RegisterMessageHandler<VideoMessage>(SaveMessage);
             onStatus.InfoObject = new AmfObject
@@ -76,6 +89,39 @@ namespace Harmonic.Controllers.Record
             MessageStream.SendMessageAsync(ChunkStream, onStatus);
 
             _recordFile = new FileStream(_recordService.GetRecordFilename(streamName), FileMode.OpenOrCreate);
+        }
+
+        private void HandleData(DataMessage message)
+        {
+            _metaData = message;
+            _recordFile.Seek(9 + message.MessageHeader.MessageLength, SeekOrigin.Current);
+        }
+
+        [RpcMethod("seek")]
+        public async Task Seek([FromOptionalArgument] double milliSeconds)
+        {
+            var resetData = new AmfObject
+            {
+                {"level", "status" },
+                {"code", "NetStream.Seek.Notify" },
+                {"description", "Seeking stream." },
+                {"details", "seek" }
+            };
+            var resetStatus = RtmpSession.CreateCommandMessage<OnStatusCommandMessage>();
+            resetStatus.InfoObject = resetData;
+            await MessageStream.SendMessageAsync(ChunkStream, resetStatus);
+
+            await _playLock.WaitAsync();
+            _recordFile.Seek(0, SeekOrigin.Begin);
+
+            uint current = 0;
+            while (current < milliSeconds && _recordFile.Position <= _recordFile.Length)
+            {
+                var message = await ReadHeader();
+                _recordFile.Seek(message.MessageLength, SeekOrigin.Current);
+                current = message.Timestamp;
+            }
+            _playLock.Release();
         }
 
         [RpcMethod("play")]
@@ -118,11 +164,9 @@ namespace Harmonic.Controllers.Record
             }
         }
 
-        private async Task PlayRecordFile()
+        private async Task<MessageHeader> ReadHeader()
         {
             byte[] headerBuffer = null;
-            byte[] bodyBuffer = null;
-            
             try
             {
                 headerBuffer = _arrayPool.Rent(9);
@@ -132,17 +176,36 @@ namespace Harmonic.Controllers.Record
                 {
                     throw new InvalidDataException();
                 }
-                var length = (int)NetworkBitConverter.ToUInt32(headerBuffer.AsSpan(0, 4));
+                var length = NetworkBitConverter.ToUInt32(headerBuffer.AsSpan(0, 4));
                 var type = (MessageType)headerBuffer[4];
                 var timestamp = NetworkBitConverter.ToUInt32(headerBuffer.AsSpan(5, 4));
+                return new MessageHeader()
+                {
+                    MessageLength = length,
+                    MessageType = type,
+                    Timestamp = timestamp
+                };
+            }
+            finally
+            {
+                _arrayPool.Return(headerBuffer);
+            }
+        }
 
-                bodyBuffer = _arrayPool.Rent(length);
-                bytesRead = await _recordFile.ReadAsync(bodyBuffer.AsMemory(0, length));
-                if (bytesRead != length)
+        private async Task<Message> ReadMessage()
+        {
+            byte[] bodyBuffer = null;
+
+            try
+            {
+                var header = await ReadHeader();
+                bodyBuffer = _arrayPool.Rent((int)header.MessageLength);
+                var bytesRead = await _recordFile.ReadAsync(bodyBuffer.AsMemory(0, (int)header.MessageLength));
+                if (bytesRead != (int)header.MessageLength)
                 {
                     throw new InvalidDataException();
                 }
-                if (RtmpSession.IOPipeline.Options.MessageFactories.TryGetValue(type, out var factory))
+                if (RtmpSession.IOPipeline.Options.MessageFactories.TryGetValue(header.MessageType, out var factory))
                 {
                     var context = new NetWorking.Rtmp.Serialization.SerializationContext()
                     {
@@ -150,43 +213,47 @@ namespace Harmonic.Controllers.Record
                         Amf0Writer = _amf0Writer,
                         Amf3Reader = _amf3Reader,
                         Amf3Writer = _amf3Writer,
-                        ReadBuffer = bodyBuffer.AsMemory(0, length)
+                        ReadBuffer = bodyBuffer.AsMemory(0, (int)header.MessageLength)
                     };
 
-                    var messageHeader = new MessageHeader();
-                    messageHeader.MessageLength = (uint)length;
-                    messageHeader.MessageType = type;
-                    messageHeader.Timestamp = timestamp;
-                    var message = factory(messageHeader, context, out var factoryConsumed);
-                    message.MessageHeader = messageHeader;
+                    var message = factory(header, context, out var factoryConsumed);
+                    message.MessageHeader = header;
                     context.ReadBuffer = context.ReadBuffer.Slice(factoryConsumed);
                     message.Deserialize(context);
                     context.Amf0Reader.ResetReference();
                     context.Amf3Reader.ResetReference();
-                    if (message is AudioMessage)
-                    {
-                        await MessageStream.SendMessageAsync(AudioChunkStream, message);
-                    }
-                    else if (message is VideoMessage)
-                    {
-                        await MessageStream.SendMessageAsync(VideoChunkStream, message);
-                    }
-                    else
-                    {
-                        await MessageStream.SendMessageAsync(ChunkStream, message);
-                    }
+                    return message;
+                }
+                else
+                {
+                    throw new NotSupportedException();
                 }
             }
             finally
             {
-                if (headerBuffer != null)
-                {
-                    _arrayPool.Return(headerBuffer);
-                }
                 if (bodyBuffer != null)
                 {
                     _arrayPool.Return(bodyBuffer);
                 }
+            }
+        }
+
+        private async Task PlayRecordFile()
+        {
+            await _playLock.WaitAsync();
+            var message = await ReadMessage();
+            _playLock.Release();
+            if (message is AudioMessage)
+            {
+                await MessageStream.SendMessageAsync(AudioChunkStream, message);
+            }
+            else if (message is VideoMessage)
+            {
+                await MessageStream.SendMessageAsync(VideoChunkStream, message);
+            }
+            else if (message is DataMessage)
+            {
+                await MessageStream.SendMessageAsync(ChunkStream, message);
             }
 
         }
@@ -194,7 +261,7 @@ namespace Harmonic.Controllers.Record
         private async void SaveMessage(Message message)
         {
             var writeBuffer = new Buffers.ByteBuffer();
-
+            _maxTimestamp = Math.Max(message.MessageHeader.Timestamp, _maxTimestamp);
             byte[] buffer = null;
             byte[] messageBuffer = null;
 
