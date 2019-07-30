@@ -7,6 +7,5 @@ namespace Harmonic.Hosting
     {
         void ConfigureServices(ContainerBuilder builder);
 
-        Type[] SessionScopedServices { get; }
     }
 }

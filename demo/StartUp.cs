@@ -10,7 +10,7 @@ namespace demo
     {
         public void ConfigureServices(ContainerBuilder builder)
         {
+
         }
-        public Type[] SessionScopedServices { get; } = new Type[0] { };
     }
 }

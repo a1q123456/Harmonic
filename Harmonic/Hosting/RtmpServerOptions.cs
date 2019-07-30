@@ -37,11 +37,9 @@ namespace Harmonic.Hosting
                 _startup = value;
                 _builder = new ContainerBuilder();
                 _startup.ConfigureServices(_builder);
-                SessionScopedServices = new List<Type>(_startup.SessionScopedServices);
                 RegisterCommonServices(_builder);
             }
         }
-        public List<Type> SessionScopedServices { get; private set; }
         public IContainer ServiceContainer { get; private set; }
         public ILifetimeScope ServerLifetime { get; private set; }
 
@@ -142,7 +140,6 @@ namespace Harmonic.Hosting
             builder.Register(c => _rpcService)
                 .AsSelf()
                 .SingleInstance();
-
         }
 
         public void RegisterController<T>(string appName = null) where T : AbstractController
