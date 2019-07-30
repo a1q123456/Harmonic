@@ -53,7 +53,7 @@ namespace Harmonic.NetWorking.Rtmp
         internal ProcessState NextProcessState { get; set; } = ProcessState.HandshakeC0C1;
         internal ChunkStreamContext ChunkStreamContext { get; set; } = null;
         private HandshakeContext _handshakeContext = null;
-        internal RtmpServerOptions _options = null;
+        public RtmpServerOptions Options { get; set; } = null;
 
 
         private static int _g_counter = 0;
@@ -64,7 +64,7 @@ namespace Harmonic.NetWorking.Rtmp
             _socket = socket;
             _resumeWriterThreshole = resumeWriterThreshole;
             _bufferProcessors = new Dictionary<ProcessState, BufferProcessor>();
-            _options = options;
+            Options = options;
             _handshakeContext = new HandshakeContext(this);
             _counter = _g_counter++;
         }

@@ -4,6 +4,7 @@ using Harmonic.NetWorking.Rtmp.Data;
 using Harmonic.NetWorking.Rtmp.Messages;
 using Harmonic.NetWorking.Rtmp.Messages.Commands;
 using Harmonic.NetWorking.Rtmp.Messages.UserControlMessages;
+using Harmonic.NetWorking.Rtmp.Streaming;
 using Harmonic.Rpc;
 using Harmonic.Service;
 using System;
@@ -13,14 +14,6 @@ using System.Threading.Tasks;
 
 namespace Harmonic.Controllers.Living
 {
-    public enum PublishingType
-    {
-        None,
-        Live,
-        Record,
-        Append
-    }
-
     public class LivingStream : NetStream
     {
         private List<Action> _cleanupActions = new List<Action>();
@@ -137,22 +130,16 @@ namespace Harmonic.Controllers.Living
         [RpcMethod(Name = "publish")]
         public void Publish([FromOptionalArgument] string publishingName, [FromOptionalArgument] string publishingType)
         {
-            var publishingTypeMap = new Dictionary<string, PublishingType>()
-            {
-                { "live", PublishingType.Live },
-                { "record", PublishingType.Record },
-                { "append", PublishingType.Append }
-            };
             if (string.IsNullOrEmpty(publishingName))
             {
                 throw new InvalidOperationException("empty publishing name");
             }
-            if (!publishingTypeMap.ContainsKey(publishingType))
+            if (!PublishingHelpers.IsTypeSupported(publishingType))
             {
                 throw new InvalidOperationException($"not supported publishing type {publishingType}");
             }
 
-            _publishingType = publishingTypeMap[publishingType];
+            _publishingType = PublishingHelpers.PublishingTypes[publishingType];
 
             _publisherSessionService.RegisterPublisher(publishingName, this);
 

@@ -1,5 +1,6 @@
 using Harmonic.Controllers;
 using Harmonic.Controllers.Living;
+using Harmonic.Controllers.Record;
 using Harmonic.NetWorking.Rtmp;
 using System;
 using System.Reflection;
@@ -54,6 +55,12 @@ namespace Harmonic.Hosting
             _websocketOptions._serverOptions = _options;
             foreach (var type in types)
             {
+                var neverRegister = type.GetCustomAttribute<NeverRegisterAttribute>();
+                if (neverRegister != null)
+                {
+                    continue;
+                }
+
                 if (typeof(NetStream).IsAssignableFrom(type) && !type.IsAbstract)
                 {
                     _options.RegisterStream(type);
@@ -84,6 +91,8 @@ namespace Harmonic.Hosting
             {
                 _options.RegisterController<LivingController>();
                 _options.RegisterStream<LivingStream>();
+                _options.RegisterStream<RecordStream>();
+                _options.RegisterController<RecordController>();
                 if (_useWebSocket)
                 {
                     _websocketOptions.RegisterController<WebSocketPlayController>();

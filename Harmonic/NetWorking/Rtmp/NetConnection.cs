@@ -97,7 +97,7 @@ namespace Harmonic.NetWorking.Rtmp
             }
             if (_rtmpSession.FindController(_rtmpSession.ConnectionInformation.App, out var controllerType))
             {
-                Controller = _rtmpSession.IOPipeline._options.ServerLifetime.Resolve(controllerType) as RtmpController;
+                Controller = _rtmpSession.IOPipeline.Options.ServerLifetime.Resolve(controllerType) as RtmpController;
             }
             else
             {

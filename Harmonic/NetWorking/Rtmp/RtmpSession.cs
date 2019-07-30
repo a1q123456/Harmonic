@@ -39,7 +39,7 @@ namespace Harmonic.NetWorking.Rtmp
             ControlMessageStream.RegisterMessageHandler<SetChunkSizeMessage>(HandleSetChunkSize);
             ControlMessageStream.RegisterMessageHandler<WindowAcknowledgementSizeMessage>(HandleWindowAcknowledgementSize);
             ControlMessageStream.RegisterMessageHandler<SetPeerBandwidthMessage>(HandleSetPeerBandwidth);
-            _rpcService = ioPipeline._options.ServerLifetime.Resolve<RpcService>();
+            _rpcService = ioPipeline.Options.ServerLifetime.Resolve<RpcService>();
         }
 
         internal void AssertStreamId(uint msid)
@@ -79,7 +79,7 @@ namespace Harmonic.NetWorking.Rtmp
 
         public T CreateNetStream<T>() where T: NetStream
         {
-            var ret = IOPipeline._options.ServerLifetime.Resolve<T>();
+            var ret = IOPipeline.Options.ServerLifetime.Resolve<T>();
             ret.MessageStream = CreateMessageStream();
             ret.RtmpSession = this;
             ret.ChunkStream = CreateChunkStream();
@@ -174,7 +174,7 @@ namespace Harmonic.NetWorking.Rtmp
 
         internal bool FindController(string appName, out Type controllerType)
         {
-            return IOPipeline._options.RegisteredControllers.TryGetValue(appName.ToLower(), out controllerType);
+            return IOPipeline.Options.RegisteredControllers.TryGetValue(appName.ToLower(), out controllerType);
         }
 
         public void Close()

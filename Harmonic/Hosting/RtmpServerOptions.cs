@@ -22,6 +22,7 @@ namespace Harmonic.Hosting
     public class RtmpServerOptions
     {
         internal Dictionary<MessageType, MessageFactory> _messageFactories = new Dictionary<MessageType, MessageFactory>();
+        public IReadOnlyDictionary<MessageType, MessageFactory> MessageFactories => _messageFactories;
         public delegate Message MessageFactory(MessageHeader header, NetWorking.Rtmp.Serialization.SerializationContext context, out int consumed);
         private Dictionary<string, Type> _registeredControllers = new Dictionary<string, Type>();
         internal ContainerBuilder _builder = null;
@@ -138,6 +139,11 @@ namespace Harmonic.Hosting
         }
         private void RegisterCommonServices(ContainerBuilder builder)
         {
+            builder.Register(c => new RecordServiceConfiguration())
+                .AsSelf();
+            builder.Register(c => new RecordService(c.Resolve<RecordServiceConfiguration>()))
+                .AsSelf()
+                .InstancePerLifetimeScope();
             builder.Register(c => new PublisherSessionService())
                 .AsSelf()
                 .InstancePerLifetimeScope();

@@ -1,4 +1,5 @@
-﻿using Harmonic.Controllers.Living;
+﻿using Harmonic.Controllers;
+using Harmonic.Controllers.Living;
 using Harmonic.Rpc;
 using System;
 using System.Collections.Generic;
@@ -6,6 +7,7 @@ using System.Text;
 
 namespace demo
 {
+    [NeverRegister]
     class MyLivingController : LivingController
     {
         [RpcMethod("createStream")]

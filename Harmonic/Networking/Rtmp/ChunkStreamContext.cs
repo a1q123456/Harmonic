@@ -462,7 +462,7 @@ namespace Harmonic.NetWorking.Rtmp
                         agg.Deserialize(context);
                         foreach (var message in agg.Messages)
                         {
-                            if (!_ioPipeline._options._messageFactories.TryGetValue(message.Header.MessageType, out var factory))
+                            if (!_ioPipeline.Options._messageFactories.TryGetValue(message.Header.MessageType, out var factory))
                             {
                                 continue;
                             }
@@ -491,7 +491,7 @@ namespace Harmonic.NetWorking.Rtmp
                     }
                     else
                     {
-                        if (_ioPipeline._options._messageFactories.TryGetValue(header.MessageHeader.MessageType, out var factory))
+                        if (_ioPipeline.Options._messageFactories.TryGetValue(header.MessageHeader.MessageType, out var factory))
                         {
                             try
                             {
