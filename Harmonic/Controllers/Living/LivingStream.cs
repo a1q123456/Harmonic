@@ -83,11 +83,11 @@ namespace Harmonic.Controllers.Living
 
             if (publisher.AACConfigureRecord != null)
             {
-                await MessageStream.SendMessageAsync(_audioChunkStream, publisher.AACConfigureRecord);
+                await MessageStream.SendMessageAsync(_audioChunkStream, publisher.AACConfigureRecord.Clone() as AudioMessage);
             }
             if (publisher.AVCConfigureRecord != null)
             {
-                await MessageStream.SendMessageAsync(_videoChunkStream, publisher.AVCConfigureRecord);
+                await MessageStream.SendMessageAsync(_videoChunkStream, publisher.AVCConfigureRecord.Clone() as VideoMessage);
             }
 
             publisher.OnAudioMessage += SendAudio;
@@ -101,12 +101,10 @@ namespace Harmonic.Controllers.Living
 
         private async void SendVideo(VideoMessage message)
         {
+            var video = message.Clone() as VideoMessage;
+            
             try
             {
-                var video = new VideoMessage();
-                video.MessageHeader.Timestamp = message.MessageHeader.Timestamp;
-                video.Data = message.Data;
-
                 await MessageStream.SendMessageAsync(_videoChunkStream, video);
             }
             catch
@@ -121,15 +119,12 @@ namespace Harmonic.Controllers.Living
 
         private async void SendAudio(AudioMessage message)
         {
+            var audio = message.Clone();
             try
             {
-                var audio = new AudioMessage();
-                audio.MessageHeader.Timestamp = message.MessageHeader.Timestamp;
-                audio.Data = message.Data;
-                
-                await MessageStream.SendMessageAsync(_audioChunkStream, audio);
+                await MessageStream.SendMessageAsync(_audioChunkStream, audio as AudioMessage);
             }
-            catch (Exception e)
+            catch
             {
                 foreach (var a in _cleanupActions)
                 {

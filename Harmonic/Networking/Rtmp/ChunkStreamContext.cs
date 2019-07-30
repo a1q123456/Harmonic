@@ -101,9 +101,10 @@ namespace Harmonic.Networking.Rtmp
                 Task ret = null;
                 // chunking
                 bool isFirstChunk = true;
+                _rtmpSession.AssertStreamId(message.MessageHeader.MessageStreamId.Value);
                 for (int i = 0; i < message.MessageHeader.MessageLength;)
                 {
-                    Debug.Assert(message.MessageHeader.Timestamp != 0xFFFFFFFF);
+                    
                     _previousWriteMessageHeader.TryGetValue(chunkStreamId, out var prevHeader);
                     var chunkHeaderType = SelectChunkType(message.MessageHeader, prevHeader, isFirstChunk);
                     isFirstChunk = false;
@@ -403,8 +404,6 @@ namespace Harmonic.Networking.Rtmp
             return true;
         }
 
-        private List<AudioMessage> messages = new List<AudioMessage>();
-
         private bool ProcessCompleteMessage(ReadOnlySequence<byte> buffer, ref int consumed)
         {
             var header = _processingChunk;
@@ -439,7 +438,7 @@ namespace Harmonic.Networking.Rtmp
 
             buffer.Slice(consumed, bytesNeed).CopyTo(state.Body.AsSpan(state.CurrentIndex));
             consumed += bytesNeed;
-            state.CurrentIndex = state.CurrentIndex + bytesNeed;
+            state.CurrentIndex += bytesNeed;
 
             if (state.IsCompleted)
             {
@@ -480,10 +479,6 @@ namespace Harmonic.Networking.Rtmp
                                 var msg = factory(header.MessageHeader, msgContext, out var factoryConsumed);
                                 msg.MessageHeader = header.MessageHeader;
                                 msg.Deserialize(msgContext);
-                                if (msg.MessageHeader.MessageType == MessageType.AudioMessage)
-                                {
-                                    messages.Add(msg as AudioMessage);
-                                }
                                 context.Amf0Reader.ResetReference();
                                 context.Amf3Reader.ResetReference();
                                 _rtmpSession.MessageArrived(msg);
@@ -504,10 +499,6 @@ namespace Harmonic.Networking.Rtmp
                                 message.MessageHeader = header.MessageHeader;
                                 context.ReadBuffer = context.ReadBuffer.Slice(factoryConsumed);
                                 message.Deserialize(context);
-                                if (message.MessageHeader.MessageType == MessageType.AudioMessage)
-                                {
-                                    messages.Add(message as AudioMessage);
-                                }
                                 context.Amf0Reader.ResetReference();
                                 context.Amf3Reader.ResetReference();
                                 _rtmpSession.MessageArrived(message);

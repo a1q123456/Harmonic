@@ -7,6 +7,7 @@ using Harmonic.NetWorking;
 using Harmonic.Rpc;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.Contracts;
 using System.Linq;
 using System.Reflection;
@@ -41,6 +42,10 @@ namespace Harmonic.Networking.Rtmp
             _rpcService = ioPipeline._options.ServerLifetime.Resolve<RpcService>();
         }
 
+        internal void AssertStreamId(uint msid)
+        {
+            Debug.Assert(_messageStreams.ContainsKey(msid));
+        }
         internal uint MakeUniqueMessageStreamId()
         {
             // TBD use uint.MaxValue
@@ -220,7 +225,7 @@ namespace Harmonic.Networking.Rtmp
             }
             else
             {
-                Contract.Assert(false);
+                Console.WriteLine($"Warning: aborted message stream id: {message.MessageHeader.MessageStreamId}");
             }
         }
 

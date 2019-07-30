@@ -9,20 +9,32 @@ using System.Text;
 namespace Harmonic.Networking.Rtmp.Messages
 {
     [RtmpMessage(MessageType.VideoMessage)]
-    public sealed class VideoMessage : Message
+    public sealed class VideoMessage : Message, ICloneable
     {
-        public byte[] Data { get; set; }
+        public ReadOnlyMemory<byte> Data { get; private set; }
+
+        public object Clone()
+        {
+            var ret = new VideoMessage
+            {
+                MessageHeader = (MessageHeader)MessageHeader.Clone()
+            };
+            ret.MessageHeader.MessageStreamId = null;
+            ret.Data = Data;
+            return ret;
+        }
 
         public override void Deserialize(SerializationContext context)
         {
-            Data = new byte[context.ReadBuffer.Length];
+            var data = new byte[context.ReadBuffer.Length];
             Debug.Assert(context.ReadBuffer.Length == MessageHeader.MessageLength);
-            context.ReadBuffer.Span.Slice(0, (int)MessageHeader.MessageLength).CopyTo(Data);
+            context.ReadBuffer.Span.Slice(0, (int)MessageHeader.MessageLength).CopyTo(data);
+            Data = data;
         }
 
         public override void Serialize(SerializationContext context)
         {
-            context.WriteBuffer.WriteToBuffer(Data.AsSpan(0, Data.Length));
+            context.WriteBuffer.WriteToBuffer(Data.Span.Slice(0, Data.Length));
         }
 
     }

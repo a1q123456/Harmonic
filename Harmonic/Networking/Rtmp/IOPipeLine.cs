@@ -55,6 +55,10 @@ namespace Harmonic.Networking.Rtmp
         private HandshakeContext _handshakeContext = null;
         internal RtmpServerOptions _options = null;
 
+
+        private static int _g_counter = 0;
+        private int _counter = 0;
+
         public IOPipeLine(Socket socket, RtmpServerOptions options, int resumeWriterThreshole = 65535)
         {
             _socket = socket;
@@ -62,6 +66,7 @@ namespace Harmonic.Networking.Rtmp
             _bufferProcessors = new Dictionary<ProcessState, BufferProcessor>();
             _options = options;
             _handshakeContext = new HandshakeContext(this);
+            _counter = _g_counter++;
         }
 
         public Task StartAsync(CancellationToken ct = default)
