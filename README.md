@@ -8,12 +8,10 @@ a high performance RTMP streaming application framework
 - [x] Amf0 serializer/deserializer
 - [x] Amf3 serialzier/deserializer
 - [x] Rtmp message serializier/deserializer
-- [ ] IStreamSession interface
+- [x] Live Streamingseeking
+- [x] Flv on websocket support
+- [x] Unittest
 - [ ] Flv muxer/demuxer
-- [ ] Live Streaming
 - [ ] Video recorder
 - [ ] Video file playing
-- [ ] Video seeking
-- [ ] Rtmp on websocket support
 - [ ] Rtmp on Udp support
-- [ ] Unittest
