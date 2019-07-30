@@ -133,7 +133,6 @@ namespace Harmonic.Networking.Rtmp
         }
 
         #region Sender
-        private int test = 0;
         internal Task SendRawData(ReadOnlySpan<byte> data)
         {
             var tcs = new TaskCompletionSource<int>();
@@ -145,23 +144,20 @@ namespace Harmonic.Networking.Rtmp
                 TaskSource = tcs,
                 Length = data.Length
             });
-            Debug.Assert(test >= 0);
-            Interlocked.Increment(ref test);
             _writerSignal.Release();
             return tcs.Task;
         }
 
         private async Task Writer(CancellationToken ct)
-        {
+        { 
             while (!ct.IsCancellationRequested && !disposedValue)
             {
                 await _writerSignal.WaitAsync(ct);
                 if (_writerQueue.TryDequeue(out var data))
                 {
-                    Interlocked.Decrement(ref test);
-                    Debug.Assert(test >= 0);
                     Debug.Assert(data != null);
                     Debug.Assert(_socket != null);
+                    Debug.Assert((data.Buffer[0] & 0x3F) < 10);
                     await _socket.SendAsync(data.Buffer.AsMemory(0, data.Length), SocketFlags.None, ct);
                     _arrayPool.Return(data.Buffer);
                     data.TaskSource?.SetResult(1);
@@ -170,7 +166,6 @@ namespace Harmonic.Networking.Rtmp
                 {
                     Debug.Assert(false);
                 }
-
             }
         }
         #endregion

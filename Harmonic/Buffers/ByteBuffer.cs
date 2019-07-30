@@ -324,14 +324,7 @@ namespace Harmonic.Buffers
                     var length = end - start;
                     var needToCopy = Math.Min(buffer.Length, length);
 
-                    try
-                    {
-                        b.AsSpan(start, needToCopy).CopyTo(buffer);
-                    }
-                    catch (ArgumentOutOfRangeException e)
-                    {
-                        throw;
-                    }
+                    b.AsSpan(start, needToCopy).CopyTo(buffer);
 
                     start += needToCopy;
                     if (isFirst)

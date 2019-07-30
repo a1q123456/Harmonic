@@ -15,6 +15,7 @@ namespace Harmonic.Controllers.Living
 {
     public enum PublishingType
     {
+        None,
         Live,
         Record,
         Append
@@ -30,6 +31,8 @@ namespace Harmonic.Controllers.Living
         private VideoMessage AVCConfigureRecord = null;
         private event Action<VideoMessage> OnVideoMessage;
         private event Action<AudioMessage> OnAudioMessage;
+        private RtmpChunkStream _videoChunkStream = null;
+        private RtmpChunkStream _audioChunkStream = null;
 
         public LivingStream(PublisherSessionService publisherSessionService)
         {
@@ -75,13 +78,16 @@ namespace Harmonic.Controllers.Living
             flvMetadata.Data = publisher.FlvMetadata.Data;
             await MessageStream.SendMessageAsync(ChunkStream, flvMetadata);
 
+            _videoChunkStream = RtmpSession.CreateChunkStream();
+            _audioChunkStream = RtmpSession.CreateChunkStream();
+
             if (publisher.AACConfigureRecord != null)
             {
-                await MessageStream.SendMessageAsync(ChunkStream, publisher.AACConfigureRecord);
+                await MessageStream.SendMessageAsync(_audioChunkStream, publisher.AACConfigureRecord);
             }
             if (publisher.AVCConfigureRecord != null)
             {
-                await MessageStream.SendMessageAsync(ChunkStream, publisher.AVCConfigureRecord);
+                await MessageStream.SendMessageAsync(_videoChunkStream, publisher.AVCConfigureRecord);
             }
 
             publisher.OnAudioMessage += SendAudio;
@@ -101,7 +107,7 @@ namespace Harmonic.Controllers.Living
                 video.MessageHeader.Timestamp = message.MessageHeader.Timestamp;
                 video.Data = message.Data;
 
-                await MessageStream.SendMessageAsync(ChunkStream, video);
+                await MessageStream.SendMessageAsync(_videoChunkStream, video);
             }
             catch
             {
@@ -121,7 +127,7 @@ namespace Harmonic.Controllers.Living
                 audio.MessageHeader.Timestamp = message.MessageHeader.Timestamp;
                 audio.Data = message.Data;
                 
-                await MessageStream.SendMessageAsync(ChunkStream, audio);
+                await MessageStream.SendMessageAsync(_audioChunkStream, audio);
             }
             catch (Exception e)
             {
@@ -204,7 +210,8 @@ namespace Harmonic.Controllers.Living
             {
                 base.Dispose(disposing);
                 _publisherSessionService.RemovePublisher(this);
-
+                _videoChunkStream?.Dispose();
+                _audioChunkStream?.Dispose();
 
                 disposedValue = true;
             }

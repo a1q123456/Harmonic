@@ -17,7 +17,6 @@ namespace Harmonic.Networking.Rtmp
         private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
         private Random _random = new Random();
         private byte[] _s1Data = null;
-        private byte[] _c1Data = null;
         private IOPipeLine _ioPipeline = null;
 
         public HandshakeContext(IOPipeLine ioPipeline)
@@ -34,11 +33,6 @@ namespace Harmonic.Networking.Rtmp
                 _arrayPool.Return(_s1Data);
                 _s1Data = null;
             }
-            if (_c1Data != null)
-            {
-                _arrayPool.Return(_c1Data);
-                _c1Data = null;
-            }
         }
 
         private bool ProcessHandshakeC0C1(ReadOnlySequence<byte> buffer, ref int consumed)
@@ -50,8 +44,8 @@ namespace Harmonic.Networking.Rtmp
             var arr = _arrayPool.Rent(1537);
             try
             {
-                buffer.Slice(consumed, 1537).CopyTo(arr);
-                consumed += 1537;
+                buffer.Slice(consumed, 9).CopyTo(arr);
+                consumed += 9;
                 var version = arr[0];
 
                 if (version < 3)
@@ -65,22 +59,24 @@ namespace Harmonic.Networking.Rtmp
 
                 _readerTimestampEpoch = NetworkBitConverter.ToUInt32(arr.AsSpan(1, 4));
                 _writerTimestampEpoch = 0;
-                //var allZero = arr.AsMemory(5, 4);
-                //if (allZero.Span[0] != 0 || allZero.Span[1] != 0 || allZero.Span[2] != 0 || allZero.Span[3] != 0)
-                //{
-                //    throw new ProtocolViolationException();
-                //}
-                _c1Data = _arrayPool.Rent(1528);
-
-                arr.AsSpan(9, 1528).CopyTo(_c1Data);
                 _s1Data = _arrayPool.Rent(1528);
                 _random.NextBytes(_s1Data.AsSpan(0, 1528));
 
+                // s0s1
                 arr.AsSpan().Clear();
                 arr[0] = 3;
                 NetworkBitConverter.TryGetBytes(_writerTimestampEpoch, arr.AsSpan(1, 4));
                 _s1Data.AsSpan(0, 1528).CopyTo(arr.AsSpan(9));
                 _ioPipeline.SendRawData(arr.AsSpan(0, 1537));
+
+                // s2
+                NetworkBitConverter.TryGetBytes(_readerTimestampEpoch, arr.AsSpan(0, 4));
+                NetworkBitConverter.TryGetBytes((uint)0, arr.AsSpan(4, 4));
+
+                _ioPipeline.SendRawData(arr.AsSpan(0, 1536));
+
+                buffer.Slice(consumed, 1528).CopyTo(arr.AsSpan(8));
+                consumed += 1528;
 
                 _ioPipeline.NextProcessState = ProcessState.HandshakeC2;
                 return true;
@@ -112,20 +108,14 @@ namespace Harmonic.Networking.Rtmp
                     throw new ProtocolViolationException();
                 }
 
-                NetworkBitConverter.TryGetBytes(_readerTimestampEpoch, arr.AsSpan(0, 4));
-                NetworkBitConverter.TryGetBytes((uint)0, arr.AsSpan(4, 4));
-                _c1Data.AsSpan(0, 1528).CopyTo(arr.AsSpan(8));
-                _ioPipeline.SendRawData(arr.AsSpan(0, 1536));
                 _ioPipeline.OnHandshakeSuccessful();
                 return true;
             }
             finally
             {
-                _arrayPool.Return(_c1Data);
                 _arrayPool.Return(_s1Data);
                 _arrayPool.Return(arr);
                 _s1Data = null;
-                _c1Data = null;
                 Dispose();
             }
 

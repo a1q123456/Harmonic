@@ -10,6 +10,7 @@ namespace demo
             RtmpServer server = new RtmpServerBuilder().UseStartup<Startup>().Build();
             var tsk = server.StartAsync();
             tsk.Wait();
+
         }
     }
 }

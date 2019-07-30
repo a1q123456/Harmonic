@@ -100,13 +100,16 @@ namespace Harmonic.Networking.Rtmp
                 Debug.Assert(message.MessageHeader.MessageType != 0);
                 Task ret = null;
                 // chunking
+                bool isFirstChunk = true;
                 for (int i = 0; i < message.MessageHeader.MessageLength;)
                 {
+                    Debug.Assert(message.MessageHeader.Timestamp != 0xFFFFFFFF);
                     _previousWriteMessageHeader.TryGetValue(chunkStreamId, out var prevHeader);
-                    var chunkHeaderType = SelectChunkType(message.MessageHeader, prevHeader);
+                    var chunkHeaderType = SelectChunkType(message.MessageHeader, prevHeader, isFirstChunk);
+                    isFirstChunk = false;
                     GenerateBasicHeader(chunkHeaderType, chunkStreamId, out var basicHeader, out var basicHeaderLength);
                     GenerateMesesageHeader(chunkHeaderType, message.MessageHeader, prevHeader, out var messageHeader, out var messageHeaderLength);
-                    _previousWriteMessageHeader[chunkStreamId] = message.MessageHeader;
+                    _previousWriteMessageHeader[chunkStreamId] = (MessageHeader)message.MessageHeader.Clone();
                     var headerLength = basicHeaderLength + messageHeaderLength;
                     var bodySize = (int)(length - i >= _writeChunkSize ? _writeChunkSize : length - i);
                     var chunkBuffer = _arrayPool.Rent(headerLength + bodySize);
@@ -148,7 +151,7 @@ namespace Harmonic.Networking.Rtmp
                     break;
                 case ChunkHeaderType.Type1:
                     buffer = _arrayPool.Rent(TYPE1_SIZE + EXTENDED_TIMESTAMP_LENGTH);
-                    timestamp = prevHeader.Timestamp - timestamp;
+                    timestamp = timestamp - prevHeader.Timestamp;
                     NetworkBitConverter.TryGetUInt24Bytes(timestamp >= 0xFFFFFF ? 0xFFFFFF : timestamp, buffer.AsSpan(0, 3));
                     NetworkBitConverter.TryGetUInt24Bytes(header.MessageLength, buffer.AsSpan(3, 3));
                     NetworkBitConverter.TryGetBytes((byte)header.MessageType, buffer.AsSpan(6, 1));
@@ -156,7 +159,7 @@ namespace Harmonic.Networking.Rtmp
                     break;
                 case ChunkHeaderType.Type2:
                     buffer = _arrayPool.Rent(TYPE2_SIZE + EXTENDED_TIMESTAMP_LENGTH);
-                    timestamp = prevHeader.Timestamp - timestamp;
+                    timestamp = timestamp - prevHeader.Timestamp;
                     NetworkBitConverter.TryGetUInt24Bytes(timestamp >= 0xFFFFFF ? 0xFFFFFF : timestamp, buffer.AsSpan(0, 3));
                     length = TYPE2_SIZE;
                     break;
@@ -167,7 +170,7 @@ namespace Harmonic.Networking.Rtmp
                 default:
                     throw new ArgumentException();
             }
-            if (header.Timestamp == 0xFFFFFF)
+            if (timestamp >= 0xFFFFFF)
             {
                 NetworkBitConverter.TryGetBytes(timestamp, buffer.AsSpan(length, EXTENDED_TIMESTAMP_LENGTH));
                 length += EXTENDED_TIMESTAMP_LENGTH;
@@ -204,23 +207,22 @@ namespace Harmonic.Networking.Rtmp
             }
         }
 
-        private ChunkHeaderType SelectChunkType(MessageHeader messageHeader, MessageHeader prevHeader)
+        private ChunkHeaderType SelectChunkType(MessageHeader messageHeader, MessageHeader prevHeader, bool isFirstChunk)
         {
             if (prevHeader == null)
             {
                 return ChunkHeaderType.Type0;
             }
 
-            if (messageHeader.Timestamp == prevHeader.Timestamp &&
-                messageHeader.MessageType == prevHeader.MessageType &&
-                messageHeader.MessageLength == prevHeader.MessageLength &&
-                messageHeader.MessageStreamId == prevHeader.MessageStreamId)
+            if (!isFirstChunk)
             {
                 return ChunkHeaderType.Type3;
             }
-            else if (messageHeader.MessageType == prevHeader.MessageType &&
+
+            if (messageHeader.MessageType == prevHeader.MessageType &&
                 messageHeader.MessageLength == prevHeader.MessageLength &&
-                messageHeader.MessageStreamId == prevHeader.MessageStreamId)
+                messageHeader.MessageStreamId == prevHeader.MessageStreamId &&
+                messageHeader.Timestamp != prevHeader.Timestamp)
             {
                 return ChunkHeaderType.Type2;
             }
@@ -244,9 +246,11 @@ namespace Harmonic.Networking.Rtmp
             switch (header.ChunkBasicHeader.RtmpChunkHeaderType)
             {
                 case ChunkHeaderType.Type1:
+                    header.MessageHeader.Timestamp += prevHeader.Timestamp;
                     header.MessageHeader.MessageStreamId = prevHeader.MessageStreamId;
                     break;
                 case ChunkHeaderType.Type2:
+                    header.MessageHeader.Timestamp += prevHeader.Timestamp;
                     header.MessageHeader.MessageLength = prevHeader.MessageLength;
                     header.MessageHeader.MessageType = prevHeader.MessageType;
                     header.MessageHeader.MessageStreamId = prevHeader.MessageStreamId;

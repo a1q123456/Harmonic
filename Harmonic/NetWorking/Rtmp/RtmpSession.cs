@@ -245,7 +245,6 @@ namespace Harmonic.Networking.Rtmp
 
         private void HandleWindowAcknowledgementSize(WindowAcknowledgementSizeMessage message)
         {
-            return;
             IOPipeline.ChunkStreamContext.ReadWindowAcknowledgementSize = message.WindowSize;
             SendControlMessageAsync(new AcknowledgementMessage()
             {
