@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Harmonic.Networking.Rtmp
+namespace Harmonic.NetWorking.Rtmp
 {
     class WriteState
     {

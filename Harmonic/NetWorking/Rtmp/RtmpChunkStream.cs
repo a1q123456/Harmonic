@@ -1,10 +1,10 @@
-﻿using Harmonic.Networking.Rtmp.Data;
+﻿using Harmonic.NetWorking.Rtmp.Data;
 using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Harmonic.Networking.Rtmp
+namespace Harmonic.NetWorking.Rtmp
 {
     public class RtmpChunkStream : IDisposable
     {

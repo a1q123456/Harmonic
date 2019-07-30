@@ -1,5 +1,5 @@
 ﻿using Autofac;
-using Harmonic.Networking.Rtmp;
+using Harmonic.NetWorking.Rtmp;
 using Harmonic.Service;
 using System;
 using System.Collections.Generic;
@@ -8,6 +8,8 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Fleck;
+using Harmonic.NetWorking.WebSocket;
 
 namespace Harmonic.Hosting
 {
@@ -16,16 +18,24 @@ namespace Harmonic.Hosting
         private readonly Socket _listener;
         private ManualResetEvent _allDone = new ManualResetEvent(false);
         private readonly RtmpServerOptions _options;
+        private WebSocketServer _webSocketServer = null;
+        private WebSocketOptions _webSocketOptions = null;
+
         public bool Started { get; private set; } = false;
 
-        internal RtmpServer(RtmpServerOptions options)
+        internal RtmpServer(RtmpServerOptions options, WebSocketOptions webSocketOptions)
         {
             _options = options;
             _listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             _listener.NoDelay = true;
-            IPEndPoint localEndPoint = new IPEndPoint(options.RtmpIPAddress, options.RtmpPort);
-            _listener.Bind(localEndPoint);
+            _listener.Bind(options.RtmpEndPoint);
             _listener.Listen(128);
+            _webSocketOptions = webSocketOptions;
+            if (webSocketOptions != null)
+            {
+                _webSocketServer = new WebSocketServer($"{(options.Cert == null ? "ws" : "wss")}://{webSocketOptions.BindEndPoint.ToString()}");
+                
+            }
 
         }
         public Task StartAsync(CancellationToken ct = default)
@@ -33,6 +43,24 @@ namespace Harmonic.Hosting
             if (Started)
             {
                 throw new InvalidOperationException("already started");
+            }
+            _webSocketServer?.Start(c =>
+            {
+                var session = new WebSocketSession(c, _webSocketOptions);
+                c.OnOpen = session.HandleOpen;
+                c.OnClose = session.HandleClose;
+                c.OnMessage = session.HandleMessage;
+            });
+
+            if (_webSocketServer != null)
+            {
+                CancellationTokenRegistration reg = default;
+                reg = ct.Register(() =>
+                {
+                    reg.Dispose();
+                    _webSocketServer.Dispose();
+                    _webSocketServer = new WebSocketServer(_webSocketOptions.BindEndPoint.ToString());
+                });
             }
             Started = true;
             var ret = new TaskCompletionSource<int>();
@@ -100,7 +128,6 @@ namespace Harmonic.Hosting
             finally
             {
                 pipe?.Dispose();
-                pipe = null;
             }
         }
     }

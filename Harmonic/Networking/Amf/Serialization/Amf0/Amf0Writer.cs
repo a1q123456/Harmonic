@@ -1,8 +1,8 @@
 ﻿using Harmonic.Buffers;
-using Harmonic.Networking.Amf.Attributes;
-using Harmonic.Networking.Amf.Common;
-using Harmonic.Networking.Amf.Serialization.Attributes;
-using Harmonic.Networking.Utils;
+using Harmonic.NetWorking.Amf.Attributes;
+using Harmonic.NetWorking.Amf.Common;
+using Harmonic.NetWorking.Amf.Serialization.Attributes;
+using Harmonic.NetWorking.Utils;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
@@ -14,7 +14,7 @@ using System.Reflection;
 using System.Text;
 using System.Xml;
 
-namespace Harmonic.Networking.Amf.Serialization.Amf0
+namespace Harmonic.NetWorking.Amf.Serialization.Amf0
 {
     public class Amf0Writer
     {

@@ -1,6 +1,6 @@
 using Harmonic.Controllers;
 using Harmonic.Controllers.Living;
-using Harmonic.Networking.Rtmp;
+using Harmonic.NetWorking.Rtmp;
 using System;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
@@ -11,11 +11,10 @@ namespace Harmonic.Hosting
     {
         private IStartup _startup = null;
         private X509Certificate2 _cert = null;
-        private bool _useWebsocket = false;
+        private bool _useWebSocket = false;
         private bool _useSsl = false;
-        private int _bindRtmpPort = 1935;
-        private int _bindWebsocketPort = -1;
-        private bool _usingRtmp = false;
+        private WebSocketOptions _websocketOptions = null;
+
         private RtmpServerOptions _options = null;
 
         public RtmpServerBuilder UseStartup<T>() where T: IStartup, new()
@@ -30,9 +29,16 @@ namespace Harmonic.Hosting
             return this;
         }
 
+        public RtmpServerBuilder UseWebSocket(Action<WebSocketOptions> conf)
+        {
+            _useWebSocket = true;
+            _websocketOptions = new WebSocketOptions();
+            conf(_websocketOptions);
+            return this;
+        }
+
         public RtmpServerBuilder UseHarmonic(Action<RtmpServerOptions> config)
         {
-            _usingRtmp = true;
             _options = new RtmpServerOptions();
             config(_options);
             return this;
@@ -45,10 +51,10 @@ namespace Harmonic.Hosting
             var types = Assembly.GetCallingAssembly().GetTypes();
 
             var registerInternalControllers = true;
-
+            _websocketOptions._serverOptions = _options;
             foreach (var type in types)
             {
-                if (typeof(AbstractController).IsAssignableFrom(type) && !type.IsAbstract)
+                if (typeof(RtmpController).IsAssignableFrom(type) && !type.IsAbstract)
                 {
                     _options.RegisterController(type);
                 }
@@ -56,16 +62,36 @@ namespace Harmonic.Hosting
                 {
                     registerInternalControllers = false;
                 }
+                if (_useWebSocket)
+                {
+                    if (typeof(WebSocketController).IsAssignableFrom(type) && !type.IsAbstract)
+                    {
+                        _websocketOptions.RegisterController(type);
+                    }
+                    if (typeof(WebSocketPlayController).IsAssignableFrom(type))
+                    {
+                        registerInternalControllers = false;
+                    }
+                }
             }
 
             if (registerInternalControllers)
             {
                 _options.RegisterController<LivingController>();
                 _options.RegisterStream<LivingStream>();
+                if (_useWebSocket)
+                {
+                    _websocketOptions.RegisterController<WebSocketPlayController>();
+                }
             }
-            
+           
+            if (_useSsl)
+            {
+                _options.Cert = _cert;
+            }
+
             _options.BuildContainer();
-            var ret = new RtmpServer(_options);
+            var ret = new RtmpServer(_options, _websocketOptions);
             return ret;
         }
 

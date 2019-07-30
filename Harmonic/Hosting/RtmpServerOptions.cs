@@ -1,12 +1,12 @@
 ﻿using Autofac;
 using Harmonic.Controllers;
 using Harmonic.Controllers.Living;
-using Harmonic.Networking.Rtmp;
-using Harmonic.Networking.Rtmp.Data;
-using Harmonic.Networking.Rtmp.Messages;
-using Harmonic.Networking.Rtmp.Messages.Commands;
-using Harmonic.Networking.Rtmp.Messages.UserControlMessages;
-using Harmonic.Networking.Rtmp.Serialization;
+using Harmonic.NetWorking.Rtmp;
+using Harmonic.NetWorking.Rtmp.Data;
+using Harmonic.NetWorking.Rtmp.Messages;
+using Harmonic.NetWorking.Rtmp.Messages.Commands;
+using Harmonic.NetWorking.Rtmp.Messages.UserControlMessages;
+using Harmonic.NetWorking.Rtmp.Serialization;
 using Harmonic.NetWorking.Rtmp.Messages;
 using Harmonic.Rpc;
 using Harmonic.Service;
@@ -15,15 +15,16 @@ using System.Collections.Generic;
 using System.Net;
 using System.Reflection;
 using System.Text;
+using System.Security.Cryptography.X509Certificates;
 
 namespace Harmonic.Hosting
 {
     public class RtmpServerOptions
     {
         internal Dictionary<MessageType, MessageFactory> _messageFactories = new Dictionary<MessageType, MessageFactory>();
-        public delegate Message MessageFactory(MessageHeader header, Networking.Rtmp.Serialization.SerializationContext context, out int consumed);
+        public delegate Message MessageFactory(MessageHeader header, NetWorking.Rtmp.Serialization.SerializationContext context, out int consumed);
         private Dictionary<string, Type> _registeredControllers = new Dictionary<string, Type>();
-        private ContainerBuilder _builder = null;
+        internal ContainerBuilder _builder = null;
         private RpcService _rpcService = null;
         internal IStartup _startup = null;
         internal IStartup Startup
@@ -44,12 +45,10 @@ namespace Harmonic.Hosting
         public ILifetimeScope ServerLifetime { get; private set; }
 
         public IReadOnlyDictionary<string, Type> RegisteredControllers => _registeredControllers;
-        public int RtmpPort { get; set; } = 1935;
-        public IPAddress RtmpIPAddress { get; set; } = IPAddress.Any;
-        public int WebsocketPort { get; set; } = 80;
-        public IPAddress WebsocketIPAddress { get; set; } = IPAddress.Any;
+        public IPEndPoint RtmpEndPoint { get; set; } = new IPEndPoint(IPAddress.Any, 1935);
         public bool UseUdp { get; set; } = true;
         public bool UseWebsocket { get; set; } = true;
+        public X509Certificate2 Cert { get; internal set; }
 
         public RtmpServerOptions()
         {
@@ -114,7 +113,7 @@ namespace Harmonic.Hosting
 
         public void RegisterController(Type controllerType, string appName = null)
         {
-            if (!typeof(AbstractController).IsAssignableFrom(controllerType))
+            if (!typeof(RtmpController).IsAssignableFrom(controllerType))
             {
                 throw new InvalidOperationException("controllerType must inherit from AbstractController");
             }
@@ -142,7 +141,7 @@ namespace Harmonic.Hosting
                 .SingleInstance();
         }
 
-        public void RegisterController<T>(string appName = null) where T : AbstractController
+        public void RegisterController<T>(string appName = null) where T : RtmpController
         {
             RegisterController(typeof(T), appName);
         }

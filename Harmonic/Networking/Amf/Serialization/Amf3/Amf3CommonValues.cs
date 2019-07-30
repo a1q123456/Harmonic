@@ -7,7 +7,7 @@ using System.Xml;
 using System.Dynamic;
 using System.IO;
 
-namespace Harmonic.Networking.Amf.Serialization.Amf3
+namespace Harmonic.NetWorking.Amf.Serialization.Amf3
 {
     public static class Amf3CommonValues
     {

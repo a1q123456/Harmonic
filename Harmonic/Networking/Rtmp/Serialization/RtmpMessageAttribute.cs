@@ -1,10 +1,10 @@
-﻿using Harmonic.Networking.Rtmp.Data;
+﻿using Harmonic.NetWorking.Rtmp.Data;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace Harmonic.Networking.Rtmp.Serialization
+namespace Harmonic.NetWorking.Rtmp.Serialization
 {
     [AttributeUsage(AttributeTargets.Class)]
     public class RtmpMessageAttribute : Attribute

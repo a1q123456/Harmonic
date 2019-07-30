@@ -2,11 +2,11 @@
 using System.Buffers;
 using System.Collections.Generic;
 using System.Text;
-using Harmonic.Networking.Rtmp.Data;
-using Harmonic.Networking.Rtmp.Serialization;
-using Harmonic.Networking.Utils;
+using Harmonic.NetWorking.Rtmp.Data;
+using Harmonic.NetWorking.Rtmp.Serialization;
+using Harmonic.NetWorking.Utils;
 
-namespace Harmonic.Networking.Rtmp.Messages
+namespace Harmonic.NetWorking.Rtmp.Messages
 {
     [RtmpMessage(MessageType.SetChunkSize)]
     public class SetChunkSizeMessage : ControlMessage

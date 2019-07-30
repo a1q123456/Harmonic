@@ -3,7 +3,7 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Networking.Amf.Serialization.Amf3
+namespace Harmonic.NetWorking.Amf.Serialization.Amf3
 {
     public enum Amf3ClassType
     {

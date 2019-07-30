@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Networking.Rtmp
+namespace Harmonic.NetWorking.Rtmp
 {
     [AttributeUsage(AttributeTargets.Parameter)]
     public class CommandObjectAttribute : Attribute

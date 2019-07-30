@@ -2,10 +2,10 @@
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
-using Harmonic.Networking.Rtmp.Data;
-using Harmonic.Networking.Rtmp.Messages;
+using Harmonic.NetWorking.Rtmp.Data;
+using Harmonic.NetWorking.Rtmp.Messages;
 
-namespace Harmonic.Networking.Rtmp
+namespace Harmonic.NetWorking.Rtmp
 {
     public class RtmpControlMessageStream : RtmpMessageStream
     {

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Networking.Rtmp.Data
+namespace Harmonic.NetWorking.Rtmp.Data
 {
     public class Chunk
     {

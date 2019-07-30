@@ -1,11 +1,11 @@
 ﻿using Harmonic.Buffers;
-using Harmonic.Networking.Amf.Serialization.Amf0;
-using Harmonic.Networking.Amf.Serialization.Amf3;
-using Harmonic.Networking.Rtmp.Data;
-using Harmonic.Networking.Rtmp.Messages;
-using Harmonic.Networking.Rtmp.Messages.Commands;
-using Harmonic.Networking.Rtmp.Serialization;
-using Harmonic.Networking.Utils;
+using Harmonic.NetWorking.Amf.Serialization.Amf0;
+using Harmonic.NetWorking.Amf.Serialization.Amf3;
+using Harmonic.NetWorking.Rtmp.Data;
+using Harmonic.NetWorking.Rtmp.Messages;
+using Harmonic.NetWorking.Rtmp.Messages.Commands;
+using Harmonic.NetWorking.Rtmp.Serialization;
+using Harmonic.NetWorking.Utils;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
@@ -15,9 +15,9 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using static Harmonic.Networking.Rtmp.IOPipeLine;
+using static Harmonic.NetWorking.Rtmp.IOPipeLine;
 
-namespace Harmonic.Networking.Rtmp
+namespace Harmonic.NetWorking.Rtmp
 {
     class ChunkStreamContext : IDisposable
     {

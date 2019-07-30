@@ -1,6 +1,6 @@
-﻿using Harmonic.Networking.Amf.Common;
-using Harmonic.Networking.Rtmp.Data;
-using Harmonic.Networking.Rtmp.Serialization;
+﻿using Harmonic.NetWorking.Amf.Common;
+using Harmonic.NetWorking.Rtmp.Data;
+using Harmonic.NetWorking.Rtmp.Serialization;
 using Harmonic.NetWorking.Rtmp.Messages;
 using System;
 using System.Collections.Generic;
@@ -10,7 +10,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 
-namespace Harmonic.Networking.Rtmp.Messages.Commands
+namespace Harmonic.NetWorking.Rtmp.Messages.Commands
 {
 
     [RtmpMessage(MessageType.Amf3Command, MessageType.Amf0Command)]

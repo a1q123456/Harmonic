@@ -6,7 +6,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace Harmonic.Networking.Utils
+namespace Harmonic.NetWorking.Utils
 {
     public static class NetworkBitConverter
     {
@@ -71,7 +71,7 @@ namespace Harmonic.Networking.Utils
 
         public static bool TryGetUInt24Bytes(uint value, Span<byte> buffer, bool littleEndian = false)
         {
-            if (buffer.Length != 3)
+            if (buffer.Length < 3)
             {
                 return false;
             }

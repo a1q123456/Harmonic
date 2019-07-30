@@ -1,9 +1,9 @@
-﻿using Harmonic.Networking.Rtmp.Data;
+﻿using Harmonic.NetWorking.Rtmp.Data;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Networking.Rtmp.Messages
+namespace Harmonic.NetWorking.Rtmp.Messages
 {
     public abstract class ControlMessage : Message
     {

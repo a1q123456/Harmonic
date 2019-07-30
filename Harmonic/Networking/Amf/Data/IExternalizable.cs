@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Networking.Amf.Data
+namespace Harmonic.NetWorking.Amf.Data
 {
     public interface IExternalizable
     {

@@ -1,11 +1,11 @@
-﻿using Harmonic.Networking.Rtmp.Data;
-using Harmonic.Networking.Rtmp.Serialization;
+﻿using Harmonic.NetWorking.Rtmp.Data;
+using Harmonic.NetWorking.Rtmp.Serialization;
 using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Text;
 
-namespace Harmonic.Networking.Rtmp.Messages
+namespace Harmonic.NetWorking.Rtmp.Messages
 {
     [RtmpMessage(MessageType.AudioMessage)]
     public sealed class AudioMessage : Message, ICloneable

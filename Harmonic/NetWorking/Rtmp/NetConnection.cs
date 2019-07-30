@@ -1,10 +1,10 @@
 ﻿using Autofac;
 using Harmonic.Controllers;
-using Harmonic.Networking.Amf.Common;
-using Harmonic.Networking.Rtmp.Data;
-using Harmonic.Networking.Rtmp.Messages;
-using Harmonic.Networking.Rtmp.Messages.Commands;
-using Harmonic.Networking.Rtmp.Serialization;
+using Harmonic.NetWorking.Amf.Common;
+using Harmonic.NetWorking.Rtmp.Data;
+using Harmonic.NetWorking.Rtmp.Messages;
+using Harmonic.NetWorking.Rtmp.Messages.Commands;
+using Harmonic.NetWorking.Rtmp.Serialization;
 using Harmonic.Rpc;
 using System;
 using System.Collections.Generic;
@@ -13,17 +13,19 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Harmonic.Networking.Rtmp
+namespace Harmonic.NetWorking.Rtmp
 {
     public class NetConnection : IDisposable
     {
         private RtmpSession _rtmpSession = null;
         private RtmpChunkStream _rtmpChunkStream = null;
-        internal Dictionary<uint, AbstractController> _netStreams = new Dictionary<uint, AbstractController>();
+        internal Dictionary<uint, RtmpController> _netStreams = new Dictionary<uint, RtmpController>();
         private RtmpControlMessageStream _controlMessageStream = null;
-        public IReadOnlyDictionary<uint, AbstractController> NetStreams { get => _netStreams; }
-        private AbstractController _controller;
-        private AbstractController Controller
+        public IReadOnlyDictionary<uint, RtmpController> NetStreams { get => _netStreams; }
+        private RtmpController _controller;
+        private bool _connected = false;
+
+        private RtmpController Controller
         {
             get
             {
@@ -56,12 +58,14 @@ namespace Harmonic.Networking.Rtmp
             if (command.ProcedureName == "connect")
             {
                 Connect(command);
+                _connected = true;
             }
             else if (command.ProcedureName == "close")
             {
                 Close();
+                _connected = false;
             }
-            else if (_controller != null)
+            else if (_controller != null && _connected)
             {
                 _rtmpSession.CommandHandler(_controller, command);
             }
@@ -93,7 +97,7 @@ namespace Harmonic.Networking.Rtmp
             }
             if (_rtmpSession.FindController(_rtmpSession.ConnectionInformation.App, out var controllerType))
             {
-                Controller = _rtmpSession.IOPipeline._options.ServerLifetime.Resolve(controllerType) as AbstractController;
+                Controller = _rtmpSession.IOPipeline._options.ServerLifetime.Resolve(controllerType) as RtmpController;
             }
             else
             {

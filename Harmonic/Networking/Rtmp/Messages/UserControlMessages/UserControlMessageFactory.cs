@@ -1,12 +1,12 @@
-﻿using Harmonic.Networking.Rtmp.Data;
-using Harmonic.Networking.Rtmp.Serialization;
-using Harmonic.Networking.Utils;
+﻿using Harmonic.NetWorking.Rtmp.Data;
+using Harmonic.NetWorking.Rtmp.Serialization;
+using Harmonic.NetWorking.Utils;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
 
-namespace Harmonic.Networking.Rtmp.Messages.UserControlMessages
+namespace Harmonic.NetWorking.Rtmp.Messages.UserControlMessages
 {
     public class UserControlMessageFactory
     {

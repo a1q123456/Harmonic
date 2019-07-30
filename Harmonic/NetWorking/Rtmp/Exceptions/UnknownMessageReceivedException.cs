@@ -1,9 +1,9 @@
-﻿using Harmonic.Networking.Rtmp.Data;
+﻿using Harmonic.NetWorking.Rtmp.Data;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Networking.Rtmp.Exceptions
+namespace Harmonic.NetWorking.Rtmp.Exceptions
 {
     public class UnknownMessageReceivedException : Exception
     {

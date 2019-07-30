@@ -1,9 +1,9 @@
-﻿using Harmonic.Networking.Amf.Common;
-using Harmonic.Networking.Rtmp;
-using Harmonic.Networking.Rtmp.Data;
-using Harmonic.Networking.Rtmp.Messages;
-using Harmonic.Networking.Rtmp.Messages.Commands;
-using Harmonic.Networking.Rtmp.Messages.UserControlMessages;
+﻿using Harmonic.NetWorking.Amf.Common;
+using Harmonic.NetWorking.Rtmp;
+using Harmonic.NetWorking.Rtmp.Data;
+using Harmonic.NetWorking.Rtmp.Messages;
+using Harmonic.NetWorking.Rtmp.Messages.Commands;
+using Harmonic.NetWorking.Rtmp.Messages.UserControlMessages;
 using Harmonic.Rpc;
 using Harmonic.Service;
 using System;
@@ -26,11 +26,11 @@ namespace Harmonic.Controllers.Living
         private List<Action> _cleanupActions = new List<Action>();
         private PublishingType _publishingType;
         private PublisherSessionService _publisherSessionService = null;
-        private DataMessage FlvMetadata = null;
-        private AudioMessage AACConfigureRecord = null;
-        private VideoMessage AVCConfigureRecord = null;
-        private event Action<VideoMessage> OnVideoMessage;
-        private event Action<AudioMessage> OnAudioMessage;
+        public DataMessage FlvMetadata = null;
+        public AudioMessage AACConfigureRecord = null;
+        public VideoMessage AVCConfigureRecord = null;
+        public event Action<VideoMessage> OnVideoMessage;
+        public event Action<AudioMessage> OnAudioMessage;
         private RtmpChunkStream _videoChunkStream = null;
         private RtmpChunkStream _audioChunkStream = null;
 
@@ -176,7 +176,7 @@ namespace Harmonic.Controllers.Living
             FlvMetadata = msg;
         }
 
-        public void HandleAudioMessage(AudioMessage audioData)
+        private void HandleAudioMessage(AudioMessage audioData)
         {
             if (AACConfigureRecord == null && audioData.Data.Length >= 2)
             {
@@ -186,7 +186,7 @@ namespace Harmonic.Controllers.Living
             OnAudioMessage?.Invoke(audioData);
         }
 
-        public void HandleVideoMessage(VideoMessage videoData)
+        private void HandleVideoMessage(VideoMessage videoData)
         {
             if (AVCConfigureRecord == null && videoData.Data.Length >= 2)
             {

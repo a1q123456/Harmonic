@@ -1,11 +1,11 @@
-﻿using Harmonic.Networking.Rtmp;
+﻿using Harmonic.NetWorking.Rtmp;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
 namespace Harmonic.Controllers
 {
-    public class AbstractController
+    public abstract class RtmpController
     {
         public RtmpMessageStream MessageStream { get; internal set; } = null;
         public RtmpChunkStream ChunkStream { get; internal set; } = null;

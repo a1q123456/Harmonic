@@ -1,4 +1,4 @@
-﻿using Harmonic.Networking.Rtmp;
+﻿using Harmonic.NetWorking.Rtmp;
 using Harmonic.Rpc;
 using System;
 using System.Collections.Generic;
@@ -6,7 +6,7 @@ using System.Text;
 
 namespace Harmonic.Controllers.Living
 {
-    public class LivingController : AbstractController
+    public class LivingController : RtmpController
     {
         [RpcMethod("createStream")]
         public uint CreateStream()

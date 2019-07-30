@@ -1,8 +1,8 @@
 ﻿using Autofac;
 using Harmonic.Controllers;
-using Harmonic.Networking.Rtmp.Data;
-using Harmonic.Networking.Rtmp.Messages;
-using Harmonic.Networking.Rtmp.Messages.Commands;
+using Harmonic.NetWorking.Rtmp.Data;
+using Harmonic.NetWorking.Rtmp.Messages;
+using Harmonic.NetWorking.Rtmp.Messages.Commands;
 using Harmonic.NetWorking;
 using Harmonic.Rpc;
 using System;
@@ -14,7 +14,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Harmonic.Networking.Rtmp
+namespace Harmonic.NetWorking.Rtmp
 {
     public class RtmpSession : IDisposable
     {
@@ -100,7 +100,7 @@ namespace Harmonic.Networking.Rtmp
             return ret as T;
         }
 
-        internal void CommandHandler(AbstractController controller, CommandMessage command)
+        internal void CommandHandler(RtmpController controller, CommandMessage command)
         {
             MethodInfo method = null;
             object[] arguments = null;

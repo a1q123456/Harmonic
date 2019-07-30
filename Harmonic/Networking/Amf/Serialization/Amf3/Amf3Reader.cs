@@ -1,17 +1,17 @@
-﻿using Harmonic.Networking.Amf.Common;
+﻿using Harmonic.NetWorking.Amf.Common;
 using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Text;
 using System.Xml;
-using Harmonic.Networking.Utils;
+using Harmonic.NetWorking.Utils;
 using System.Buffers;
-using Harmonic.Networking.Amf.Data;
+using Harmonic.NetWorking.Amf.Data;
 using System.Reflection;
-using Harmonic.Networking.Amf.Attributes;
-using Harmonic.Networking.Amf.Serialization.Attributes;
+using Harmonic.NetWorking.Amf.Attributes;
+using Harmonic.NetWorking.Amf.Serialization.Attributes;
 
-namespace Harmonic.Networking.Amf.Serialization.Amf3
+namespace Harmonic.NetWorking.Amf.Serialization.Amf3
 {
     public class Amf3Reader
     {

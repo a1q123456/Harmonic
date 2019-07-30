@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Networking.Rtmp.Serialization
+namespace Harmonic.NetWorking.Rtmp.Serialization
 {
     [AttributeUsage(AttributeTargets.Class)]
     public class RtmpCommandAttribute : Attribute

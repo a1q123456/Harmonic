@@ -1,8 +1,8 @@
 ﻿using Harmonic.Controllers;
-using Harmonic.Networking.Amf.Common;
-using Harmonic.Networking.Rtmp;
-using Harmonic.Networking.Rtmp.Messages.Commands;
-using Harmonic.Networking.Rtmp.Serialization;
+using Harmonic.NetWorking.Amf.Common;
+using Harmonic.NetWorking.Rtmp;
+using Harmonic.NetWorking.Rtmp.Messages.Commands;
+using Harmonic.NetWorking.Rtmp.Serialization;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -34,7 +34,7 @@ namespace Harmonic.Rpc
     {
         public Dictionary<Type, List<RpcMethod>> Controllers = new Dictionary<Type, List<RpcMethod>>();
 
-        public void PrepareMethod<T>(T instance, CommandMessage command, out MethodInfo methodInfo, out object[] callArguments) where T: AbstractController
+        public void PrepareMethod<T>(T instance, CommandMessage command, out MethodInfo methodInfo, out object[] callArguments) where T: RtmpController
         {
             if (!Controllers.TryGetValue(instance.GetType(), out var methods))
             {

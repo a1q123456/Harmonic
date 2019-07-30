@@ -1,6 +1,6 @@
 
 
-using Harmonic.Networking.Rtmp.Messages.Commands;
+using Harmonic.NetWorking.Rtmp.Messages.Commands;
 using Harmonic.NetWorking.Rtmp.Messages;
 
 namespace Harmonic.NetWorking

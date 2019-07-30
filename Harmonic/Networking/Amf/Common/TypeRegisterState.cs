@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Networking.Amf.Common
+namespace Harmonic.NetWorking.Amf.Common
 {
     class TypeRegisterState
     {

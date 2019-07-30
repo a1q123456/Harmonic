@@ -1,13 +1,13 @@
 ﻿using Harmonic.Controllers;
-using Harmonic.Networking.Amf.Common;
+using Harmonic.NetWorking.Amf.Common;
 using Harmonic.Rpc;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Networking.Rtmp
+namespace Harmonic.NetWorking.Rtmp
 {
-    public abstract class NetStream : AbstractController, IDisposable
+    public abstract class NetStream : RtmpController, IDisposable
     {
         [RpcMethod("deleteStream")]
         public void DeleteStream()
