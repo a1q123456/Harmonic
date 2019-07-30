@@ -54,10 +54,15 @@ namespace Harmonic.Hosting
             _websocketOptions._serverOptions = _options;
             foreach (var type in types)
             {
-                if (typeof(RtmpController).IsAssignableFrom(type) && !type.IsAbstract)
+                if (typeof(NetStream).IsAssignableFrom(type) && !type.IsAbstract)
+                {
+                    _options.RegisterStream(type);
+                }
+                else if (typeof(RtmpController).IsAssignableFrom(type) && !type.IsAbstract)
                 {
                     _options.RegisterController(type);
                 }
+
                 if (typeof(LivingController).IsAssignableFrom(type))
                 {
                     registerInternalControllers = false;
@@ -89,7 +94,7 @@ namespace Harmonic.Hosting
             {
                 _options.Cert = _cert;
             }
-
+            _options.CleanupRpcRegistration();
             _options.BuildContainer();
             var ret = new RtmpServer(_options, _websocketOptions);
             return ret;
