@@ -2,11 +2,11 @@
 using System.Buffers;
 using System.Collections.Generic;
 using System.Text;
-using Harmonic.NetWorking.Rtmp.Data;
-using Harmonic.NetWorking.Rtmp.Serialization;
-using Harmonic.NetWorking.Utils;
+using Harmonic.Networking.Rtmp.Data;
+using Harmonic.Networking.Rtmp.Serialization;
+using Harmonic.Networking.Utils;
 
-namespace Harmonic.NetWorking.Rtmp.Messages
+namespace Harmonic.Networking.Rtmp.Messages
 {
     [RtmpMessage(MessageType.WindowAcknowledgementSize)]
     public class WindowAcknowledgementSizeMessage : ControlMessage

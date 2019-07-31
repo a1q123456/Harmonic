@@ -1,13 +1,13 @@
-﻿using Harmonic.NetWorking.Rtmp.Data;
-using Harmonic.NetWorking.Rtmp.Serialization;
-using Harmonic.NetWorking.Utils;
+﻿using Harmonic.Networking.Rtmp.Data;
+using Harmonic.Networking.Rtmp.Serialization;
+using Harmonic.Networking.Utils;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace Harmonic.NetWorking.Rtmp.Messages
+namespace Harmonic.Networking.Rtmp.Messages
 {
     internal class MessageData
     {

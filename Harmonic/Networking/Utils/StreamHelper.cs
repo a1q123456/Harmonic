@@ -4,7 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Harmonic.NetWorking
+namespace Harmonic.Networking
 {
     static class StreamHelper
     {

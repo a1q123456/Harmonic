@@ -1,5 +1,5 @@
 ﻿using Autofac;
-using Harmonic.NetWorking.Rtmp;
+using Harmonic.Networking.Rtmp;
 using Harmonic.Service;
 using System;
 using System.Collections.Generic;
@@ -9,7 +9,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Fleck;
-using Harmonic.NetWorking.WebSocket;
+using Harmonic.Networking.WebSocket;
 
 namespace Harmonic.Hosting
 {

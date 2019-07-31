@@ -1,11 +1,11 @@
 ﻿using Harmonic.Controllers;
-using Harmonic.NetWorking.Amf.Common;
+using Harmonic.Networking.Amf.Common;
 using Harmonic.Rpc;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.NetWorking.Rtmp
+namespace Harmonic.Networking.Rtmp
 {
     public abstract class NetStream : RtmpController, IDisposable
     {

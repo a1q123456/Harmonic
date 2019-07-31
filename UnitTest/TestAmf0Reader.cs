@@ -1,6 +1,6 @@
-﻿using Harmonic.NetWorking.Amf.Attributes;
-using Harmonic.NetWorking.Amf.Data;
-using Harmonic.NetWorking.Amf.Serialization.Amf0;
+﻿using Harmonic.Networking.Amf.Attributes;
+using Harmonic.Networking.Amf.Data;
+using Harmonic.Networking.Amf.Serialization.Amf0;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using System.Collections.Generic;

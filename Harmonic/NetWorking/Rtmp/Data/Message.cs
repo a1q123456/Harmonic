@@ -1,11 +1,11 @@
-﻿using Harmonic.NetWorking.Rtmp.Serialization;
+﻿using Harmonic.Networking.Rtmp.Serialization;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace Harmonic.NetWorking.Rtmp.Data
+namespace Harmonic.Networking.Rtmp.Data
 {
     public abstract class Message
     {

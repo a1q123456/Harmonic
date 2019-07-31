@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.NetWorking.Amf.Serialization.Amf0
+namespace Harmonic.Networking.Amf.Serialization.Amf0
 {
     public class SerializationContext : IDisposable
     {

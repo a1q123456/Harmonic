@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.NetWorking.Rtmp.Streaming
+namespace Harmonic.Networking.Rtmp.Streaming
 {
     public enum PublishingType
     {

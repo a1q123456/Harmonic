@@ -1,9 +1,9 @@
 ﻿using Autofac;
 using Harmonic.Controllers;
-using Harmonic.NetWorking.Rtmp.Data;
-using Harmonic.NetWorking.Rtmp.Messages;
-using Harmonic.NetWorking.Rtmp.Messages.Commands;
-using Harmonic.NetWorking;
+using Harmonic.Networking.Rtmp.Data;
+using Harmonic.Networking.Rtmp.Messages;
+using Harmonic.Networking.Rtmp.Messages.Commands;
+using Harmonic.Networking;
 using Harmonic.Rpc;
 using System;
 using System.Collections.Generic;
@@ -14,7 +14,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Harmonic.NetWorking.Rtmp
+namespace Harmonic.Networking.Rtmp
 {
     public class RtmpSession : IDisposable
     {
@@ -84,8 +84,20 @@ namespace Harmonic.NetWorking.Rtmp
             ret.RtmpSession = this;
             ret.ChunkStream = CreateChunkStream();
             ret.MessageStream.RegisterMessageHandler<CommandMessage>(c => CommandHandler(ret, c));
-            NetConnection._netStreams.Add(ret.MessageStream.MessageStreamId, ret);
+            NetConnection.AddMessageStream(ret.MessageStream.MessageStreamId, ret);
             return ret;
+        }
+
+        public void DeleteNetStream(uint id)
+        {
+            if (NetConnection.NetStreams.TryGetValue(id, out var stream))
+            {
+                if (stream is IDisposable disp)
+                {
+                    disp.Dispose();
+                }
+                NetConnection.RemoveMessageStream(id);
+            }
         }
 
         public T CreateCommandMessage<T>() where T: CommandMessage

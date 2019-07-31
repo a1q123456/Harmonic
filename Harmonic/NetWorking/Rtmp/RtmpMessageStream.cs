@@ -1,6 +1,6 @@
-﻿using Harmonic.NetWorking.Rtmp.Data;
-using Harmonic.NetWorking.Rtmp.Messages;
-using Harmonic.NetWorking.Rtmp.Serialization;
+﻿using Harmonic.Networking.Rtmp.Data;
+using Harmonic.Networking.Rtmp.Messages;
+using Harmonic.Networking.Rtmp.Serialization;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,7 +8,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Harmonic.NetWorking.Rtmp
+namespace Harmonic.Networking.Rtmp
 {
     public class RtmpMessageStream : IDisposable
     { 

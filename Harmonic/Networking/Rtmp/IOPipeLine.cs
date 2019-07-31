@@ -1,6 +1,6 @@
-﻿using Harmonic.NetWorking;
-using Harmonic.NetWorking.Rtmp.Data;
-using Harmonic.NetWorking.Rtmp.Exceptions;
+﻿using Harmonic.Networking;
+using Harmonic.Networking.Rtmp.Data;
+using Harmonic.Networking.Rtmp.Exceptions;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
@@ -13,20 +13,20 @@ using System.Threading.Tasks;
 using System.IO.Pipelines;
 using System.Collections.ObjectModel;
 using System.Collections.Concurrent;
-using Harmonic.NetWorking.Rtmp.Messages;
-using Harmonic.NetWorking.Utils;
-using Harmonic.NetWorking.Rtmp.Serialization;
+using Harmonic.Networking.Rtmp.Messages;
+using Harmonic.Networking.Utils;
+using Harmonic.Networking.Rtmp.Serialization;
 using Harmonic.Buffers;
-using Harmonic.NetWorking.Amf.Serialization.Amf0;
-using Harmonic.NetWorking.Amf.Serialization.Amf3;
+using Harmonic.Networking.Amf.Serialization.Amf0;
+using Harmonic.Networking.Amf.Serialization.Amf3;
 using System.Reflection;
-using Harmonic.NetWorking.Rtmp.Messages.UserControlMessages;
-using Harmonic.NetWorking.Rtmp.Messages.Commands;
+using Harmonic.Networking.Rtmp.Messages.UserControlMessages;
+using Harmonic.Networking.Rtmp.Messages.Commands;
 using Harmonic.Hosting;
 using System.Linq;
 using System.Diagnostics;
 
-namespace Harmonic.NetWorking.Rtmp
+namespace Harmonic.Networking.Rtmp
 {
     enum ProcessState
     {

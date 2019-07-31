@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.NetWorking.Amf.Serialization.Attributes
+namespace Harmonic.Networking.Amf.Serialization.Attributes
 {
     [AttributeUsage(AttributeTargets.Property)]
     public class ClassFieldAttribute : Attribute

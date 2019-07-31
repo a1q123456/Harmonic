@@ -1,4 +1,4 @@
-﻿using Harmonic.NetWorking.Amf.Common;
+﻿using Harmonic.Networking.Amf.Common;
 using System;
 using System.Linq;
 using System.Buffers;
@@ -7,14 +7,14 @@ using System.Text;
 using System.Xml;
 using System.IO;
 using Harmonic.Buffers;
-using Harmonic.NetWorking.Utils;
-using Harmonic.NetWorking.Amf.Data;
+using Harmonic.Networking.Utils;
+using Harmonic.Networking.Amf.Data;
 using System.Diagnostics.Contracts;
 using System.Reflection;
-using Harmonic.NetWorking.Amf.Attributes;
-using Harmonic.NetWorking.Amf.Serialization.Attributes;
+using Harmonic.Networking.Amf.Attributes;
+using Harmonic.Networking.Amf.Serialization.Attributes;
 
-namespace Harmonic.NetWorking.Amf.Serialization.Amf3
+namespace Harmonic.Networking.Amf.Serialization.Amf3
 {
     public class Amf3Writer
     {

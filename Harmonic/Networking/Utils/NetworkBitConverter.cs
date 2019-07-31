@@ -6,7 +6,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace Harmonic.NetWorking.Utils
+namespace Harmonic.Networking.Utils
 {
     public static class NetworkBitConverter
     {

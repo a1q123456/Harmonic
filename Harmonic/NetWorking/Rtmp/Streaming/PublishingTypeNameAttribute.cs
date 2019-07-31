@@ -4,7 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 
-namespace Harmonic.NetWorking.Rtmp.Streaming
+namespace Harmonic.Networking.Rtmp.Streaming
 {
     [AttributeUsage(AttributeTargets.Field)]
     public class PublishingTypeNameAttribute : Attribute

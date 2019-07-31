@@ -1,12 +1,12 @@
-﻿using Harmonic.NetWorking.Rtmp.Serialization;
-using Harmonic.NetWorking.Utils;
+﻿using Harmonic.Networking.Rtmp.Serialization;
+using Harmonic.Networking.Utils;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics.Contracts;
 using System.Text;
 
-namespace Harmonic.NetWorking.Rtmp.Messages.UserControlMessages
+namespace Harmonic.Networking.Rtmp.Messages.UserControlMessages
 {
     [UserControlMessage(Type = UserControlEventType.StreamIsRecorded)]
     public class StreamIsRecordedMessage : UserControlMessage

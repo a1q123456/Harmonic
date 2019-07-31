@@ -1,11 +1,11 @@
 ﻿using Harmonic.Buffers;
-using Harmonic.NetWorking.Amf.Serialization.Amf0;
-using Harmonic.NetWorking.Amf.Serialization.Amf3;
-using Harmonic.NetWorking.Rtmp.Data;
-using Harmonic.NetWorking.Rtmp.Messages;
-using Harmonic.NetWorking.Rtmp.Messages.Commands;
-using Harmonic.NetWorking.Rtmp.Serialization;
-using Harmonic.NetWorking.Utils;
+using Harmonic.Networking.Amf.Serialization.Amf0;
+using Harmonic.Networking.Amf.Serialization.Amf3;
+using Harmonic.Networking.Rtmp.Data;
+using Harmonic.Networking.Rtmp.Messages;
+using Harmonic.Networking.Rtmp.Messages.Commands;
+using Harmonic.Networking.Rtmp.Serialization;
+using Harmonic.Networking.Utils;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
@@ -15,9 +15,9 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using static Harmonic.NetWorking.Rtmp.IOPipeLine;
+using static Harmonic.Networking.Rtmp.IOPipeLine;
 
-namespace Harmonic.NetWorking.Rtmp
+namespace Harmonic.Networking.Rtmp
 {
     class ChunkStreamContext : IDisposable
     {
@@ -104,7 +104,6 @@ namespace Harmonic.NetWorking.Rtmp
                 _rtmpSession.AssertStreamId(message.MessageHeader.MessageStreamId.Value);
                 for (int i = 0; i < message.MessageHeader.MessageLength;)
                 {
-                    
                     _previousWriteMessageHeader.TryGetValue(chunkStreamId, out var prevHeader);
                     var chunkHeaderType = SelectChunkType(message.MessageHeader, prevHeader, isFirstChunk);
                     isFirstChunk = false;
@@ -218,6 +217,14 @@ namespace Harmonic.NetWorking.Rtmp
             if (!isFirstChunk)
             {
                 return ChunkHeaderType.Type3;
+            }
+
+            long currentTimestamp = messageHeader.Timestamp;
+            long prevTimesatmp = prevHeader.Timestamp;
+
+            if (currentTimestamp - prevTimesatmp < 0)
+            {
+                return ChunkHeaderType.Type0;
             }
 
             if (messageHeader.MessageType == prevHeader.MessageType &&
@@ -462,7 +469,7 @@ namespace Harmonic.NetWorking.Rtmp
                         agg.Deserialize(context);
                         foreach (var message in agg.Messages)
                         {
-                            if (!_ioPipeline.Options._messageFactories.TryGetValue(message.Header.MessageType, out var factory))
+                            if (!_ioPipeline.Options.MessageFactories.TryGetValue(message.Header.MessageType, out var factory))
                             {
                                 continue;
                             }

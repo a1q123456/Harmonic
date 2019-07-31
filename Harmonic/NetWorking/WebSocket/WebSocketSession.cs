@@ -3,37 +3,41 @@ using Fleck;
 using Harmonic.Buffers;
 using Harmonic.Controllers;
 using Harmonic.Hosting;
-using Harmonic.NetWorking.Amf.Serialization.Amf0;
-using Harmonic.NetWorking.Amf.Serialization.Amf3;
-using Harmonic.NetWorking.Rtmp.Messages;
-using Harmonic.NetWorking.Rtmp.Serialization;
+using Harmonic.Networking.Amf.Serialization.Amf0;
+using Harmonic.Networking.Amf.Serialization.Amf3;
+using Harmonic.Networking.Rtmp.Messages;
+using Harmonic.Networking.Rtmp.Serialization;
 using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
-using Harmonic.NetWorking.Utils;
-using Harmonic.NetWorking.Rtmp.Data;
+using Harmonic.Networking.Utils;
+using Harmonic.Networking.Rtmp.Data;
 using System.Linq;
+using Harmonic.Networking.Flv;
+using System.Threading.Tasks;
+using System.Web;
 
-namespace Harmonic.NetWorking.WebSocket
+namespace Harmonic.Networking.WebSocket
 {
     public class WebSocketSession
     {
         private IWebSocketConnection _webSocketConnection = null;
         private WebSocketOptions _options = null;
         private WebSocketController _controller = null;
-        private Amf0Writer _amf0Writer = new Amf0Writer();
-        private Amf3Writer _amf3Writer = new Amf3Writer();
+        private FlvMuxer _flvMuxer = null;
+        public RtmpServerOptions Options => _options._serverOptions;
 
         public WebSocketSession(IWebSocketConnection connection, WebSocketOptions options)
         {
             _webSocketConnection = connection;
             _options = options;
+            _flvMuxer = new FlvMuxer();
         }
 
-        public void SendRawData(byte[] data)
+        public Task SendRawDataAsync(byte[] data)
         {
-            _webSocketConnection.Send(data);
+            return _webSocketConnection.Send(data);
         }
 
         public void Close()
@@ -65,10 +69,13 @@ namespace Harmonic.NetWorking.WebSocket
                     _webSocketConnection.Close();
                 }
                 _controller = _options._serverOptions.ServerLifetime.Resolve(controllerType) as WebSocketController;
-                _controller.Query = query;
+                _controller.Query = HttpUtility.ParseQueryString(query);
                 _controller.StreamName = streamName;
                 _controller.Session = this;
-                _controller.OnConnect();
+                _controller.OnConnect().ContinueWith(_ =>
+                {
+                    _webSocketConnection.Close();
+                }, TaskContinuationOptions.OnlyOnFaulted); ;
             }
             catch
             {
@@ -76,52 +83,14 @@ namespace Harmonic.NetWorking.WebSocket
             }
         }
 
-        public void SendFlvHeader(bool hasAudio, bool hasVideo)
+        public Task SendFlvHeaderAsync(bool hasAudio, bool hasVideo)
         {
-            var header = new byte[13];
-            header[0] = 0x46;
-            header[1] = 0x4C;
-            header[2] = 0x56;
-            header[3] = 0x01;
-
-            byte audioFlag = 0x01 << 2;
-            byte videoFlag = 0x01;
-            byte typeFlag = 0x00;
-            if (hasAudio) typeFlag |= audioFlag;
-            if (hasVideo) typeFlag |= videoFlag;
-            header[4] = typeFlag;
-
-            NetworkBitConverter.TryGetBytes(9, header.AsSpan(5));
-            SendRawData(header);
+            return SendRawDataAsync(_flvMuxer.MultiplexFlvHeader(hasAudio, hasVideo));
         }
 
-        public void SendMessage(Message data)
+        public Task SendMessageAsync(Message data)
         {
-            var dataBuffer = new ByteBuffer();
-            dataBuffer.WriteToBuffer((byte)data.MessageHeader.MessageType);
-            var buffer = new byte[4];
-            NetworkBitConverter.TryGetUInt24Bytes(data.MessageHeader.MessageLength, buffer);
-            dataBuffer.WriteToBuffer(buffer.AsSpan(0, 3));
-            NetworkBitConverter.TryGetBytes(data.MessageHeader.Timestamp, buffer);
-            dataBuffer.WriteToBuffer(buffer.AsSpan(1, 3));
-            dataBuffer.WriteToBuffer(buffer.AsSpan(0, 1));
-            buffer.AsSpan().Clear();
-            dataBuffer.WriteToBuffer(buffer.AsSpan(0, 3));
-
-            var context = new Rtmp.Serialization.SerializationContext()
-            {
-                Amf0Writer = _amf0Writer,
-                Amf3Writer = _amf3Writer,
-                WriteBuffer = dataBuffer
-            };
-
-            data.Serialize(context);
-            NetworkBitConverter.TryGetBytes((uint)(data.MessageHeader.MessageLength + 11), buffer);
-            dataBuffer.WriteToBuffer(buffer);
-
-            var rawData = new byte[dataBuffer.Length];
-            dataBuffer.TakeOutMemory(rawData);
-            SendRawData(rawData);
+            return SendRawDataAsync(_flvMuxer.MultiplexFlv(data));
         }
 
         internal void HandleClose()

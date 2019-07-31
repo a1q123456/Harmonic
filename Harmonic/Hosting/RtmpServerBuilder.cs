@@ -1,7 +1,7 @@
 using Harmonic.Controllers;
 using Harmonic.Controllers.Living;
 using Harmonic.Controllers.Record;
-using Harmonic.NetWorking.Rtmp;
+using Harmonic.Networking.Rtmp;
 using System;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;

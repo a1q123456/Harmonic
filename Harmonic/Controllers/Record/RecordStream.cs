@@ -1,13 +1,14 @@
-﻿using Harmonic.NetWorking.Amf.Common;
-using Harmonic.NetWorking.Amf.Serialization.Amf0;
-using Harmonic.NetWorking.Amf.Serialization.Amf3;
-using Harmonic.NetWorking.Rtmp;
-using Harmonic.NetWorking.Rtmp.Data;
-using Harmonic.NetWorking.Rtmp.Messages;
-using Harmonic.NetWorking.Rtmp.Messages.Commands;
-using Harmonic.NetWorking.Rtmp.Messages.UserControlMessages;
-using Harmonic.NetWorking.Rtmp.Streaming;
-using Harmonic.NetWorking.Utils;
+﻿using Harmonic.Networking.Flv;
+using Harmonic.Networking.Amf.Common;
+using Harmonic.Networking.Amf.Serialization.Amf0;
+using Harmonic.Networking.Amf.Serialization.Amf3;
+using Harmonic.Networking.Rtmp;
+using Harmonic.Networking.Rtmp.Data;
+using Harmonic.Networking.Rtmp.Messages;
+using Harmonic.Networking.Rtmp.Messages.Commands;
+using Harmonic.Networking.Rtmp.Messages.UserControlMessages;
+using Harmonic.Networking.Rtmp.Streaming;
+using Harmonic.Networking.Utils;
 using Harmonic.Rpc;
 using Harmonic.Service;
 using System;
@@ -17,6 +18,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Harmonic.Networking.Flv.Data;
 
 namespace Harmonic.Controllers.Record
 {
@@ -24,32 +26,52 @@ namespace Harmonic.Controllers.Record
     {
         private PublishingType _publishingType;
         private FileStream _recordFile = null;
+        private FileStream _recordFileData = null;
         private RecordService _recordService = null;
-        private Amf0Writer _amf0Writer = new Amf0Writer();
-        private Amf3Writer _amf3Writer = new Amf3Writer();
-        private Amf0Reader _amf0Reader = new Amf0Reader();
-        private Amf3Reader _amf3Reader = new Amf3Reader();
-        private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
         private DataMessage _metaData = null;
         private uint _maxTimestamp = 0;
         private SemaphoreSlim _playLock = new SemaphoreSlim(1);
+        private int _playing = 0;
+        private AmfObject _keyframes = null;
+        private List<object> _keyframeTimes;
+        private List<object> _keyframeFilePositions;
 
         private RtmpChunkStream VideoChunkStream { get; set; } = null;
         private RtmpChunkStream AudioChunkStream { get; set; } = null;
-
+        private bool _disposed = false;
         protected override void Dispose(bool disposing)
         {
             base.Dispose(disposing);
-            if (disposing)
+            if (!_disposed)
             {
-                if (_publishingType != PublishingType.None && _recordFile != null)
+                _disposed = true;
+                if (_recordFileData != null)
                 {
-                    var metadata = _metaData.Data[2] as Dictionary<string, object>;
-                    metadata["duration"] = ((double)_maxTimestamp) / 1000;
-                    _recordFile.Seek(0, SeekOrigin.Begin);
-                    SaveMessage(_metaData);
-                }
+                    var filePath = _recordFileData.Name;
+                    using (var recordFile = new FileStream(filePath.Substring(0, filePath.Length - 5) + ".flv", FileMode.OpenOrCreate))
+                    {
+                        recordFile.SetLength(0);
+                        recordFile.Seek(0, SeekOrigin.Begin);
+                        recordFile.Write(FlvMuxer.MultiplexFlvHeader(true, true));
+                        var metaData = _metaData.Data[1] as Dictionary<string, object>;
+                        metaData["duration"] = ((double)_maxTimestamp) / 1000;
+                        metaData["keyframes"] = _keyframes;
+                        _metaData.MessageHeader.MessageLength = 0;
+                        var dataTagLen = FlvMuxer.MultiplexFlv(_metaData).Length;
 
+                        var offset = recordFile.Position + dataTagLen;
+                        for (int i = 0; i < _keyframeFilePositions.Count; i++)
+                        {
+                            _keyframeFilePositions[i] = (double)_keyframeFilePositions[i] + offset;
+                        }
+
+                        recordFile.Write(FlvMuxer.MultiplexFlv(_metaData));
+                        _recordFileData.Seek(0, SeekOrigin.Begin);
+                        _recordFileData.CopyTo(recordFile);
+                        _recordFileData.Dispose();
+                        File.Delete(filePath);
+                    }
+                }
                 _recordFile?.Dispose();
             }
         }
@@ -59,8 +81,9 @@ namespace Harmonic.Controllers.Record
             _recordService = recordService;
         }
 
+
         [RpcMethod(Name = "publish")]
-        public void Publish([FromOptionalArgument] string streamName, [FromOptionalArgument] string publishingType)
+        public async Task Publish([FromOptionalArgument] string streamName, [FromOptionalArgument] string publishingType)
         {
             if (string.IsNullOrEmpty(streamName))
             {
@@ -73,12 +96,12 @@ namespace Harmonic.Controllers.Record
 
             _publishingType = PublishingHelpers.PublishingTypes[publishingType];
 
-            RtmpSession.SendControlMessageAsync(new StreamIsRecordedMessage() { StreamID = MessageStream.MessageStreamId });
-            RtmpSession.SendControlMessageAsync(new StreamBeginMessage() { StreamID = MessageStream.MessageStreamId });
+            await RtmpSession.SendControlMessageAsync(new StreamIsRecordedMessage() { StreamID = MessageStream.MessageStreamId });
+            await RtmpSession.SendControlMessageAsync(new StreamBeginMessage() { StreamID = MessageStream.MessageStreamId });
             var onStatus = RtmpSession.CreateCommandMessage<OnStatusCommandMessage>();
             MessageStream.RegisterMessageHandler<DataMessage>(HandleData);
-            MessageStream.RegisterMessageHandler<AudioMessage>(SaveMessage);
-            MessageStream.RegisterMessageHandler<VideoMessage>(SaveMessage);
+            MessageStream.RegisterMessageHandler<AudioMessage>(HandleAudioMessage);
+            MessageStream.RegisterMessageHandler<VideoMessage>(HandleVideoMessage);
             onStatus.InfoObject = new AmfObject
             {
                 {"level", "status" },
@@ -86,15 +109,65 @@ namespace Harmonic.Controllers.Record
                 {"description", "Stream is now published." },
                 {"details", streamName }
             };
-            MessageStream.SendMessageAsync(ChunkStream, onStatus);
+            await MessageStream.SendMessageAsync(ChunkStream, onStatus);
 
-            _recordFile = new FileStream(_recordService.GetRecordFilename(streamName), FileMode.OpenOrCreate);
+            _recordFileData = new FileStream(_recordService.GetRecordFilename(streamName) + ".data", FileMode.OpenOrCreate);
+            _recordFileData.SetLength(0);
+            _keyframes = new AmfObject();
+            _keyframeTimes = new List<object>();
+            _keyframeFilePositions = new List<object>();
+            _keyframes.Add("times", _keyframeTimes);
+            _keyframes.Add("filepositions", _keyframeFilePositions);
+        }
+
+        private async void HandleAudioMessage(AudioMessage message)
+        {
+            try
+            {
+                _maxTimestamp = Math.Max(_maxTimestamp, message.MessageHeader.Timestamp);
+
+                await SaveMessage(message);
+            }
+            catch
+            {
+                RtmpSession.Close();
+            }
+        }
+
+        private async void HandleVideoMessage(VideoMessage message)
+        {
+            try
+            {
+                _maxTimestamp = Math.Max(_maxTimestamp, message.MessageHeader.Timestamp);
+
+                var head = message.Data.Span[0];
+
+                var data = FlvDemuxer.DemultiplexVideoData(message);
+                if (data.FrameType == FrameType.KeyFrame)
+                {
+                    _keyframeTimes.Add((double)message.MessageHeader.Timestamp);
+                    _keyframeFilePositions.Add((double)_recordFileData.Position);
+                }
+
+                await SaveMessage(message);
+            }
+            catch
+            {
+                RtmpSession.Close();
+            }
         }
 
         private void HandleData(DataMessage message)
         {
-            _metaData = message;
-            _recordFile.Seek(9 + message.MessageHeader.MessageLength, SeekOrigin.Current);
+            try
+            {
+                _metaData = message;
+                _metaData.Data.RemoveAt(0);
+            }
+            catch
+            {
+                RtmpSession.Close();
+            }
         }
 
         [RpcMethod("seek")]
@@ -111,17 +184,21 @@ namespace Harmonic.Controllers.Record
             resetStatus.InfoObject = resetData;
             await MessageStream.SendMessageAsync(ChunkStream, resetStatus);
 
-            await _playLock.WaitAsync();
-            _recordFile.Seek(0, SeekOrigin.Begin);
+            await SeekAndPlay(milliSeconds);
+        }
 
-            uint current = 0;
-            while (current < milliSeconds && _recordFile.Position <= _recordFile.Length)
-            {
-                var message = await ReadHeader();
-                _recordFile.Seek(message.MessageLength, SeekOrigin.Current);
-                current = message.Timestamp;
-            }
+        private async Task SeekAndPlay(double milliSeconds)
+        {
+            await _playLock.WaitAsync();
+            _recordFileData.Seek(0, SeekOrigin.Begin);
+
+            await FlvDemuxer.SeekAsync(milliSeconds);
+
             _playLock.Release();
+            if (_playing == 0)
+            {
+                await StartPlay();
+            }
         }
 
         [RpcMethod("play")]
@@ -131,7 +208,8 @@ namespace Harmonic.Controllers.Record
      [FromOptionalArgument] double duration = -1,
      [FromOptionalArgument] bool reset = false)
         {
-            _recordFile = new FileStream(_recordService.GetRecordFilename(streamName), FileMode.Open, FileAccess.Read);
+            _recordFile = new FileStream(_recordService.GetRecordFilename(streamName) + ".flv", FileMode.Open, FileAccess.Read);
+            await FlvDemuxer.AttachStream(_recordFile);
 
             var resetData = new AmfObject
             {
@@ -158,84 +236,38 @@ namespace Harmonic.Controllers.Record
             VideoChunkStream = RtmpSession.CreateChunkStream();
             AudioChunkStream = RtmpSession.CreateChunkStream();
 
+            start = Math.Max(start, 0);
+            await SeekAndPlay(start / 1000);
+        }
+
+        [RpcMethod("pause")]
+        public async Task Pause([FromOptionalArgument] bool isPause, [FromOptionalArgument] double milliseconds)
+        {
+            if (isPause)
+            {
+                await _playLock.WaitAsync();
+                _recordFile.Seek(0, SeekOrigin.End);
+                _playLock.Release();
+            }
+            else
+            {
+                await SeekAndPlay(milliseconds);
+            }
+        }
+
+        private async Task StartPlay()
+        {
+            Interlocked.Exchange(ref _playing, 1);
             while (_recordFile.Position < _recordFile.Length)
             {
                 await PlayRecordFile();
             }
+            Interlocked.Exchange(ref _playing, 0);
         }
 
-        private async Task<MessageHeader> ReadHeader()
+        private Task<Message> ReadMessage()
         {
-            byte[] headerBuffer = null;
-            try
-            {
-                headerBuffer = _arrayPool.Rent(9);
-
-                var bytesRead = await _recordFile.ReadAsync(headerBuffer.AsMemory(0, 9));
-                if (bytesRead != 9)
-                {
-                    throw new InvalidDataException();
-                }
-                var length = NetworkBitConverter.ToUInt32(headerBuffer.AsSpan(0, 4));
-                var type = (MessageType)headerBuffer[4];
-                var timestamp = NetworkBitConverter.ToUInt32(headerBuffer.AsSpan(5, 4));
-                return new MessageHeader()
-                {
-                    MessageLength = length,
-                    MessageType = type,
-                    Timestamp = timestamp
-                };
-            }
-            finally
-            {
-                _arrayPool.Return(headerBuffer);
-            }
-        }
-
-        private async Task<Message> ReadMessage()
-        {
-            byte[] bodyBuffer = null;
-
-            try
-            {
-                var header = await ReadHeader();
-                bodyBuffer = _arrayPool.Rent((int)header.MessageLength);
-                var bytesRead = await _recordFile.ReadAsync(bodyBuffer.AsMemory(0, (int)header.MessageLength));
-                if (bytesRead != (int)header.MessageLength)
-                {
-                    throw new InvalidDataException();
-                }
-                if (RtmpSession.IOPipeline.Options.MessageFactories.TryGetValue(header.MessageType, out var factory))
-                {
-                    var context = new NetWorking.Rtmp.Serialization.SerializationContext()
-                    {
-                        Amf0Reader = _amf0Reader,
-                        Amf0Writer = _amf0Writer,
-                        Amf3Reader = _amf3Reader,
-                        Amf3Writer = _amf3Writer,
-                        ReadBuffer = bodyBuffer.AsMemory(0, (int)header.MessageLength)
-                    };
-
-                    var message = factory(header, context, out var factoryConsumed);
-                    message.MessageHeader = header;
-                    context.ReadBuffer = context.ReadBuffer.Slice(factoryConsumed);
-                    message.Deserialize(context);
-                    context.Amf0Reader.ResetReference();
-                    context.Amf3Reader.ResetReference();
-                    return message;
-                }
-                else
-                {
-                    throw new NotSupportedException();
-                }
-            }
-            finally
-            {
-                if (bodyBuffer != null)
-                {
-                    _arrayPool.Return(bodyBuffer);
-                }
-            }
+            return FlvDemuxer.DemultiplexFlvAsync();
         }
 
         private async Task PlayRecordFile()
@@ -258,50 +290,9 @@ namespace Harmonic.Controllers.Record
 
         }
 
-        private async void SaveMessage(Message message)
+        private async Task SaveMessage(Message message)
         {
-            var writeBuffer = new Buffers.ByteBuffer();
-            _maxTimestamp = Math.Max(message.MessageHeader.Timestamp, _maxTimestamp);
-            byte[] buffer = null;
-            byte[] messageBuffer = null;
-
-            try
-            {
-                buffer = _arrayPool.Rent(4);
-                NetworkBitConverter.TryGetBytes(message.MessageHeader.MessageLength, buffer);
-                writeBuffer.WriteToBuffer(buffer.AsSpan(0, 4));
-                writeBuffer.WriteToBuffer((byte)message.MessageHeader.MessageType);
-                NetworkBitConverter.TryGetBytes(message.MessageHeader.Timestamp, buffer);
-                writeBuffer.WriteToBuffer(buffer.AsSpan(0, 4));
-                var context = new NetWorking.Rtmp.Serialization.SerializationContext()
-                {
-                    Amf0Writer = _amf0Writer,
-                    Amf3Writer = _amf3Writer,
-                    WriteBuffer = writeBuffer,
-                };
-                message.Serialize(context);
-                var messageLen = writeBuffer.Length;
-                messageBuffer = _arrayPool.Rent(messageLen);
-                writeBuffer.TakeOutMemory(messageBuffer);
-
-                await _recordFile.WriteAsync(messageBuffer.AsMemory(0, messageLen));
-            }
-            catch
-            {
-                RtmpSession.Close();
-            }
-            finally
-            {
-                writeBuffer.Dispose();
-                if (buffer != null)
-                {
-                    _arrayPool.Return(buffer);
-                }
-                if (messageBuffer != null)
-                {
-                    _arrayPool.Return(messageBuffer);
-                }
-            }
+            await _recordFileData.WriteAsync(FlvMuxer.MultiplexFlv(message));
         }
     }
 }

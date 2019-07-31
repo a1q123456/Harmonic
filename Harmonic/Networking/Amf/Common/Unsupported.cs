@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.NetWorking.Amf.Common
+namespace Harmonic.Networking.Amf.Common
 {
     public class Unsupported
     {

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.NetWorking.Rtmp.Data
+namespace Harmonic.Networking.Rtmp.Data
 {
     public enum ChunkHeaderType : byte
     {

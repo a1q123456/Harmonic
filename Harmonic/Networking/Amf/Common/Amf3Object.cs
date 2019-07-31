@@ -1,11 +1,11 @@
-﻿using Harmonic.NetWorking.Amf.Data;
+﻿using Harmonic.Networking.Amf.Data;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace Harmonic.NetWorking.Amf.Common
+namespace Harmonic.Networking.Amf.Common
 {
     public class AmfObject : IDynamicObject, IEnumerable
     {

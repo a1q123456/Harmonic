@@ -1,9 +1,9 @@
 
 
-using Harmonic.NetWorking.Rtmp.Messages.Commands;
-using Harmonic.NetWorking.Rtmp.Messages;
+using Harmonic.Networking.Rtmp.Messages.Commands;
+using Harmonic.Networking.Rtmp.Messages;
 
-namespace Harmonic.NetWorking
+namespace Harmonic.Networking
 {
     public class ConnectionInformation
     {

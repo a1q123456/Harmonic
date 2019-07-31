@@ -1,10 +1,10 @@
 ﻿using Autofac;
 using Harmonic.Controllers;
-using Harmonic.NetWorking.Amf.Common;
-using Harmonic.NetWorking.Rtmp.Data;
-using Harmonic.NetWorking.Rtmp.Messages;
-using Harmonic.NetWorking.Rtmp.Messages.Commands;
-using Harmonic.NetWorking.Rtmp.Serialization;
+using Harmonic.Networking.Amf.Common;
+using Harmonic.Networking.Rtmp.Data;
+using Harmonic.Networking.Rtmp.Messages;
+using Harmonic.Networking.Rtmp.Messages.Commands;
+using Harmonic.Networking.Rtmp.Serialization;
 using Harmonic.Rpc;
 using System;
 using System.Collections.Generic;
@@ -13,17 +13,18 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Harmonic.NetWorking.Rtmp
+namespace Harmonic.Networking.Rtmp
 {
     public class NetConnection : IDisposable
     {
         private RtmpSession _rtmpSession = null;
         private RtmpChunkStream _rtmpChunkStream = null;
-        internal Dictionary<uint, RtmpController> _netStreams = new Dictionary<uint, RtmpController>();
+        private Dictionary<uint, RtmpController> _netStreams = new Dictionary<uint, RtmpController>();
         private RtmpControlMessageStream _controlMessageStream = null;
         public IReadOnlyDictionary<uint, RtmpController> NetStreams { get => _netStreams; }
         private RtmpController _controller;
         private bool _connected = false;
+        private object _streamsLock = new object();
 
         private RtmpController Controller
         {
@@ -78,7 +79,7 @@ namespace Harmonic.NetWorking.Rtmp
         public void Connect(CommandMessage command)
         {
             var commandObj = command.CommandObject;
-            _rtmpSession.ConnectionInformation = new NetWorking.ConnectionInformation();
+            _rtmpSession.ConnectionInformation = new Networking.ConnectionInformation();
             var props = _rtmpSession.ConnectionInformation.GetType().GetProperties();
             foreach (var prop in props)
             {
@@ -131,7 +132,27 @@ namespace Harmonic.NetWorking.Rtmp
 
         internal void MessageStreamDestroying(NetStream stream)
         {
-            _netStreams.Remove(stream.MessageStream.MessageStreamId);
+            lock (_streamsLock)
+            {
+                _netStreams.Remove(stream.MessageStream.MessageStreamId);
+            }
+            
+        }
+
+        internal void AddMessageStream(uint id, NetStream stream)
+        {
+            lock (_streamsLock)
+            {
+                _netStreams.Add(id, stream);
+            }
+        }
+
+        internal void RemoveMessageStream(uint id)
+        {
+            lock (_streamsLock)
+            {
+                _netStreams.Remove(id);
+            }
         }
 
 
@@ -144,14 +165,18 @@ namespace Harmonic.NetWorking.Rtmp
             {
                 if (disposing)
                 {
-                    while (_netStreams.Any())
+                    lock (_streamsLock)
                     {
-                        (_, var stream) = _netStreams.First();
-                        if (stream is IDisposable disp)
+                        while (_netStreams.Any())
                         {
-                            disp.Dispose();
+                            (_, var stream) = _netStreams.First();
+                            if (stream is IDisposable disp)
+                            {
+                                disp.Dispose();
+                            }
                         }
                     }
+
                     _rtmpChunkStream.Dispose();
                 }
 

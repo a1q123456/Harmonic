@@ -1,9 +1,9 @@
-﻿using Harmonic.NetWorking.Rtmp.Messages.UserControlMessages;
+﻿using Harmonic.Networking.Rtmp.Messages.UserControlMessages;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.NetWorking.Rtmp.Serialization
+namespace Harmonic.Networking.Rtmp.Serialization
 {
     public class UserControlMessageAttribute : Attribute
     {
