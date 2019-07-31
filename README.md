@@ -11,7 +11,8 @@ a high performance RTMP streaming application framework
 - [x] Live Streamingseeking
 - [x] Flv on websocket support
 - [x] Unittest
-- [ ] Flv muxer/demuxer
-- [ ] Video recorder
-- [ ] Video file playing
+- [x] Flv muxer/demuxer
+- [x] Video recorder
+- [x] Video file playing
+- [ ] websocket-flv seeking support
 - [ ] Rtmp on Udp support
