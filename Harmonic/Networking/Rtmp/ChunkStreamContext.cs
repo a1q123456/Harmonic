@@ -440,7 +440,7 @@ namespace Harmonic.Networking.Rtmp
                     prevHeader = null;
                 }
             }
-            _previousReadMessageHeader[_processingChunk.ChunkBasicHeader.ChunkStreamId] = _processingChunk.MessageHeader;
+            _previousReadMessageHeader[_processingChunk.ChunkBasicHeader.ChunkStreamId] = (MessageHeader)_processingChunk.MessageHeader.Clone();
             _processingChunk = null;
 
             buffer.Slice(consumed, bytesNeed).CopyTo(state.Body.AsSpan(state.CurrentIndex));
