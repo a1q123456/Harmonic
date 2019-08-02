@@ -145,7 +145,7 @@ namespace Harmonic.Controllers.Record
                 var data = FlvDemuxer.DemultiplexVideoData(message);
                 if (data.FrameType == FrameType.KeyFrame)
                 {
-                    _keyframeTimes.Add((double)message.MessageHeader.Timestamp);
+                    _keyframeTimes.Add((double)message.MessageHeader.Timestamp / 1000);
                     _keyframeFilePositions.Add((double)_recordFileData.Position);
                 }
 

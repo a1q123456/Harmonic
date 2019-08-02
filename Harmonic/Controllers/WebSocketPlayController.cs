@@ -85,14 +85,14 @@ namespace Harmonic.Controllers
                     _playRangeTo = long.Parse(toStr);
                 }
 
-                //var header = new byte[9];
+                var header = new byte[9];
 
-                //await _recordFile.ReadBytesAsync(header);
-                //await Session.SendRawDataAsync(header);
+                await _recordFile.ReadBytesAsync(header);
+                await Session.SendRawDataAsync(header);
 
-                //from = Math.Max(from, 9);
+                from = Math.Max(from, 9);
 
-                //_recordFile.Seek(from, SeekOrigin.Begin);
+                _recordFile.Seek(from, SeekOrigin.Begin);
 
                 await PlayRecordFile();
             }
@@ -129,32 +129,32 @@ namespace Harmonic.Controllers
 
         public override async void OnMessage(string msg)
         {
-            var obj = JObject.Parse(msg);
-            var action = obj["action"].Value<string>();
+            //var obj = JObject.Parse(msg);
+            //var action = obj["action"].Value<string>();
 
-            if (action == "suspend")
-            {
-                await _playLock.WaitAsync();
-            }
-            else if (action == "seek")
-            {
-                if (_playLock.CurrentCount != 0)
-                {
-                    return;
-                }
+            //if (action == "suspend")
+            //{
+            //    await _playLock.WaitAsync();
+            //}
+            //else if (action == "seek")
+            //{
+            //    if (_playLock.CurrentCount != 0)
+            //    {
+            //        return;
+            //    }
 
-                var pos = JsonConvert.DeserializeObject<SeekAction>(msg).FilePos;
+            //    var pos = JsonConvert.DeserializeObject<SeekAction>(msg).FilePos;
 
-                _recordFile.Seek((int)pos, SeekOrigin.Begin);
+            //    _recordFile.Seek((int)pos, SeekOrigin.Begin);
 
-                _playLock.Release();
+            //    _playLock.Release();
 
-                if (_playing == 0)
-                {
-                    await PlayRecordFile();
-                }
+            //    if (_playing == 0)
+            //    {
+            //        await PlayRecordFile();
+            //    }
 
-            }
+            //}
         }
 
         #region IDisposable Support
