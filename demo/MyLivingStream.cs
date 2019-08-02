@@ -1,4 +1,5 @@
-﻿using Harmonic.Controllers.Living;
+﻿using Harmonic.Controllers;
+using Harmonic.Controllers.Living;
 using Harmonic.Rpc;
 using Harmonic.Service;
 using System;
@@ -8,6 +9,7 @@ using System.Threading.Tasks;
 
 namespace demo
 {
+    [NeverRegister]
     public class MyLivingStream : LivingStream
     {
         public MyLivingStream(PublisherSessionService publisherSessionService) : base(publisherSessionService)

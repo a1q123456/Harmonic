@@ -1,12 +1,12 @@
-﻿using Harmonic.NetWorking.Rtmp.Data;
-using Harmonic.NetWorking.Rtmp.Serialization;
+﻿using Harmonic.Networking.Rtmp.Data;
+using Harmonic.Networking.Rtmp.Serialization;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net;
 using System.Text;
 
-namespace Harmonic.NetWorking.Rtmp.Messages
+namespace Harmonic.Networking.Rtmp.Messages
 {
     [RtmpMessage(MessageType.VideoMessage)]
     public sealed class VideoMessage : Message, ICloneable

@@ -1,13 +1,12 @@
 ﻿using Autofac;
 using Harmonic.Controllers;
 using Harmonic.Controllers.Living;
-using Harmonic.NetWorking.Rtmp;
-using Harmonic.NetWorking.Rtmp.Data;
-using Harmonic.NetWorking.Rtmp.Messages;
-using Harmonic.NetWorking.Rtmp.Messages.Commands;
-using Harmonic.NetWorking.Rtmp.Messages.UserControlMessages;
-using Harmonic.NetWorking.Rtmp.Serialization;
-using Harmonic.NetWorking.Rtmp.Messages;
+using Harmonic.Networking.Rtmp;
+using Harmonic.Networking.Rtmp.Data;
+using Harmonic.Networking.Rtmp.Messages;
+using Harmonic.Networking.Rtmp.Messages.Commands;
+using Harmonic.Networking.Rtmp.Messages.UserControlMessages;
+using Harmonic.Networking.Rtmp.Serialization;
 using Harmonic.Rpc;
 using Harmonic.Service;
 using System;
@@ -22,7 +21,8 @@ namespace Harmonic.Hosting
     public class RtmpServerOptions
     {
         internal Dictionary<MessageType, MessageFactory> _messageFactories = new Dictionary<MessageType, MessageFactory>();
-        public delegate Message MessageFactory(MessageHeader header, NetWorking.Rtmp.Serialization.SerializationContext context, out int consumed);
+        public IReadOnlyDictionary<MessageType, MessageFactory> MessageFactories => _messageFactories;
+        public delegate Message MessageFactory(MessageHeader header, Networking.Rtmp.Serialization.SerializationContext context, out int consumed);
         private Dictionary<string, Type> _registeredControllers = new Dictionary<string, Type>();
         internal ContainerBuilder _builder = null;
         private RpcService _rpcService = null;
@@ -138,6 +138,11 @@ namespace Harmonic.Hosting
         }
         private void RegisterCommonServices(ContainerBuilder builder)
         {
+            builder.Register(c => new RecordServiceConfiguration())
+                .AsSelf();
+            builder.Register(c => new RecordService(c.Resolve<RecordServiceConfiguration>()))
+                .AsSelf()
+                .InstancePerLifetimeScope();
             builder.Register(c => new PublisherSessionService())
                 .AsSelf()
                 .InstancePerLifetimeScope();

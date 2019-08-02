@@ -1,70 +1,160 @@
-﻿using Harmonic.NetWorking.Rtmp.Messages;
+﻿using Harmonic.Networking;
+using Harmonic.Networking.Rtmp.Messages;
 using Harmonic.Service;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Harmonic.Controllers
 {
     public class WebSocketPlayController : WebSocketController, IDisposable
     {
-        private PublisherSessionService _publisherSessionService = null;
-        private List<Action> _cleanupActions = new List<Action>();
-
-        public WebSocketPlayController(PublisherSessionService publisherSessionService)
+        class SeekAction
         {
-            _publisherSessionService = publisherSessionService;
+            [JsonProperty("action")]
+            public string Action { get; set; }
+            [JsonProperty("filePos")]
+            public double FilePos { get; set; }
         }
 
-        public override void OnConnect()
+        private RecordService _recordService = null;
+        private PublisherSessionService _publisherSessionService = null;
+        private List<Action> _cleanupActions = new List<Action>();
+        private FileStream _recordFile = null;
+        private SemaphoreSlim _playLock = new SemaphoreSlim(1);
+        private int _playing = 0;
+        private long _playRangeTo = 0;
+
+        public WebSocketPlayController(PublisherSessionService publisherSessionService, RecordService recordService)
+        {
+            _publisherSessionService = publisherSessionService;
+            _recordService = recordService;
+        }
+
+        public override async Task OnConnect()
         {
             var publisher = _publisherSessionService.FindPublisher(StreamName);
-            if (publisher == null)
+            if (publisher != null)
             {
-                throw new KeyNotFoundException();
+                _cleanupActions.Add(() =>
+                {
+                    publisher.OnAudioMessage -= SendAudio;
+                    publisher.OnVideoMessage -= SendVideo;
+                });
+
+                var metadata = (Dictionary<string, object>)publisher.FlvMetadata.Data.Last();
+                var hasAudio = metadata.ContainsKey("audiocodecid");
+                var hasVideo = metadata.ContainsKey("videocodecid");
+
+                await Session.SendFlvHeaderAsync(hasAudio, hasVideo);
+
+                await Session.SendMessageAsync(publisher.FlvMetadata);
+                if (hasAudio)
+                {
+                    await Session.SendMessageAsync(publisher.AACConfigureRecord);
+                }
+                if (hasVideo)
+                {
+                    await Session.SendMessageAsync(publisher.AVCConfigureRecord);
+                }
+
+                publisher.OnAudioMessage += SendAudio;
+                publisher.OnVideoMessage += SendVideo;
             }
-
-            _cleanupActions.Add(() =>
+            // play record
+            else
             {
-                publisher.OnAudioMessage -= SendAudio;
-                publisher.OnVideoMessage -= SendVideo;
-            });
+                _recordFile = new FileStream(_recordService.GetRecordFilename(StreamName) + ".flv", FileMode.Open, FileAccess.Read);
+                var fromStr = Query.Get("from");
+                long from = 0;
+                if (fromStr != null)
+                {
+                    from = long.Parse(fromStr);
+                }
+                var toStr = Query.Get("to");
+                _playRangeTo = -1;
+                if (toStr != null)
+                {
+                    _playRangeTo = long.Parse(toStr);
+                }
 
-            var metadata = (Dictionary<string, object>)publisher.FlvMetadata.Data.Last();
-            var hasAudio = metadata.ContainsKey("audiocodecid");
-            var hasVideo = metadata.ContainsKey("videocodecid");
+                var header = new byte[9];
 
-            Session.SendFlvHeader(hasAudio, hasVideo);
+                await _recordFile.ReadBytesAsync(header);
+                await Session.SendRawDataAsync(header);
 
-            Session.SendMessage(publisher.FlvMetadata);
-            if (hasAudio)
-            {
-                Session.SendMessage(publisher.AACConfigureRecord);
+                from = Math.Max(from, 9);
+
+                _recordFile.Seek(from, SeekOrigin.Begin);
+
+                await PlayRecordFile();
             }
-            if (hasVideo)
-            {
-                Session.SendMessage(publisher.AVCConfigureRecord);
-            }
+        }
 
-            publisher.OnAudioMessage += SendAudio;
-            publisher.OnVideoMessage += SendVideo;
+        private async Task PlayRecordFile()
+        {
+            Interlocked.Exchange(ref _playing, 1);
+            var buffer = new byte[512];
+            int bytesRead = 0;
+            do
+            {
+                await _playLock.WaitAsync();
+                bytesRead = await _recordFile.ReadAsync(buffer);
+                await Session.SendRawDataAsync(buffer);
+                _playLock.Release();
+                if (_playRangeTo < _recordFile.Position && _playRangeTo != -1)
+                {
+                    break;
+                }
+            } while (bytesRead != 0);
+            Interlocked.Exchange(ref _playing, 0);
         }
 
         private void SendVideo(VideoMessage message)
         {
-            Session.SendMessage(message);
+            Session.SendMessageAsync(message);
         }
 
         private void SendAudio(AudioMessage message)
         {
-            Session.SendMessage(message);
+            Session.SendMessageAsync(message);
         }
 
-        public override void OnMessage(string msg)
+        public override async void OnMessage(string msg)
         {
+            //var obj = JObject.Parse(msg);
+            //var action = obj["action"].Value<string>();
 
+            //if (action == "suspend")
+            //{
+            //    await _playLock.WaitAsync();
+            //}
+            //else if (action == "seek")
+            //{
+            //    if (_playLock.CurrentCount != 0)
+            //    {
+            //        return;
+            //    }
+
+            //    var pos = JsonConvert.DeserializeObject<SeekAction>(msg).FilePos;
+
+            //    _recordFile.Seek((int)pos, SeekOrigin.Begin);
+
+            //    _playLock.Release();
+
+            //    if (_playing == 0)
+            //    {
+            //        await PlayRecordFile();
+            //    }
+
+            //}
         }
 
         #region IDisposable Support
@@ -80,6 +170,7 @@ namespace Harmonic.Controllers
                     {
                         c();
                     }
+                    _recordFile?.Dispose();
                 }
 
                 disposedValue = true;

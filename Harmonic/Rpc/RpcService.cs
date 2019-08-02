@@ -1,8 +1,8 @@
 ﻿using Harmonic.Controllers;
-using Harmonic.NetWorking.Amf.Common;
-using Harmonic.NetWorking.Rtmp;
-using Harmonic.NetWorking.Rtmp.Messages.Commands;
-using Harmonic.NetWorking.Rtmp.Serialization;
+using Harmonic.Networking.Amf.Common;
+using Harmonic.Networking.Rtmp;
+using Harmonic.Networking.Rtmp.Messages.Commands;
+using Harmonic.Networking.Rtmp.Serialization;
 using System;
 using System.Collections.Generic;
 using System.Linq;

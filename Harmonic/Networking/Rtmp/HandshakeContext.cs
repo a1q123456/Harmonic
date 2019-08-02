@@ -1,5 +1,5 @@
 ﻿using Harmonic.Buffers;
-using Harmonic.NetWorking.Utils;
+using Harmonic.Networking.Utils;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
@@ -8,7 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Harmonic.NetWorking.Rtmp
+namespace Harmonic.Networking.Rtmp
 {
     sealed class HandshakeContext : IDisposable
     {

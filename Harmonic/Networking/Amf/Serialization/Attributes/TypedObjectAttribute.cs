@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.NetWorking.Amf.Attributes
+namespace Harmonic.Networking.Amf.Attributes
 {
     [AttributeUsage(AttributeTargets.Class)]
     public class TypedObjectAttribute : Attribute

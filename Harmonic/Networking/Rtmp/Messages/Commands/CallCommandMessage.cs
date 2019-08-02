@@ -5,11 +5,11 @@ using System.Diagnostics.Contracts;
 using System.Linq;
 using System.Reflection;
 using System.Text;
-using Harmonic.NetWorking.Rtmp.Data;
-using Harmonic.NetWorking.Rtmp.Serialization;
-using Harmonic.NetWorking.Rtmp.Messages;
+using Harmonic.Networking.Rtmp.Data;
+using Harmonic.Networking.Rtmp.Serialization;
+using Harmonic.Networking.Rtmp.Messages;
 
-namespace Harmonic.NetWorking.Rtmp.Messages.Commands
+namespace Harmonic.Networking.Rtmp.Messages.Commands
 {
     public abstract class CallCommandMessage : CommandMessage
     {

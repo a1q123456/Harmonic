@@ -1,9 +1,9 @@
 ﻿using Harmonic.Buffers;
-using Harmonic.NetWorking.Amf.Attributes;
-using Harmonic.NetWorking.Amf.Common;
-using Harmonic.NetWorking.Amf.Data;
-using Harmonic.NetWorking.Amf.Serialization.Amf3;
-using Harmonic.NetWorking.Amf.Serialization.Attributes;
+using Harmonic.Networking.Amf.Attributes;
+using Harmonic.Networking.Amf.Common;
+using Harmonic.Networking.Amf.Data;
+using Harmonic.Networking.Amf.Serialization.Amf3;
+using Harmonic.Networking.Amf.Serialization.Attributes;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using System.Collections.Generic;
@@ -114,7 +114,7 @@ namespace UnitTest
 
             using (var sc = new SerializationContext())
             {
-                writer.WriteBytes(new Harmonic.NetWorking.Amf.Common.Undefined(), sc);
+                writer.WriteBytes(new Harmonic.Networking.Amf.Common.Undefined(), sc);
                 var buffer = new byte[sc.MessageLength];
                 sc.GetMessage(buffer);
 

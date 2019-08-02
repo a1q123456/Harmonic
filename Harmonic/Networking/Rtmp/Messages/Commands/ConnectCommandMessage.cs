@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using Harmonic.NetWorking.Rtmp.Serialization;
-using Harmonic.NetWorking.Rtmp.Messages;
+using Harmonic.Networking.Rtmp.Serialization;
+using Harmonic.Networking.Rtmp.Messages;
 
-namespace Harmonic.NetWorking.Rtmp.Messages.Commands
+namespace Harmonic.Networking.Rtmp.Messages.Commands
 {
     [RtmpCommand(Name = "connect")]
     public class ConnectCommandMessage : CommandMessage
