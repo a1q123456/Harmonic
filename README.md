@@ -1,4 +1,4 @@
-master is not a stable branch, you may want to see the latest [tag](https://github.com/a1q123456/rtmp-sharp-server/tree/v0.0.1)
+master is not a stable branch, you may want to see the latest [tag](https://github.com/a1q123456/rtmp-sharp-server/tree/v0.0.2)
 
 # Harmonic
 A high performance RTMP live streaming application framework
