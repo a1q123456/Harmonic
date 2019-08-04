@@ -13,6 +13,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace Harmonic.Networking.Rtmp
 {
@@ -39,7 +40,13 @@ namespace Harmonic.Networking.Rtmp
             ControlMessageStream.RegisterMessageHandler<SetChunkSizeMessage>(HandleSetChunkSize);
             ControlMessageStream.RegisterMessageHandler<WindowAcknowledgementSizeMessage>(HandleWindowAcknowledgementSize);
             ControlMessageStream.RegisterMessageHandler<SetPeerBandwidthMessage>(HandleSetPeerBandwidth);
+            ControlMessageStream.RegisterMessageHandler<AcknowledgementMessage>(HandleAcknowledgement);
             _rpcService = ioPipeline.Options.ServerLifetime.Resolve<RpcService>();
+        }
+
+        private void HandleAcknowledgement(AcknowledgementMessage ack)
+        {
+            Interlocked.Add(ref IOPipeline.ChunkStreamContext.WriteUnAcknowledgedSize, ack.BytesReceived * -1);
         }
 
         internal void AssertStreamId(uint msid)
@@ -251,23 +258,25 @@ namespace Harmonic.Networking.Rtmp
 
         private void HandleSetPeerBandwidth(SetPeerBandwidthMessage message)
         {
-            IOPipeline.ChunkStreamContext.ReadWindowAcknowledgementSize = message.WindowSize;
-            SendControlMessageAsync(new AcknowledgementMessage()
+            if (IOPipeline.ChunkStreamContext.WriteWindowAcknowledgementSize.HasValue && message.LimitType == LimitType.Soft && message.WindowSize > IOPipeline.ChunkStreamContext.WriteWindowAcknowledgementSize)
             {
-                BytesReceived = IOPipeline.ChunkStreamContext.ReadWindowSize
+                return;
+            }
+            if (IOPipeline.ChunkStreamContext.PreviousLimitType.HasValue && message.LimitType == LimitType.Dynamic && IOPipeline.ChunkStreamContext.PreviousLimitType != LimitType.Hard)
+            {
+                return;
+            }
+            IOPipeline.ChunkStreamContext.PreviousLimitType = message.LimitType;
+            IOPipeline.ChunkStreamContext.WriteWindowAcknowledgementSize = message.WindowSize;
+            SendControlMessageAsync(new WindowAcknowledgementSizeMessage()
+            {
+                WindowSize = message.WindowSize
             });
-            IOPipeline.ChunkStreamContext.ReadWindowSize = 0;
-            IOPipeline.ChunkStreamContext.BandwidthLimited = true;
         }
 
         private void HandleWindowAcknowledgementSize(WindowAcknowledgementSizeMessage message)
         {
             IOPipeline.ChunkStreamContext.ReadWindowAcknowledgementSize = message.WindowSize;
-            SendControlMessageAsync(new AcknowledgementMessage()
-            {
-                BytesReceived = IOPipeline.ChunkStreamContext.ReadWindowSize
-            });
-            IOPipeline.ChunkStreamContext.ReadWindowSize = 0;
         }
 
         private void HandleSetChunkSize(SetChunkSizeMessage setChunkSize)

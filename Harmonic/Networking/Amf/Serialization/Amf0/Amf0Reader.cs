@@ -585,6 +585,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             int consumed = Amf0CommonValues.MARKER_LENGTH + sizeof(uint);
             var arrayBodyBuffer = buffer.Slice(consumed);
             var elementBodyBuffer = arrayBodyBuffer;
+            System.Diagnostics.Debug.WriteLine(elementCount);
             for (uint i = 0; i < elementCount; i++)
             {
                 if (!TryGetValue(elementBodyBuffer, out _, out var element, out var bufferConsumed))

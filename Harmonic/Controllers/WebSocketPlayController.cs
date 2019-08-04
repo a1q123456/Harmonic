@@ -16,14 +16,6 @@ namespace Harmonic.Controllers
 {
     public class WebSocketPlayController : WebSocketController, IDisposable
     {
-        class SeekAction
-        {
-            [JsonProperty("action")]
-            public string Action { get; set; }
-            [JsonProperty("filePos")]
-            public double FilePos { get; set; }
-        }
-
         private RecordService _recordService = null;
         private PublisherSessionService _publisherSessionService = null;
         private List<Action> _cleanupActions = new List<Action>();
@@ -102,7 +94,7 @@ namespace Harmonic.Controllers
         {
             Interlocked.Exchange(ref _playing, 1);
             var buffer = new byte[512];
-            int bytesRead = 0;
+            int bytesRead;
             do
             {
                 await _playLock.WaitAsync();
@@ -127,34 +119,8 @@ namespace Harmonic.Controllers
             Session.SendMessageAsync(message);
         }
 
-        public override async void OnMessage(string msg)
+        public override void OnMessage(string msg)
         {
-            //var obj = JObject.Parse(msg);
-            //var action = obj["action"].Value<string>();
-
-            //if (action == "suspend")
-            //{
-            //    await _playLock.WaitAsync();
-            //}
-            //else if (action == "seek")
-            //{
-            //    if (_playLock.CurrentCount != 0)
-            //    {
-            //        return;
-            //    }
-
-            //    var pos = JsonConvert.DeserializeObject<SeekAction>(msg).FilePos;
-
-            //    _recordFile.Seek((int)pos, SeekOrigin.Begin);
-
-            //    _playLock.Release();
-
-            //    if (_playing == 0)
-            //    {
-            //        await PlayRecordFile();
-            //    }
-
-            //}
         }
 
         #region IDisposable Support

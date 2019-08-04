@@ -103,11 +103,12 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                 var buffer = bufferBackend.AsSpan(0, bytesNeed);
                 if (isLongString)
                 {
-                    Contract.Assert(NetworkBitConverter.TryGetBytes((uint)bodyLength, buffer));
+                    NetworkBitConverter.TryGetBytes((uint)bodyLength, buffer);
                 }
                 else
                 {
-                    Contract.Assert(NetworkBitConverter.TryGetBytes((ushort)bodyLength, buffer));
+                    var contractRet = NetworkBitConverter.TryGetBytes((ushort)bodyLength, buffer);
+                    Contract.Assert(contractRet);
                 }
 
                 Encoding.UTF8.GetBytes(str, buffer.Slice(headerLength));
@@ -145,7 +146,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             {
                 var buffer = bufferBackend.AsSpan(0, bytesNeed);
                 buffer[0] = (byte)Amf0Type.Number;
-                Contract.Assert(NetworkBitConverter.TryGetBytes(val, buffer.Slice(Amf0CommonValues.MARKER_LENGTH)));
+                var contractRet = NetworkBitConverter.TryGetBytes(val, buffer.Slice(Amf0CommonValues.MARKER_LENGTH));
+                Contract.Assert(contractRet);
                 context.Buffer.WriteToBuffer(buffer);
             }
             finally
@@ -185,7 +187,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             {
                 var buffer = backend.AsSpan(0, bytesNeed);
                 buffer[0] = (byte)Amf0Type.Reference;
-                Contract.Assert(NetworkBitConverter.TryGetBytes(index, buffer.Slice(Amf0CommonValues.MARKER_LENGTH)));
+                var contractRet = NetworkBitConverter.TryGetBytes(index, buffer.Slice(Amf0CommonValues.MARKER_LENGTH));
+                Contract.Assert(contractRet);
                 context.Buffer.WriteToBuffer(buffer);
             }
             finally
@@ -213,7 +216,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
                 buffer[0] = (byte)Amf0Type.Date;
                 var dof = new DateTimeOffset(dateTime);
                 var timestamp = (double)dof.ToUnixTimeMilliseconds();
-                Contract.Assert(NetworkBitConverter.TryGetBytes(timestamp, buffer.Slice(Amf0CommonValues.MARKER_LENGTH)));
+                var contractRet = NetworkBitConverter.TryGetBytes(timestamp, buffer.Slice(Amf0CommonValues.MARKER_LENGTH));
+                Contract.Assert(contractRet);
                 context.Buffer.WriteToBuffer(buffer);
             }
             finally
@@ -279,7 +283,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             var countBuffer = _arrayPool.Rent(sizeof(uint));
             try
             {
-                Contract.Assert(NetworkBitConverter.TryGetBytes((uint)value.Count, countBuffer));
+                var contractRet = NetworkBitConverter.TryGetBytes((uint)value.Count, countBuffer);
+                Contract.Assert(contractRet);
                 context.Buffer.WriteToBuffer(countBuffer.AsSpan(0, sizeof(uint)));
             }
             finally
@@ -314,7 +319,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0
             var countBuffer = _arrayPool.Rent(sizeof(uint));
             try
             {
-                Contract.Assert(NetworkBitConverter.TryGetBytes((uint)value.Count, countBuffer));
+                var contractRet = NetworkBitConverter.TryGetBytes((uint)value.Count, countBuffer);
+                Contract.Assert(contractRet);
                 context.Buffer.WriteToBuffer(countBuffer.AsSpan(0, sizeof(uint)));
             }
             finally
