@@ -1,5 +1,6 @@
 ﻿using Harmonic.Buffers;
 using Harmonic.Networking;
+using Harmonic.Networking.Amf.Common;
 using Harmonic.Networking.Amf.Serialization.Amf0;
 using Harmonic.Networking.Amf.Serialization.Amf3;
 using Harmonic.Networking.Flv.Data;
@@ -10,7 +11,9 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using static Harmonic.Hosting.RtmpServerOptions;
 
@@ -42,18 +45,26 @@ namespace Harmonic.Networking.Flv
             return headerBuffer;
         }
 
-        public async Task SeekAsync(double milliseconds)
+        public void SeekNoLock(double milliseconds, Dictionary<string, object> metaData, CancellationToken ct = default)
         {
-            uint current = 0;
-            while (current <= milliseconds)
+            if (metaData == null)
             {
-                var header = await ReadHeader();
-                current = header.Timestamp;
-                _stream.Seek(header.MessageLength + sizeof(int), SeekOrigin.Current);
+                return;
             }
+            var seconds = milliseconds / 1000;
+            var keyframes = metaData["keyframes"] as AmfObject;
+            var times = keyframes.Fields["times"] as List<object>;
+            var idx = times.FindIndex(t => ((double)t) >= seconds);
+            if (idx == -1)
+            {
+                return;
+            }
+            var filePositions = keyframes.Fields["filepositions"] as List<object>;
+            var pos = (double)filePositions[idx];
+            _stream.Seek((int)(pos - 4), SeekOrigin.Begin);
         }
 
-        private async Task<MessageHeader> ReadHeader()
+        private async Task<MessageHeader> ReadHeader(CancellationToken ct = default)
         {
             byte[] headerBuffer = null;
             byte[] timestampBuffer = null;
@@ -61,7 +72,7 @@ namespace Harmonic.Networking.Flv
             {
                 headerBuffer = _arrayPool.Rent(15);
                 timestampBuffer = _arrayPool.Rent(4);
-                await _stream.ReadBytesAsync(headerBuffer.AsMemory(0, 15));
+                await _stream.ReadBytesAsync(headerBuffer.AsMemory(0, 15), ct);
                 var type = (MessageType)headerBuffer[4];
                 var length = NetworkBitConverter.ToUInt24(headerBuffer.AsSpan(5, 3));
 
@@ -124,13 +135,13 @@ namespace Harmonic.Networking.Flv
             return ret;
         }
 
-        public async Task<Message> DemultiplexFlvAsync()
+        public async Task<Message> DemultiplexFlvAsync(CancellationToken ct = default)
         {
             byte[] bodyBuffer = null;
 
             try
             {
-                var header = await ReadHeader();
+                var header = await ReadHeader(ct);
 
                 bodyBuffer = _arrayPool.Rent((int)header.MessageLength);
                 if (!_factories.TryGetValue(header.MessageType, out var factory))
@@ -138,7 +149,7 @@ namespace Harmonic.Networking.Flv
                     throw new InvalidOperationException();
                 }
 
-                await _stream.ReadBytesAsync(bodyBuffer.AsMemory(0, (int)header.MessageLength));
+                await _stream.ReadBytesAsync(bodyBuffer.AsMemory(0, (int)header.MessageLength), ct);
 
                 var context = new Networking.Rtmp.Serialization.SerializationContext()
                 {

@@ -67,13 +67,13 @@ namespace Harmonic.Networking.Rtmp
                 arr[0] = 3;
                 NetworkBitConverter.TryGetBytes(_writerTimestampEpoch, arr.AsSpan(1, 4));
                 _s1Data.AsSpan(0, 1528).CopyTo(arr.AsSpan(9));
-                _ioPipeline.SendRawData(arr.AsSpan(0, 1537));
+                _ = _ioPipeline.SendRawData(arr.AsMemory(0, 1537));
 
                 // s2
                 NetworkBitConverter.TryGetBytes(_readerTimestampEpoch, arr.AsSpan(0, 4));
                 NetworkBitConverter.TryGetBytes((uint)0, arr.AsSpan(4, 4));
 
-                _ioPipeline.SendRawData(arr.AsSpan(0, 1536));
+                _ = _ioPipeline.SendRawData(arr.AsMemory(0, 1536));
 
                 buffer.Slice(consumed, 1528).CopyTo(arr.AsSpan(8));
                 consumed += 1528;

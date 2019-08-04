@@ -138,11 +138,13 @@ namespace Harmonic.Networking.Rtmp
         }
 
         #region Sender
-        internal Task SendRawData(ReadOnlySpan<byte> data)
+
+        internal async Task SendRawData(ReadOnlyMemory<byte> data)
         {
             var tcs = new TaskCompletionSource<int>();
             var buffer = _arrayPool.Rent(data.Length);
             data.CopyTo(buffer);
+
             _writerQueue.Enqueue(new WriteState()
             {
                 Buffer = buffer,
@@ -150,7 +152,7 @@ namespace Harmonic.Networking.Rtmp
                 Length = data.Length
             });
             _writerSignal.Release();
-            return tcs.Task;
+            await tcs.Task;
         }
 
         private async Task Writer(CancellationToken ct)
@@ -186,18 +188,6 @@ namespace Harmonic.Networking.Rtmp
                 {
                     break;
                 }
-                if (ChunkStreamContext != null)
-                {
-                    ChunkStreamContext.ReadWindowSize += (uint)bytesRead;
-                    if (ChunkStreamContext.ReadWindowAcknowledgementSize.HasValue)
-                    {
-                        if (ChunkStreamContext.ReadWindowSize >= ChunkStreamContext.ReadWindowAcknowledgementSize)
-                        {
-                            ChunkStreamContext._rtmpSession.Acknowledgement(ChunkStreamContext.ReadWindowAcknowledgementSize.Value);
-                            ChunkStreamContext.ReadWindowSize -= ChunkStreamContext.ReadWindowAcknowledgementSize.Value;
-                        }
-                    }
-                }
                 writer.Advance(bytesRead);
                 var result = await writer.FlushAsync(ct);
                 if (result.IsCompleted || result.IsCanceled)
@@ -227,7 +217,18 @@ namespace Harmonic.Networking.Rtmp
                 buffer = buffer.Slice(consumed);
 
                 reader.AdvanceTo(buffer.Start, buffer.End);
-
+                if (ChunkStreamContext != null)
+                {
+                    ChunkStreamContext.ReadUnAcknowledgedSize += consumed;
+                    if (ChunkStreamContext.ReadWindowAcknowledgementSize.HasValue)
+                    {
+                        if (ChunkStreamContext.ReadUnAcknowledgedSize >= ChunkStreamContext.ReadWindowAcknowledgementSize)
+                        {
+                            ChunkStreamContext._rtmpSession.Acknowledgement((uint)ChunkStreamContext.ReadUnAcknowledgedSize);
+                            ChunkStreamContext.ReadUnAcknowledgedSize -= 0;
+                        }
+                    }
+                }
                 if (result.IsCompleted || result.IsCanceled)
                 {
                     break;

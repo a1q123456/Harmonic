@@ -29,11 +29,11 @@ namespace Harmonic.Networking.Rtmp
         internal Dictionary<uint, MessageReadingState> _incompleteMessageState = new Dictionary<uint, MessageReadingState>();
         internal uint? ReadWindowAcknowledgementSize { get; set; } = null;
         internal uint? WriteWindowAcknowledgementSize { get; set; } = null;
-        internal uint ReadWindowSize { get; set; } = 0;
-        internal uint WriteWindowSize { get; set; } = 0;
         internal int ReadChunkSize { get; set; } = 128;
-        internal bool BandwidthLimited { get; set; } = false;
-        internal int _writeChunkSize = 128;
+        internal long ReadUnAcknowledgedSize = 0;
+        internal long WriteUnAcknowledgedSize = 0;
+
+        internal uint _writeChunkSize = 128;
         internal readonly int EXTENDED_TIMESTAMP_LENGTH = 4;
         internal readonly int TYPE0_SIZE = 11;
         internal readonly int TYPE1_SIZE = 7;
@@ -46,7 +46,10 @@ namespace Harmonic.Networking.Rtmp
         internal Amf3Reader _amf3Reader = new Amf3Reader();
         internal Amf3Writer _amf3Writer = new Amf3Writer();
 
+
         private IOPipeLine _ioPipeline = null;
+        private SemaphoreSlim _sync = new SemaphoreSlim(1);
+        internal LimitType? PreviousLimitType { get; set; } = null;
 
         public ChunkStreamContext(IOPipeLine stream)
         {
@@ -64,7 +67,7 @@ namespace Harmonic.Networking.Rtmp
             ((IDisposable)_rtmpSession).Dispose();
         }
 
-        internal Task MultiplexMessageAsync(uint chunkStreamId, Message message)
+        internal async Task MultiplexMessageAsync(uint chunkStreamId, Message message)
         {
             if (!message.MessageHeader.MessageStreamId.HasValue)
             {
@@ -112,22 +115,76 @@ namespace Harmonic.Networking.Rtmp
                     _previousWriteMessageHeader[chunkStreamId] = (MessageHeader)message.MessageHeader.Clone();
                     var headerLength = basicHeaderLength + messageHeaderLength;
                     var bodySize = (int)(length - i >= _writeChunkSize ? _writeChunkSize : length - i);
+
                     var chunkBuffer = _arrayPool.Rent(headerLength + bodySize);
-                    basicHeader.AsSpan(0, basicHeaderLength).CopyTo(chunkBuffer);
-                    messageHeader.AsSpan(0, messageHeaderLength).CopyTo(chunkBuffer.AsSpan(basicHeaderLength));
-                    _arrayPool.Return(basicHeader);
-                    _arrayPool.Return(messageHeader);
-                    buffer.AsSpan(i, bodySize).CopyTo(chunkBuffer.AsSpan(headerLength));
-                    i += bodySize;
-                    var isLastChunk = message.MessageHeader.MessageLength - i == 0;
-                    var tsk = _ioPipeline.SendRawData(chunkBuffer.AsSpan(0, headerLength + bodySize));
-                    if (isLastChunk)
+                    await _sync.WaitAsync();
+                    try
                     {
-                        ret = tsk;
+                        basicHeader.AsSpan(0, basicHeaderLength).CopyTo(chunkBuffer);
+                        messageHeader.AsSpan(0, messageHeaderLength).CopyTo(chunkBuffer.AsSpan(basicHeaderLength));
+                        _arrayPool.Return(basicHeader);
+                        _arrayPool.Return(messageHeader);
+                        buffer.AsSpan(i, bodySize).CopyTo(chunkBuffer.AsSpan(headerLength));
+                        i += bodySize;
+                        var isLastChunk = message.MessageHeader.MessageLength - i == 0;
+
+                        long offset = 0;
+                        long totalLength = headerLength + bodySize;
+                        long currentSendSize = totalLength;
+
+                        while (offset != (headerLength + bodySize))
+                        {
+                            if (WriteWindowAcknowledgementSize.HasValue && Interlocked.Read(ref WriteUnAcknowledgedSize) + headerLength + bodySize > WriteWindowAcknowledgementSize.Value)
+                            {
+                                currentSendSize = Math.Min(WriteWindowAcknowledgementSize.Value, currentSendSize);
+                                //var delayCount = 0;
+                                while (currentSendSize + Interlocked.Read(ref WriteUnAcknowledgedSize) >= WriteWindowAcknowledgementSize.Value)
+                                {
+                                    await Task.Delay(1);
+                                }
+                            }
+                            var tsk = _ioPipeline.SendRawData(chunkBuffer.AsMemory((int)offset, (int)currentSendSize));
+                            offset += currentSendSize;
+                            totalLength -= currentSendSize;
+
+                            if (WriteWindowAcknowledgementSize.HasValue)
+                            {
+                                Interlocked.Add(ref WriteUnAcknowledgedSize, currentSendSize);
+                            }
+                            
+                            if (isLastChunk)
+                            {
+                                ret = tsk;
+                            }
+                        }
+                        if (isLastChunk)
+                        {
+                            if (message.MessageHeader.MessageType == MessageType.SetChunkSize)
+                            {
+                                var setChunkSize = message as SetChunkSizeMessage;
+                                _writeChunkSize = setChunkSize.ChunkSize;
+                            }
+                            else if (message.MessageHeader.MessageType == MessageType.SetPeerBandwidth)
+                            {
+                                var m = message as SetPeerBandwidthMessage;
+                                ReadWindowAcknowledgementSize = m.WindowSize;
+                            }
+                            else if (message.MessageHeader.MessageType == MessageType.WindowAcknowledgementSize)
+                            {
+                                var m = message as WindowAcknowledgementSizeMessage;
+                                WriteWindowAcknowledgementSize = m.WindowSize;
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        _sync.Release();
+                        _arrayPool.Return(chunkBuffer);
                     }
                 }
                 Debug.Assert(ret != null);
-                return ret;
+                await ret;
+
             }
             finally
             {

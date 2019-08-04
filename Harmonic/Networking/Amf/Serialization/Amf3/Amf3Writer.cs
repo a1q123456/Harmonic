@@ -68,7 +68,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
         private void WrapVector(object value, SerializationContext context)
         {
             var valueType = value.GetType();
-            Contract.Assert(valueType.IsGenericType);
+            var contractRet = valueType.IsGenericType;
+            Contract.Assert(contractRet);
             var defination = valueType.GetGenericTypeDefinition();
             Contract.Assert(defination == typeof(Vector<>));
             var vectorT = valueType.GetGenericArguments().First();
@@ -79,7 +80,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
         private void WrapDictionary(object value, SerializationContext context)
         {
             var valueType = value.GetType();
-            Contract.Assert(valueType.IsGenericType);
+            var contractRet = valueType.IsGenericType;
+            Contract.Assert(contractRet);
             var defination = valueType.GetGenericTypeDefinition();
             Contract.Assert(defination == typeof(Amf3Dictionary<,>));
             var tKey = valueType.GetGenericArguments().First();
@@ -205,7 +207,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             var backend = _arrayPool.Rent(sizeof(double));
             try
             {
-                Contract.Assert(NetworkBitConverter.TryGetBytes(value, backend));
+                var contractRet = NetworkBitConverter.TryGetBytes(value, backend);
+                Contract.Assert(contractRet);
                 context.Buffer.WriteToBuffer(backend.AsSpan(0, sizeof(double)));
             }
             finally
@@ -290,7 +293,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
             var backend = _arrayPool.Rent(sizeof(double));
             try
             {
-                Contract.Assert(NetworkBitConverter.TryGetBytes(timestamp, backend));
+                var contractRet = NetworkBitConverter.TryGetBytes(timestamp, backend);
+                Contract.Assert(contractRet);
                 context.Buffer.WriteToBuffer(backend.AsSpan(0, sizeof(double)));
             }
             finally
@@ -511,7 +515,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 {
                     foreach (var i in value)
                     {
-                        Contract.Assert(NetworkBitConverter.TryGetBytes(i, buffer));
+                        var contractRet = NetworkBitConverter.TryGetBytes(i, buffer);
+                        Contract.Assert(contractRet);
                         context.Buffer.WriteToBuffer(buffer.AsSpan(0, sizeof(uint)));
                     }
                 }
@@ -545,7 +550,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
 
                     foreach (var i in value)
                     {
-                        Contract.Assert(NetworkBitConverter.TryGetBytes(i, buffer));
+                        var contractRet = NetworkBitConverter.TryGetBytes(i, buffer);
+                        Contract.Assert(contractRet);
                         context.Buffer.WriteToBuffer(buffer.AsSpan(0, sizeof(int)));
                     }
                 }
@@ -579,7 +585,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3
                 {
                     foreach (var i in value)
                     {
-                        Contract.Assert(NetworkBitConverter.TryGetBytes(i, buffer));
+                        var contractRet = NetworkBitConverter.TryGetBytes(i, buffer);
+                        Contract.Assert(contractRet);
                         context.Buffer.WriteToBuffer(buffer.AsSpan(0, sizeof(double)));
                     }
                 }

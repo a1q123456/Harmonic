@@ -29,16 +29,19 @@ namespace Harmonic.Controllers.Record
         private FileStream _recordFileData = null;
         private RecordService _recordService = null;
         private DataMessage _metaData = null;
-        private uint _maxTimestamp = 0;
+        private uint _currentTimestamp = 0;
         private SemaphoreSlim _playLock = new SemaphoreSlim(1);
         private int _playing = 0;
         private AmfObject _keyframes = null;
         private List<object> _keyframeTimes;
         private List<object> _keyframeFilePositions;
+        private long _bufferMs = -1;
 
         private RtmpChunkStream VideoChunkStream { get; set; } = null;
         private RtmpChunkStream AudioChunkStream { get; set; } = null;
         private bool _disposed = false;
+        private CancellationTokenSource _playCts;
+
         protected override async void Dispose(bool disposing)
         {
             base.Dispose(disposing);
@@ -56,7 +59,7 @@ namespace Harmonic.Controllers.Record
                             recordFile.Seek(0, SeekOrigin.Begin);
                             await recordFile.WriteAsync(FlvMuxer.MultiplexFlvHeader(true, true));
                             var metaData = _metaData.Data[1] as Dictionary<string, object>;
-                            metaData["duration"] = ((double)_maxTimestamp) / 1000;
+                            metaData["duration"] = ((double)_currentTimestamp) / 1000;
                             metaData["keyframes"] = _keyframes;
                             _metaData.MessageHeader.MessageLength = 0;
                             var dataTagLen = FlvMuxer.MultiplexFlv(_metaData).Length;
@@ -109,6 +112,7 @@ namespace Harmonic.Controllers.Record
             MessageStream.RegisterMessageHandler<DataMessage>(HandleData);
             MessageStream.RegisterMessageHandler<AudioMessage>(HandleAudioMessage);
             MessageStream.RegisterMessageHandler<VideoMessage>(HandleVideoMessage);
+            MessageStream.RegisterMessageHandler<UserControlMessage>(HandleUserControlMessage);
             onStatus.InfoObject = new AmfObject
             {
                 {"level", "status" },
@@ -127,11 +131,19 @@ namespace Harmonic.Controllers.Record
             _keyframes.Add("filepositions", _keyframeFilePositions);
         }
 
+        private void HandleUserControlMessage(UserControlMessage msg)
+        {
+            if (msg.UserControlEventType == UserControlEventType.SetBufferLength)
+            {
+                _bufferMs = (msg as SetBufferLengthMessage).BufferMilliseconds;
+            }
+        }
+
         private async void HandleAudioMessage(AudioMessage message)
         {
             try
             {
-                _maxTimestamp = Math.Max(_maxTimestamp, message.MessageHeader.Timestamp);
+                _currentTimestamp = Math.Max(_currentTimestamp, message.MessageHeader.Timestamp);
 
                 await SaveMessage(message);
             }
@@ -145,7 +157,7 @@ namespace Harmonic.Controllers.Record
         {
             try
             {
-                _maxTimestamp = Math.Max(_maxTimestamp, message.MessageHeader.Timestamp);
+                _currentTimestamp = Math.Max(_currentTimestamp, message.MessageHeader.Timestamp);
 
                 var head = message.Data.Span[0];
 
@@ -191,21 +203,16 @@ namespace Harmonic.Controllers.Record
             resetStatus.InfoObject = resetData;
             await MessageStream.SendMessageAsync(ChunkStream, resetStatus);
 
-            await SeekAndPlay(milliSeconds);
-        }
-
-        private async Task SeekAndPlay(double milliSeconds)
-        {
-            await _playLock.WaitAsync();
-            _recordFileData.Seek(0, SeekOrigin.Begin);
-
-            await FlvDemuxer.SeekAsync(milliSeconds);
-
-            _playLock.Release();
-            if (_playing == 0)
+            _playCts?.Cancel();
+            while (_playing == 1)
             {
-                await StartPlay();
+                await Task.Yield();
             }
+
+            var cts = new CancellationTokenSource();
+            _playCts?.Dispose();
+            _playCts = cts;
+            await SeekAndPlay(milliSeconds, cts.Token);
         }
 
         [RpcMethod("play")]
@@ -236,15 +243,23 @@ namespace Harmonic.Controllers.Record
                 {"description", "Started playing." },
                 {"details", streamName }
             };
+
             var startStatus = RtmpSession.CreateCommandMessage<OnStatusCommandMessage>();
             startStatus.InfoObject = startData;
             await MessageStream.SendMessageAsync(ChunkStream, startStatus);
-
+            var bandwidthLimit = new WindowAcknowledgementSizeMessage()
+            {
+                WindowSize = 500 * 1024
+            };
+            await RtmpSession.ControlMessageStream.SendMessageAsync(RtmpSession.ControlChunkStream, bandwidthLimit);
             VideoChunkStream = RtmpSession.CreateChunkStream();
             AudioChunkStream = RtmpSession.CreateChunkStream();
 
+            var cts = new CancellationTokenSource();
+            _playCts?.Dispose();
+            _playCts = cts;
             start = Math.Max(start, 0);
-            await SeekAndPlay(start / 1000);
+            await SeekAndPlay(start / 1000, cts.Token);
         }
 
         [RpcMethod("pause")]
@@ -252,36 +267,64 @@ namespace Harmonic.Controllers.Record
         {
             if (isPause)
             {
-                await _playLock.WaitAsync();
-                _recordFile.Seek(0, SeekOrigin.End);
-                _playLock.Release();
+                _playCts?.Cancel();
+                while (_playing == 1)
+                {
+                    await Task.Yield();
+                }
             }
             else
             {
-                await SeekAndPlay(milliseconds);
+                var cts = new CancellationTokenSource();
+                _playCts?.Dispose();
+                _playCts = cts;
+                await SeekAndPlay(milliseconds, cts.Token);
             }
         }
 
-        private async Task StartPlay()
+        private async Task StartPlayNoLock(CancellationToken ct)
         {
-            Interlocked.Exchange(ref _playing, 1);
-            while (_recordFile.Position < _recordFile.Length)
+            while (_recordFile.Position < _recordFile.Length && !ct.IsCancellationRequested)
             {
-                await PlayRecordFile();
+                while (_bufferMs != -1 && _currentTimestamp >= _bufferMs)
+                {
+                    await Task.Yield();
+                }
+
+                await PlayRecordFileNoLock(ct);
             }
-            Interlocked.Exchange(ref _playing, 0);
         }
 
-        private Task<Message> ReadMessage()
+        private Task<Message> ReadMessage(CancellationToken ct)
         {
-            return FlvDemuxer.DemultiplexFlvAsync();
+            return FlvDemuxer.DemultiplexFlvAsync(ct);
         }
 
-        private async Task PlayRecordFile()
+        private async Task SeekAndPlay(double milliSeconds, CancellationToken ct)
         {
             await _playLock.WaitAsync();
-            var message = await ReadMessage();
-            _playLock.Release();
+            Interlocked.Exchange(ref _playing, 1);
+            try
+            {
+
+                _recordFile.Seek(9, SeekOrigin.Begin);
+                FlvDemuxer.SeekNoLock(milliSeconds, _metaData == null ? null : _metaData.Data[2] as Dictionary<string, object>, ct);
+                await StartPlayNoLock(ct);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _playing, 0);
+                _playLock.Release();
+            }
+        }
+
+        private async Task PlayRecordFileNoLock(CancellationToken ct)
+        {
+            var message = await ReadMessage(ct);
             if (message is AudioMessage)
             {
                 await MessageStream.SendMessageAsync(AudioChunkStream, message);
@@ -290,11 +333,13 @@ namespace Harmonic.Controllers.Record
             {
                 await MessageStream.SendMessageAsync(VideoChunkStream, message);
             }
-            else if (message is DataMessage)
+            else if (message is DataMessage data)
             {
-                await MessageStream.SendMessageAsync(ChunkStream, message);
+                data.Data.Insert(0, "@setDataFrame");
+                _metaData = data;
+                await MessageStream.SendMessageAsync(ChunkStream, data);
             }
-
+            _currentTimestamp = Math.Max(_currentTimestamp, message.MessageHeader.Timestamp);
         }
 
         private async Task SaveMessage(Message message)
