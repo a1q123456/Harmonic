@@ -156,6 +156,56 @@ See [rpc-docs](rpc.md)
 ## Api
 See [api-docs](api.md)
 
+## Dependency injection in controllers
+Harmonic uses autofac as the DI framework, you can register you own service in `StartUp`, and use it in your controller
+
+```csharp
+class Startup : IStartup
+{
+    public void ConfigureServices(ContainerBuilder builder)
+    {
+        builder.Register(c => new MyService()).AsSelf();
+    }
+}
+
+class MyController: LivingController
+{
+    public MyController(MyService service)
+    {
+        //...
+    }
+}
+
+```
+
+
+## Custom message
+
+To add your own custom message, you need to write a message class, then rengister the message class when you call `UseHarmonic`
+
+for example:
+
+
+```csharp
+
+static void Main(string[] args)
+{
+    RtmpServer server = new RtmpServerBuilder()
+        .UseStartup<Startup>()
+        .UseWebSocket(c =>
+        {
+            c.BindEndPoint = new IPEndPoint(IPAddress.Parse("0.0.0.0"), 8080);
+        })
+        .UseHarmonic(c => {
+            c.RegisterMessage<MyMessage>();
+        })
+        .Build();
+    var tsk = server.StartAsync();
+    tsk.Wait();
+}
+
+```
+
 # Test
 
 ## push video file using ffmpeg
