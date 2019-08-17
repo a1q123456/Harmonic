@@ -122,7 +122,7 @@ ffplay "rtmp://127.0.0.1/living/streamName"
         var player = document.getElementById('player');
         var flvPlayer = flvjs.createPlayer({
             type: 'flv',
-            url: "ws://127.0.0.1/living/streamName"
+            url: "ws://127.0.0.1/websocketplay/streamName"
         });
         flvPlayer.attachMediaElement(player);
         flvPlayer.load();
