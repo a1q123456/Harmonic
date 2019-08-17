@@ -92,7 +92,6 @@ namespace Harmonic.Networking.Rtmp
         //   Dispose(false);
         // }
 
-        // 添加此代码以正确实现可处置模式。
         public void Dispose()
         {
             Dispose(true);

@@ -4,9 +4,9 @@ using System.Text;
 
 namespace Harmonic.Service
 {
-    public class RecordServiceConfiguration : IServiceConfiguration
+    public class RecordServiceConfiguration
     {
-        public string RecordPath { get; set; } = @"Record";
-        public string FilenameFormat { get; set; } = @"recorded-{streamName}";
+        public virtual string RecordPath { get; set; } = @"Record";
+        public virtual string FilenameFormat { get; set; } = @"recorded-{streamName}";
     }
 }

@@ -5,7 +5,7 @@ using System.Text;
 
 namespace Harmonic.Networking.Rtmp.Data
 {
-    public class ChunkHeader
+    class ChunkHeader
     {
         public ChunkBasicHeader ChunkBasicHeader { get; set; }
         public MessageHeader MessageHeader { get; set; }

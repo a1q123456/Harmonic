@@ -6,7 +6,7 @@ using System.Text;
 
 namespace Harmonic.Networking.Rtmp.Data
 {
-    public class ChunkBasicHeader 
+    class ChunkBasicHeader 
     {
         public ChunkHeaderType RtmpChunkHeaderType { get; set; }
         public uint ChunkStreamId { get; set; }

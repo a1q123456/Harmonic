@@ -50,14 +50,12 @@ namespace Harmonic.Networking.Rtmp
         internal Dictionary<ProcessState, BufferProcessor> _bufferProcessors;
 
         private ConcurrentQueue<WriteState> _writerQueue = new ConcurrentQueue<WriteState>();
+
         internal ProcessState NextProcessState { get; set; } = ProcessState.HandshakeC0C1;
         internal ChunkStreamContext ChunkStreamContext { get; set; } = null;
         private HandshakeContext _handshakeContext = null;
         public RtmpServerOptions Options { get; set; } = null;
 
-
-        private static int _g_counter = 0;
-        private int _counter = 0;
 
         public IOPipeLine(Socket socket, RtmpServerOptions options, int resumeWriterThreshole = 65535)
         {
@@ -66,7 +64,7 @@ namespace Harmonic.Networking.Rtmp
             _bufferProcessors = new Dictionary<ProcessState, BufferProcessor>();
             Options = options;
             _handshakeContext = new HandshakeContext(this);
-            _counter = _g_counter++;
+
         }
 
         public Task StartAsync(CancellationToken ct = default)
@@ -91,42 +89,29 @@ namespace Harmonic.Networking.Rtmp
             });
 
             var tcs = new TaskCompletionSource<int>();
-            t1.ContinueWith(_ =>
+            Action<Task> setException = t =>
             {
-                tcs.TrySetException(t1.Exception.InnerException);
-            }, TaskContinuationOptions.OnlyOnFaulted);
-            t2.ContinueWith(_ =>
-            {
-                tcs.TrySetException(t2.Exception.InnerException);
-            }, TaskContinuationOptions.OnlyOnFaulted);
-            t3.ContinueWith(_ =>
-            {
-                tcs.TrySetException(t3.Exception.InnerException);
-            }, TaskContinuationOptions.OnlyOnFaulted);
-            t1.ContinueWith(_ =>
+                tcs.TrySetException(t.Exception.InnerException);
+            };
+            Action<Task> setCanceled = _ =>
             {
                 tcs.TrySetCanceled();
-            }, TaskContinuationOptions.OnlyOnCanceled);
-            t2.ContinueWith(_ =>
-            {
-                tcs.TrySetCanceled();
-            }, TaskContinuationOptions.OnlyOnCanceled);
-            t3.ContinueWith(_ =>
-            {
-                tcs.TrySetCanceled();
-            }, TaskContinuationOptions.OnlyOnCanceled);
-            t1.ContinueWith(_ =>
+            };
+            Action<Task> setResult = t =>
             {
                 tcs.TrySetResult(1);
-            }, TaskContinuationOptions.OnlyOnRanToCompletion);
-            t2.ContinueWith(_ =>
-            {
-                tcs.TrySetResult(1);
-            }, TaskContinuationOptions.OnlyOnRanToCompletion);
-            t3.ContinueWith(_ =>
-            {
-                tcs.TrySetResult(1);
-            }, TaskContinuationOptions.OnlyOnRanToCompletion);
+            };
+
+
+            t1.ContinueWith(setException, TaskContinuationOptions.OnlyOnFaulted);
+            t2.ContinueWith(setException, TaskContinuationOptions.OnlyOnFaulted);
+            t3.ContinueWith(setException, TaskContinuationOptions.OnlyOnFaulted);
+            t1.ContinueWith(setCanceled, TaskContinuationOptions.OnlyOnCanceled);
+            t2.ContinueWith(setCanceled, TaskContinuationOptions.OnlyOnCanceled);
+            t3.ContinueWith(setCanceled, TaskContinuationOptions.OnlyOnCanceled);
+            t1.ContinueWith(setResult, TaskContinuationOptions.OnlyOnRanToCompletion);
+            t2.ContinueWith(setResult, TaskContinuationOptions.OnlyOnRanToCompletion);
+            t3.ContinueWith(setResult, TaskContinuationOptions.OnlyOnRanToCompletion);
             return tcs.Task;
         }
 

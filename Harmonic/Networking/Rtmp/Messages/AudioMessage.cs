@@ -24,6 +24,7 @@ namespace Harmonic.Networking.Rtmp.Messages
 
         public override void Deserialize(SerializationContext context)
         {
+            // TODO: optimize performance
             var data = new byte[context.ReadBuffer.Length];
             context.ReadBuffer.Span.Slice(0, (int)MessageHeader.MessageLength).CopyTo(data);
             Data = data;
