@@ -3,12 +3,10 @@ master is not a stable branch, you may want to see the latest [tag](https://gith
 # Harmonic
 A high performance RTMP live streaming application framework
 
-# Documentation
-You can view docs [here](docs/README.md)
 
+# Getting started
 
-# Usage
-
+## Code
 
 Program.cs
 
@@ -65,45 +63,6 @@ RtmpServer server = new RtmpServerBuilder()
 
 ```
 
-# Scalability
-
-Harmonic will scan your assembly and try to find classes that inherit from `RtmpController` or `WebSocketController` then register them into Harmonic, and map controller by url `rtmp://<address>/<controller_name>/<streamName>` for rtmp and `ws://<address>/<controller_name>/<streamName>`. the controller_name is controller class's name then remove the `Controller` suffix, for example `Living` is controller_name of `LivingController`.
-
-You can also inherit builtin classes `LivingController` or `WebSocketPlayController`, when Harmonic found a class that inherit from them, it will not register `LivingController` and `WebSocketPlayController`. When you want to custom streaming logic, you can create a class that inherits from `LivingController` or `WebSocketPlayController`.
-
-```csharp
-public class MyLivingController : LivingController
-{
-    [RpcMethod("createStream")]
-    public new uint CreateStream()
-    {
-        var stream = RtmpSession.CreateNetStream<MyLivingStream>();
-        return stream.MessageStream.MessageStreamId;
-    }
-}
-
-public class MyLivingStream : LivingStream
-{
-    [RpcMethod(Name = "publish")]
-    public void Publish([FromOptionalArgument] string publishingName, [FromOptionalArgument] string publishingType)
-    {
-        if (...)
-        {
-            
-        }
-        // your logic
-
-        base.Publish(publishingName, publishingType);
-        
-    }
-}
-
-```
-
-
-
-# Test
-
 ## push video file using ffmpeg
 ```bash
 ffmpeg -i test.mp4 -f flv -vcodec h264 -acodec aac "rtmp://127.0.0.1/living/streamName"
@@ -135,5 +94,6 @@ ffplay "rtmp://127.0.0.1/living/streamName"
 ```
 
 
+# Dive in deep
+You can view docs [here](docs/README.md)
 
-```
