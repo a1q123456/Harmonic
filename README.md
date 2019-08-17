@@ -3,6 +3,9 @@ master is not a stable branch, you may want to see the latest [tag](https://gith
 # Harmonic
 A high performance RTMP live streaming application framework
 
+# Doc
+You can view docs [here](docs/README.md)
+
 
 # Usage
 
