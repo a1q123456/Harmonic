@@ -15,3 +15,6 @@ jobs:
         dotnet-version: 2.2.108
     - name: Build with dotnet
       run: dotnet build --configuration Release
+
+    - name: Nuget Push
+      run: nuget push *.nupkg
