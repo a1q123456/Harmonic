@@ -17,4 +17,4 @@ jobs:
       run: dotnet pack --configuration Release
 
     - name: Nuget Push
-      run: dotnet nuget push Harmonic.0.0.2.nupkg -k ${{ secrets.NUGET_TOKEN }} -s https://api.nuget.org/v3/index.json
+      run: dotnet nuget push Harmonic/bin/Release/*.nupkg -k ${{ secrets.NUGET_TOKEN }} -s https://api.nuget.org/v3/index.json
