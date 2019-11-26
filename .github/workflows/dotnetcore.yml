@@ -17,4 +17,4 @@ jobs:
       run: dotnet build --configuration Release
 
     - name: Nuget Push
-      run: nuget push *.nupkg
+      run: dotnet nuget push *.nupkg -k ${{ secrets.NUGET_TOKEN }} -s https://api.nuget.org/v3/index.json
