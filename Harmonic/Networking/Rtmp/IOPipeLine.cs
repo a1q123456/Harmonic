@@ -38,35 +38,29 @@ namespace Harmonic.Networking.Rtmp
         CompleteMessage
     }
 
-    // TBD: retransfer bytes when acknowledgement not received
     class IOPipeLine : IDisposable
     {
         internal delegate bool BufferProcessor(ReadOnlySequence<byte> buffer, ref int consumed);
-        private SemaphoreSlim _writerSignal = new SemaphoreSlim(0);
+        private readonly SemaphoreSlim _writerSignal = new SemaphoreSlim(0);
 
-        private Socket _socket;
-        private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
-        private readonly int _resumeWriterThreshole;
+        private readonly Socket _socket;
+        private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
+        private readonly int _pauseWriterThreshold;
         internal Dictionary<ProcessState, BufferProcessor> _bufferProcessors;
 
-        private ConcurrentQueue<WriteState> _writerQueue = new ConcurrentQueue<WriteState>();
+        private readonly ConcurrentQueue<WriteState> _writerQueue = new ConcurrentQueue<WriteState>();
         internal ProcessState NextProcessState { get; set; } = ProcessState.HandshakeC0C1;
         internal ChunkStreamContext ChunkStreamContext { get; set; } = null;
         private HandshakeContext _handshakeContext = null;
         public RtmpServerOptions Options { get; set; } = null;
 
-
-        private static int _g_counter = 0;
-        private int _counter = 0;
-
-        public IOPipeLine(Socket socket, RtmpServerOptions options, int resumeWriterThreshole = 65535)
+        public IOPipeLine(Socket socket, RtmpServerOptions options, int pauseWriterThreshold = 65535)
         {
             _socket = socket;
-            _resumeWriterThreshole = resumeWriterThreshole;
+            _pauseWriterThreshold = pauseWriterThreshold;
             _bufferProcessors = new Dictionary<ProcessState, BufferProcessor>();
             Options = options;
             _handshakeContext = new HandshakeContext(this);
-            _counter = _g_counter++;
         }
 
         public Task StartAsync(CancellationToken ct = default)
@@ -76,7 +70,7 @@ namespace Harmonic.Networking.Rtmp
                 d.Pool,
                 d.ReaderScheduler,
                 d.WriterScheduler,
-                _resumeWriterThreshole,
+                _pauseWriterThreshold,
                 d.ResumeWriterThreshold,
                 d.MinimumSegmentSize,
                 d.UseSynchronizationContext);
@@ -156,7 +150,7 @@ namespace Harmonic.Networking.Rtmp
         }
 
         private async Task Writer(CancellationToken ct)
-        { 
+        {
             while (!ct.IsCancellationRequested && !disposedValue)
             {
                 await _writerSignal.WaitAsync(ct);
@@ -198,6 +192,8 @@ namespace Harmonic.Networking.Rtmp
 
             writer.Complete();
         }
+
+        public bool _stop = false;
 
         private async Task Consumer(PipeReader reader, CancellationToken ct = default)
         {

@@ -151,7 +151,7 @@ namespace Harmonic.Networking.Rtmp
                             {
                                 Interlocked.Add(ref WriteUnAcknowledgedSize, currentSendSize);
                             }
-                            
+
                             if (isLastChunk)
                             {
                                 ret = tsk;
@@ -566,6 +566,8 @@ namespace Harmonic.Networking.Rtmp
                                 context.Amf0Reader.ResetReference();
                                 context.Amf3Reader.ResetReference();
                                 _rtmpSession.MessageArrived(message);
+
+
                             }
                             catch (NotSupportedException)
                             {

@@ -1,4 +1,5 @@
 ﻿using Harmonic.Networking.Amf.Common;
+using Harmonic.Networking.Flv.Data;
 using Harmonic.Networking.Rtmp;
 using Harmonic.Networking.Rtmp.Data;
 using Harmonic.Networking.Rtmp.Messages;
@@ -7,8 +8,10 @@ using Harmonic.Networking.Rtmp.Messages.UserControlMessages;
 using Harmonic.Networking.Rtmp.Streaming;
 using Harmonic.Rpc;
 using Harmonic.Service;
+using Harmonic.Service.KeyframeService;
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -16,20 +19,23 @@ namespace Harmonic.Controllers.Living
 {
     public class LivingStream : NetStream
     {
-        private List<Action> _cleanupActions = new List<Action>();
+        private readonly List<Action> _cleanupActions = new List<Action>();
         private PublishingType _publishingType;
-        private PublisherSessionService _publisherSessionService = null;
-        public DataMessage FlvMetadata = null;
-        public AudioMessage AACConfigureRecord = null;
-        public VideoMessage AVCConfigureRecord = null;
+        private readonly PublisherSessionService _publisherSessionService = null;
+        public DataMessage FlvMetadata { get; set; } = null;
+        public AudioMessage AACConfigureRecord { get; set; } = null;
+        public VideoMessage AVCConfigureRecord { get; set; } = null;
         public event Action<VideoMessage> OnVideoMessage;
         public event Action<AudioMessage> OnAudioMessage;
         private RtmpChunkStream _videoChunkStream = null;
         private RtmpChunkStream _audioChunkStream = null;
+        private VideoDecoder _videoDecoder = null;
 
-        public LivingStream(PublisherSessionService publisherSessionService)
+        public LivingStream(
+            PublisherSessionService publisherSessionService)
         {
             _publisherSessionService = publisherSessionService;
+            //_livingConfiguration = livingConfiguration;
         }
 
         [RpcMethod("play")]
@@ -81,6 +87,20 @@ namespace Harmonic.Controllers.Living
             if (publisher.AVCConfigureRecord != null)
             {
                 await MessageStream.SendMessageAsync(_videoChunkStream, publisher.AVCConfigureRecord.Clone() as VideoMessage);
+
+                try
+                {
+                    if (publisher._videoDecoder != null)
+                    {
+                        var data = FlvDemuxer.DemultiplexVideoData(publisher.AVCConfigureRecord);
+                        await MessageStream.SendMessageAsync(_videoChunkStream, publisher._videoDecoder.GenerateKeyFrame());
+                    }
+                }
+                catch (ApplicationException e)
+                {
+                    Console.WriteLine("Failed to generate key frame, decoder not ready");
+                    Console.WriteLine(e.ToString());
+                }
             }
 
             publisher.OnAudioMessage += SendAudio;
@@ -95,7 +115,7 @@ namespace Harmonic.Controllers.Living
         private async void SendVideo(VideoMessage message)
         {
             var video = message.Clone() as VideoMessage;
-            
+
             try
             {
                 await MessageStream.SendMessageAsync(_videoChunkStream, video);
@@ -107,6 +127,7 @@ namespace Harmonic.Controllers.Living
                     a();
                 }
                 RtmpSession.Close();
+                throw;
             }
         }
 
@@ -124,6 +145,7 @@ namespace Harmonic.Controllers.Living
                     a();
                 }
                 RtmpSession.Close();
+                throw;
             }
         }
 
@@ -132,11 +154,11 @@ namespace Harmonic.Controllers.Living
         {
             if (string.IsNullOrEmpty(publishingName))
             {
-                throw new InvalidOperationException("empty publishing name");
+                throw new InvalidOperationException(Resource.empty_publishing_name);
             }
             if (!PublishingHelpers.IsTypeSupported(publishingType))
             {
-                throw new InvalidOperationException($"not supported publishing type {publishingType}");
+                throw new InvalidOperationException($"{Resource.not_supported_publishing_type}{publishingType}");
             }
 
             _publishingType = PublishingHelpers.PublishingTypes[publishingType];
@@ -156,6 +178,8 @@ namespace Harmonic.Controllers.Living
                 {"details", publishingName }
             };
             MessageStream.SendMessageAsync(ChunkStream, onStatus);
+
+            RtmpSession.IOPipeline._stop = true;
         }
 
         private void HandleDataMessage(DataMessage msg)
@@ -170,16 +194,47 @@ namespace Harmonic.Controllers.Living
                 AACConfigureRecord = audioData;
                 return;
             }
-            OnAudioMessage?.Invoke(audioData);
+            try
+            {
+                OnAudioMessage?.Invoke(audioData);
+            }
+#pragma warning disable CA1031
+            catch { }
+#pragma warning restore CA1031
         }
 
-        private void HandleVideoMessage(VideoMessage videoData)
+        private void HandleVideoMessage(VideoMessage videoMessage)
         {
-            if (AVCConfigureRecord == null && videoData.Data.Length >= 2)
+            if (videoMessage.Data.Length < 8 + 24)
             {
-                AVCConfigureRecord = videoData;
+                throw new ProtocolViolationException();
             }
-            OnVideoMessage?.Invoke(videoData);
+            var videoData = FlvDemuxer.DemultiplexVideoData(videoMessage);
+            if (AVCConfigureRecord == null && 
+                videoData.CodecId == CodecId.Avc &&
+                ((AvcVideoPacket)videoData.VideoPacket).AvcPacketType == AvcPacketType.AvcSequenceHeader)
+            {
+                AVCConfigureRecord = videoMessage;
+                _videoDecoder = new VideoDecoder(FlvMetadata, ((AvcVideoPacket)videoData.VideoPacket).Payload.Span);
+            }
+            if (_videoDecoder == null)
+            {
+                throw new ProtocolViolationException(Resource.avc_extradata_not_found);
+            }
+
+            if (((AvcVideoPacket)videoData.VideoPacket).AvcPacketType != AvcPacketType.AvcSequenceHeader)
+            {
+                _videoDecoder.SendFrame(((AvcVideoPacket)videoData.VideoPacket).Payload.Span);
+            }
+
+            try
+            {
+                OnVideoMessage?.Invoke(videoMessage);
+            }
+
+#pragma warning disable CA1031
+            catch { }
+#pragma warning restore CA1031
         }
 
         #region Disposable Support

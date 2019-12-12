@@ -29,7 +29,6 @@ namespace Harmonic.Networking.Flv
 
         public FlvDemuxer(IReadOnlyDictionary<MessageType, MessageFactory> factories)
         {
-
             _factories = factories;
         }
 
@@ -131,7 +130,11 @@ namespace Harmonic.Networking.Flv
             var head = message.Data.Span[0];
             ret.FrameType = (FrameType)(head >> 4);
             ret.CodecId = (CodecId)(head & 0x0F);
-            ret.VideoData = message.Data.Slice(1);
+            if (ret.CodecId != CodecId.Avc)
+            {
+                throw new NotImplementedException();
+            }
+            ret.VideoPacket = new AvcVideoPacket(message.Data.Slice(1));
             return ret;
         }
 

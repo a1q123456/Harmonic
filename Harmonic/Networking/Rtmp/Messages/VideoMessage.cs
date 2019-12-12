@@ -11,6 +11,17 @@ namespace Harmonic.Networking.Rtmp.Messages
     [RtmpMessage(MessageType.VideoMessage)]
     public sealed class VideoMessage : Message, ICloneable
     {
+        public VideoMessage() { }
+
+        public static VideoMessage CreateFromData(ReadOnlySpan<byte> data)
+        {
+            var ret = new VideoMessage();
+            var retData = new byte[data.Length];
+            data.CopyTo(retData);
+            ret.Data = retData;
+            return ret;
+        }
+
         public ReadOnlyMemory<byte> Data { get; private set; }
 
         public object Clone()

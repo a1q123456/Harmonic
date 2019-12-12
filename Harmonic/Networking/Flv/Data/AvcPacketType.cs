@@ -4,10 +4,10 @@ using System.Text;
 
 namespace Harmonic.Networking.Flv.Data
 {
-
-    public enum AacPacketType
+    public enum AvcPacketType
     {
-        SequenceHeader,
-        Raw
+        AvcSequenceHeader,
+        AvcNalu,
+        AvcEndOfSequence
     }
 }

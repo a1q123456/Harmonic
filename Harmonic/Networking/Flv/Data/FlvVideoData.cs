@@ -9,7 +9,7 @@ namespace Harmonic.Networking.Flv.Data
         public FrameType FrameType { get; set; }
         public CodecId CodecId { get; set; }
 
-        public ReadOnlyMemory<byte> VideoData { get; set; }
+        public AVPacket VideoPacket { get; set; }
 
     }
 }
