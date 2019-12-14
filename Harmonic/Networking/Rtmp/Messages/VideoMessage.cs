@@ -13,12 +13,19 @@ namespace Harmonic.Networking.Rtmp.Messages
     {
         public VideoMessage() { }
 
-        public static VideoMessage CreateFromData(ReadOnlySpan<byte> data)
+        public static VideoMessage CopyFromData(ReadOnlySpan<byte> data)
         {
             var ret = new VideoMessage();
             var retData = new byte[data.Length];
             data.CopyTo(retData);
             ret.Data = retData;
+            return ret;
+        }
+
+        public static VideoMessage RefFromMemory(Memory<byte> data)
+        {
+            var ret = new VideoMessage();
+            ret.Data = data;
             return ret;
         }
 

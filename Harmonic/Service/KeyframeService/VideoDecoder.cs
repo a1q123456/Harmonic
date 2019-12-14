@@ -100,11 +100,15 @@ namespace Harmonic.Service.KeyframeService
             _pEncoderCodecContext->pix_fmt = AVPixelFormat.AV_PIX_FMT_YUV420P; // TODO
             _pEncoderCodecContext->keyint_min = 1;
             _pEncoderCodecContext->max_b_frames = 0;
-            
 
-            ErrorCode.ThrowIfFailed(ffmpeg.avcodec_open2(_pEncoderCodecContext, encoderCodec, null));
+            AVDictionary* options = null;
+            ffmpeg.av_dict_set(&options, "x264opts", "annexb=0", 0);
 
-            CodecName = ffmpeg.avcodec_get_name(decoderCodec->id);
+            ErrorCode.ThrowIfFailed(ffmpeg.avcodec_open2(_pEncoderCodecContext, encoderCodec, &options));
+
+            ffmpeg.av_dict_free(&options);
+
+            CodecName = ffmpeg.avcodec_get_name(encoderCodec->id);
             FrameSize = new Size(_pDecoderCodecContext->width, _pDecoderCodecContext->height);
 
             _pPacket = ffmpeg.av_packet_alloc();
@@ -121,10 +125,14 @@ namespace Harmonic.Service.KeyframeService
             {
                 ErrorCode.ThrowIfFailed(ffmpeg.avcodec_receive_packet(_pEncoderCodecContext, packet));
 
-                var data = new byte[packet->size];
-                Marshal.Copy((IntPtr)packet->data, data, 0, packet->size);
+                var data = new byte[packet->size + 1];
+                fixed (byte* pData = data)
+                {
+                    pData[0] = (byte)FrameType.GeneratedKeyFrame << 4 | (byte)CodecId.Avc;
+                    Buffer.MemoryCopy(packet->data, pData + 1, packet->size, packet->size);
+                }
 
-                return VideoMessage.CreateFromData(data);
+                return VideoMessage.RefFromMemory(data);
             }
             finally
             {
