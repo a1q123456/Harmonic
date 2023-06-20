@@ -10,7 +10,7 @@ namespace Harmonic.Networking.Rtmp.Messages.UserControlMessages;
 
 public class CommandMessageFactory
 {
-    public Dictionary<string?, Type> _messageFactories = new();
+    public Dictionary<string, Type> _messageFactories = new();
 
     public CommandMessageFactory()
     {
@@ -41,7 +41,7 @@ public class CommandMessageFactory
 
     public Message Provide(MessageHeader header, SerializationContext context, out int consumed)
     {
-        string? name = null;
+        string name = null;
         bool amf3 = false;
         if (header.MessageType == MessageType.Amf0Command)
         {

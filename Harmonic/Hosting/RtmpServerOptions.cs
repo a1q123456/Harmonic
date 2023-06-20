@@ -20,11 +20,11 @@ public class RtmpServerOptions
 {
     internal Dictionary<MessageType, MessageFactory> _messageFactories = new();
     public IReadOnlyDictionary<MessageType, MessageFactory> MessageFactories => _messageFactories;
-    public delegate Message MessageFactory(MessageHeader header, SerializationContext context, out int consumed);
+    public delegate Message MessageFactory(MessageHeader header, Networking.Rtmp.Serialization.SerializationContext context, out int consumed);
     private readonly Dictionary<string, Type> _registeredControllers = new();
-    internal ContainerBuilder _builder;
-    private readonly RpcService _rpcService;
-    internal IStartup _startup;
+    internal ContainerBuilder _builder = null;
+    private readonly RpcService _rpcService = null;
+    internal IStartup _startup = null;
     internal IStartup Startup
     {
         get

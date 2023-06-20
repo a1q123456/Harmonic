@@ -15,8 +15,8 @@ public class Amf3ClassTraits : IEquatable<Amf3ClassTraits>
 {
     public bool IsDynamic { get; set; } = false;
     public Amf3ClassType ClassType { get; set; }
-    public string? ClassName { get; set; }
-    public List<string?> Members { get; set; } = new();
+    public string ClassName { get; set; }
+    public List<string> Members { get; set; } = new();
 
     public override bool Equals(object obj)
     {

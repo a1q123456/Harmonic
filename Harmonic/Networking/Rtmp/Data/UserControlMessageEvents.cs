@@ -5,7 +5,7 @@ namespace Harmonic.Networking.Rtmp.Data;
 public enum UserControlMessageEvents : UInt16
 {
     StreamBegin,
-    StreamEof,
+    StreamEOF,
     StreamDry,
     SetBufferLength,
     StreamIsRecorded,

@@ -2,12 +2,12 @@
 
 class MessageReadingState
 {
-    public uint _messageLength;
-    public byte[] _body;
-    public int _currentIndex;
+    public uint MessageLength;
+    public byte[] Body;
+    public int CurrentIndex;
     public long RemainBytes
     {
-        get => _messageLength - _currentIndex;
+        get => MessageLength - CurrentIndex;
     }
     public bool IsCompleted
     {

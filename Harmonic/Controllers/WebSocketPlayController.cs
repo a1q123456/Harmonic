@@ -12,13 +12,13 @@ namespace Harmonic.Controllers;
 
 public class WebSocketPlayController : WebSocketController, IDisposable
 {
-    private readonly RecordService _recordService;
-    private readonly PublisherSessionService _publisherSessionService;
+    private readonly RecordService _recordService = null;
+    private readonly PublisherSessionService _publisherSessionService = null;
     private readonly List<Action> _cleanupActions = new();
-    private FileStream _recordFile;
+    private FileStream _recordFile = null;
     private readonly SemaphoreSlim _playLock = new(1);
-    private int _playing;
-    private long _playRangeTo;
+    private int _playing = 0;
+    private long _playRangeTo = 0;
 
     public WebSocketPlayController(PublisherSessionService publisherSessionService, RecordService recordService)
     {
@@ -28,7 +28,7 @@ public class WebSocketPlayController : WebSocketController, IDisposable
 
     public override async Task OnConnect()
     {
-        var publisher = _publisherSessionService.FindPublisher(this.StreamName);
+        var publisher = _publisherSessionService.FindPublisher(StreamName);
         if (publisher != null)
         {
             _cleanupActions.Add(() =>
@@ -37,20 +37,20 @@ public class WebSocketPlayController : WebSocketController, IDisposable
                 publisher.OnVideoMessage -= SendVideo;
             });
 
-            var metadata = (Dictionary<string, object>)publisher._flvMetadata.Data.Last();
+            var metadata = (Dictionary<string, object>)publisher.FlvMetadata.Data.Last();
             var hasAudio = metadata.ContainsKey("audiocodecid");
             var hasVideo = metadata.ContainsKey("videocodecid");
 
-            await this.Session.SendFlvHeaderAsync(hasAudio, hasVideo);
+            await Session.SendFlvHeaderAsync(hasAudio, hasVideo);
 
-            await this.Session.SendMessageAsync(publisher._flvMetadata);
+            await Session.SendMessageAsync(publisher.FlvMetadata);
             if (hasAudio)
             {
-                await this.Session.SendMessageAsync(publisher._aacConfigureRecord);
+                await Session.SendMessageAsync(publisher.AACConfigureRecord);
             }
             if (hasVideo)
             {
-                await this.Session.SendMessageAsync(publisher._avcConfigureRecord);
+                await Session.SendMessageAsync(publisher.AVCConfigureRecord);
             }
 
             publisher.OnAudioMessage += SendAudio;
@@ -59,14 +59,14 @@ public class WebSocketPlayController : WebSocketController, IDisposable
         // play record
         else
         {
-            _recordFile = new FileStream(_recordService.GetRecordFilename(this.StreamName) + ".flv", FileMode.Open, FileAccess.Read);
-            var fromStr = this.Query.Get("from");
+            _recordFile = new FileStream(_recordService.GetRecordFilename(StreamName) + ".flv", FileMode.Open, FileAccess.Read);
+            var fromStr = Query.Get("from");
             long from = 0;
             if (fromStr != null)
             {
                 from = long.Parse(fromStr);
             }
-            var toStr = this.Query.Get("to");
+            var toStr = Query.Get("to");
             _playRangeTo = -1;
             if (toStr != null)
             {
@@ -76,7 +76,7 @@ public class WebSocketPlayController : WebSocketController, IDisposable
             var header = new byte[9];
 
             await _recordFile.ReadBytesAsync(header);
-            await this.Session.SendRawDataAsync(header);
+            await Session.SendRawDataAsync(header);
 
             from = Math.Max(from, 9);
 
@@ -95,7 +95,7 @@ public class WebSocketPlayController : WebSocketController, IDisposable
         {
             await _playLock.WaitAsync();
             bytesRead = await _recordFile.ReadAsync(buffer);
-            await this.Session.SendRawDataAsync(buffer);
+            await Session.SendRawDataAsync(buffer);
             _playLock.Release();
             if (_playRangeTo < _recordFile.Position && _playRangeTo != -1)
             {
@@ -107,12 +107,12 @@ public class WebSocketPlayController : WebSocketController, IDisposable
 
     private void SendVideo(VideoMessage message)
     {
-        this.Session.SendMessageAsync(message);
+        Session.SendMessageAsync(message);
     }
 
     private void SendAudio(AudioMessage message)
     {
-        this.Session.SendMessageAsync(message);
+        Session.SendMessageAsync(message);
     }
 
     public override void OnMessage(string msg)
@@ -120,11 +120,11 @@ public class WebSocketPlayController : WebSocketController, IDisposable
     }
 
     #region IDisposable Support
-    private bool _disposedValue;
+    private bool disposedValue = false;
 
     protected virtual void Dispose(bool disposing)
     {
-        if (!_disposedValue)
+        if (!disposedValue)
         {
             if (disposing)
             {
@@ -135,7 +135,7 @@ public class WebSocketPlayController : WebSocketController, IDisposable
                 _recordFile?.Dispose();
             }
 
-            _disposedValue = true;
+            disposedValue = true;
         }
     }
 

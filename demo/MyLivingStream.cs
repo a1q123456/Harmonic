@@ -15,7 +15,7 @@ public class MyLivingStream : LivingStream
 
     [RpcMethod("play")]
     public new async Task Play(
-        [FromOptionalArgument] string? streamName,
+        [FromOptionalArgument] string streamName,
         [FromOptionalArgument] double start = -1,
         [FromOptionalArgument] double duration = -1,
         [FromOptionalArgument] bool reset = false)

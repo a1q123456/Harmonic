@@ -13,7 +13,7 @@ public sealed class VideoMessage : Message, ICloneable
     {
         var ret = new VideoMessage
         {
-            MessageHeader = (MessageHeader)this.MessageHeader.Clone()
+            MessageHeader = (MessageHeader)MessageHeader.Clone()
         };
         ret.MessageHeader.MessageStreamId = null;
         ret.Data = Data;
@@ -24,7 +24,7 @@ public sealed class VideoMessage : Message, ICloneable
     {
         // TODO: optimize performance
         var data = new byte[context.ReadBuffer.Length];
-        context.ReadBuffer.Span.Slice(0, (int)this.MessageHeader.MessageLength).CopyTo(data);
+        context.ReadBuffer.Span.Slice(0, (int)MessageHeader.MessageLength).CopyTo(data);
         Data = data;
     }
 

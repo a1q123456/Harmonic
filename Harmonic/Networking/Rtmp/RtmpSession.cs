@@ -16,20 +16,20 @@ namespace Harmonic.Networking.Rtmp;
 
 public class RtmpSession : IDisposable
 {
-    internal IoPipeLine IoPipeline { get; set; }
+    internal IOPipeLine IOPipeline { get; set; } = null;
     private readonly Dictionary<uint, RtmpMessageStream> _messageStreams = new();
     private readonly Random _random = new();
     internal RtmpControlChunkStream ControlChunkStream { get; }
     public RtmpControlMessageStream ControlMessageStream { get; }
     public NetConnection NetConnection { get; }
-    private readonly RpcService _rpcService;
+    private readonly RpcService _rpcService = null;
     public ConnectionInformation ConnectionInformation { get; internal set; }
     private readonly object _allocCsidLocker = new();
     private readonly SortedList<uint, uint> _allocatedCsid = new();
 
-    internal RtmpSession(IoPipeLine ioPipeline)
+    internal RtmpSession(IOPipeLine ioPipeline)
     {
-        IoPipeline = ioPipeline;
+        IOPipeline = ioPipeline;
         ControlChunkStream = new RtmpControlChunkStream(this);
         ControlMessageStream = new RtmpControlMessageStream(this);
         _messageStreams.Add(ControlMessageStream.MessageStreamId, ControlMessageStream);
@@ -43,7 +43,7 @@ public class RtmpSession : IDisposable
 
     private void HandleAcknowledgement(AcknowledgementMessage ack)
     {
-        Interlocked.Add(ref IoPipeline.ChunkStreamContext._writeUnAcknowledgedSize, ack.BytesReceived * -1);
+        Interlocked.Add(ref IOPipeline.ChunkStreamContext.WriteUnAcknowledgedSize, ack.BytesReceived * -1);
     }
 
     internal void AssertStreamId(uint msid)
@@ -83,7 +83,7 @@ public class RtmpSession : IDisposable
 
     public T CreateNetStream<T>() where T: NetStream
     {
-        var ret = IoPipeline.Options.ServerLifetime.Resolve<T>();
+        var ret = IOPipeline.Options.ServerLifetime.Resolve<T>();
         ret.MessageStream = CreateMessageStream();
         ret.RtmpSession = this;
         ret.ChunkStream = CreateChunkStream();
@@ -119,7 +119,7 @@ public class RtmpSession : IDisposable
     internal void CommandHandler(RtmpController controller, CommandMessage command)
     {
         MethodInfo method = null;
-        object?[] arguments = null;
+        object[] arguments = null;
         try
         {
             _rpcService.PrepareMethod(controller, command, out method, out arguments);
@@ -135,7 +135,7 @@ public class RtmpSession : IDisposable
                         var taskResult = resType.GetProperty("Result").GetValue(result);
                         var retCommand = new ReturnResultCommandMessage(command.AmfEncodingVersion);
                         retCommand.IsSuccess = true;
-                        retCommand.TranscationId = command.TranscationId;
+                        retCommand.TranscationID = command.TranscationID;
                         retCommand.CommandObject = null;
                         retCommand.ReturnValue = taskResult;
                         _ = controller.MessageStream.SendMessageAsync(controller.ChunkStream, retCommand);
@@ -145,7 +145,7 @@ public class RtmpSession : IDisposable
                         var exception = tsk.Exception;
                         var retCommand = new ReturnResultCommandMessage(command.AmfEncodingVersion);
                         retCommand.IsSuccess = false;
-                        retCommand.TranscationId = command.TranscationId;
+                        retCommand.TranscationID = command.TranscationID;
                         retCommand.CommandObject = null;
                         retCommand.ReturnValue = exception.Message;
                         _ = controller.MessageStream.SendMessageAsync(controller.ChunkStream, retCommand);
@@ -159,7 +159,7 @@ public class RtmpSession : IDisposable
                         var exception = tsk.Exception;
                         var retCommand = new ReturnResultCommandMessage(command.AmfEncodingVersion);
                         retCommand.IsSuccess = false;
-                        retCommand.TranscationId = command.TranscationId;
+                        retCommand.TranscationID = command.TranscationID;
                         retCommand.CommandObject = null;
                         retCommand.ReturnValue = exception.Message;
                         _ = controller.MessageStream.SendMessageAsync(controller.ChunkStream, retCommand);
@@ -169,7 +169,7 @@ public class RtmpSession : IDisposable
                 {
                     var retCommand = new ReturnResultCommandMessage(command.AmfEncodingVersion);
                     retCommand.IsSuccess = true;
-                    retCommand.TranscationId = command.TranscationId;
+                    retCommand.TranscationID = command.TranscationID;
                     retCommand.CommandObject = null;
                     retCommand.ReturnValue = result;
                     _ = controller.MessageStream.SendMessageAsync(controller.ChunkStream, retCommand);
@@ -180,7 +180,7 @@ public class RtmpSession : IDisposable
         {
             var retCommand = new ReturnResultCommandMessage(command.AmfEncodingVersion);
             retCommand.IsSuccess = false;
-            retCommand.TranscationId = command.TranscationId;
+            retCommand.TranscationID = command.TranscationID;
             retCommand.CommandObject = null;
             retCommand.ReturnValue = e.Message;
             _ = controller.MessageStream.SendMessageAsync(controller.ChunkStream, retCommand);
@@ -190,12 +190,12 @@ public class RtmpSession : IDisposable
 
     internal bool FindController(string appName, out Type controllerType)
     {
-        return IoPipeline.Options.RegisteredControllers.TryGetValue(appName.ToLower(), out controllerType);
+        return IOPipeline.Options.RegisteredControllers.TryGetValue(appName.ToLower(), out controllerType);
     }
 
     public void Close()
     {
-        IoPipeline.Disconnect();
+        IOPipeline.Disconnect();
     }
 
     private RtmpMessageStream CreateMessageStream()
@@ -220,7 +220,7 @@ public class RtmpSession : IDisposable
 
     internal Task SendMessageAsync(uint chunkStreamId, Message message)
     {
-        return IoPipeline.ChunkStreamContext.MultiplexMessageAsync(chunkStreamId, message);
+        return IOPipeline.ChunkStreamContext.MultiplexMessageAsync(chunkStreamId, message);
     }
 
     internal void MessageStreamCreated(RtmpMessageStream messageStream)
@@ -255,16 +255,16 @@ public class RtmpSession : IDisposable
 
     private void HandleSetPeerBandwidth(SetPeerBandwidthMessage message)
     {
-        if (IoPipeline.ChunkStreamContext.WriteWindowAcknowledgementSize.HasValue && message.LimitType == LimitType.Soft && message.WindowSize > IoPipeline.ChunkStreamContext.WriteWindowAcknowledgementSize)
+        if (IOPipeline.ChunkStreamContext.WriteWindowAcknowledgementSize.HasValue && message.LimitType == LimitType.Soft && message.WindowSize > IOPipeline.ChunkStreamContext.WriteWindowAcknowledgementSize)
         {
             return;
         }
-        if (IoPipeline.ChunkStreamContext.PreviousLimitType.HasValue && message.LimitType == LimitType.Dynamic && IoPipeline.ChunkStreamContext.PreviousLimitType != LimitType.Hard)
+        if (IOPipeline.ChunkStreamContext.PreviousLimitType.HasValue && message.LimitType == LimitType.Dynamic && IOPipeline.ChunkStreamContext.PreviousLimitType != LimitType.Hard)
         {
             return;
         }
-        IoPipeline.ChunkStreamContext.PreviousLimitType = message.LimitType;
-        IoPipeline.ChunkStreamContext.WriteWindowAcknowledgementSize = message.WindowSize;
+        IOPipeline.ChunkStreamContext.PreviousLimitType = message.LimitType;
+        IOPipeline.ChunkStreamContext.WriteWindowAcknowledgementSize = message.WindowSize;
         SendControlMessageAsync(new WindowAcknowledgementSizeMessage()
         {
             WindowSize = message.WindowSize
@@ -273,29 +273,29 @@ public class RtmpSession : IDisposable
 
     private void HandleWindowAcknowledgementSize(WindowAcknowledgementSizeMessage message)
     {
-        IoPipeline.ChunkStreamContext.ReadWindowAcknowledgementSize = message.WindowSize;
+        IOPipeline.ChunkStreamContext.ReadWindowAcknowledgementSize = message.WindowSize;
     }
 
     private void HandleSetChunkSize(SetChunkSizeMessage setChunkSize)
     {
-        IoPipeline.ChunkStreamContext.ReadChunkSize = (int)setChunkSize.ChunkSize;
+        IOPipeline.ChunkStreamContext.ReadChunkSize = (int)setChunkSize.ChunkSize;
     }
 
     public Task SendControlMessageAsync(Message message)
     {
         if (message.MessageHeader.MessageType == MessageType.WindowAcknowledgementSize)
         {
-            IoPipeline.ChunkStreamContext.WriteWindowAcknowledgementSize = ((WindowAcknowledgementSizeMessage)message).WindowSize;
+            IOPipeline.ChunkStreamContext.WriteWindowAcknowledgementSize = ((WindowAcknowledgementSizeMessage)message).WindowSize;
         }
         return ControlMessageStream.SendMessageAsync(ControlChunkStream, message);
     }
 
     #region IDisposable Support
-    private bool _disposedValue;
+    private bool disposedValue = false;
 
     protected virtual void Dispose(bool disposing)
     {
-        if (!_disposedValue)
+        if (!disposedValue)
         {
             if (disposing)
             {
@@ -304,7 +304,7 @@ public class RtmpSession : IDisposable
                 ControlMessageStream.Dispose();
             }
 
-            _disposedValue = true;
+            disposedValue = true;
         }
     }
 

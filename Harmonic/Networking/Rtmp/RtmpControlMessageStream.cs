@@ -2,9 +2,9 @@
 
 public class RtmpControlMessageStream : RtmpMessageStream
 {
-    private static readonly uint _controlMsid = 0;
+    private static readonly uint CONTROL_MSID = 0;
 
-    internal RtmpControlMessageStream(RtmpSession rtmpSession) : base(rtmpSession, _controlMsid)
+    internal RtmpControlMessageStream(RtmpSession rtmpSession) : base(rtmpSession, CONTROL_MSID)
     {
     }
 }

@@ -20,8 +20,8 @@ public class FlvDemuxer
     private readonly Amf0Reader _amf0Reader = new();
     private readonly Amf3Reader _amf3Reader = new();
     private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
-    private Stream _stream;
-    private readonly IReadOnlyDictionary<MessageType, MessageFactory> _factories;
+    private Stream _stream = null;
+    private readonly IReadOnlyDictionary<MessageType, MessageFactory> _factories = null;
 
     public FlvDemuxer(IReadOnlyDictionary<MessageType, MessageFactory> factories)
     {
@@ -147,7 +147,7 @@ public class FlvDemuxer
 
             await _stream.ReadBytesAsync(bodyBuffer.AsMemory(0, (int)header.MessageLength), ct);
 
-            var context = new Rtmp.Serialization.SerializationContext()
+            var context = new Networking.Rtmp.Serialization.SerializationContext()
             {
                 Amf0Reader = _amf0Reader,
                 Amf3Reader = _amf3Reader,

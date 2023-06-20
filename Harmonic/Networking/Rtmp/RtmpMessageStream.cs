@@ -71,18 +71,18 @@ public class RtmpMessageStream : IDisposable
     }
 
     #region IDisposable Support
-    private bool _disposedValue;
+    private bool disposedValue = false;
 
     protected virtual void Dispose(bool disposing)
     {
-        if (!_disposedValue)
+        if (!disposedValue)
         {
             if (disposing)
             {
                 RtmpSession.MessageStreamDestroying(this);
             }
 
-            _disposedValue = true;
+            disposedValue = true;
         }
     }
 

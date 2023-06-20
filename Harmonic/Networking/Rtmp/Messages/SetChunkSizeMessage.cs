@@ -23,7 +23,7 @@ public class SetChunkSizeMessage : ControlMessage
 
     public override void Serialize(SerializationContext context)
     {
-        var buffer = this._arrayPool.Rent(sizeof(uint));
+        var buffer = _arrayPool.Rent(sizeof(uint));
         try
         {
             NetworkBitConverter.TryGetBytes(ChunkSize, buffer);
@@ -31,7 +31,7 @@ public class SetChunkSizeMessage : ControlMessage
         }
         finally
         {
-            this._arrayPool.Return(buffer);
+            _arrayPool.Return(buffer);
         }
             
     }

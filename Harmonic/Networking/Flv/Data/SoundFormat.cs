@@ -2,17 +2,17 @@
 
 public enum SoundFormat
 {
-    PcmPe,
+    PcmPE,
     Adpcm,
     Mp3,
-    PcmLe,
-    Nellymonser16K,
-    Nellymonser8K,
+    PcmLE,
+    Nellymonser16k,
+    Nellymonser8k,
     Nellymonser,
     G711ALawPcm,
     G711MuLawPcm,
     Aac = 10,
     Speex,
-    Mp38K = 14,
+    Mp38k = 14,
     DeviceSpecificSound
 }

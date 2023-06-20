@@ -17,11 +17,11 @@ public class ReturnResultCommandMessage : CallCommandMessage
         {
             if (value)
             {
-                this.ProcedureName = "_result";
+                ProcedureName = "_result";
             }
             else
             {
-                this.ProcedureName = "_error";
+                ProcedureName = "_error";
             }
             _success = value;
         }

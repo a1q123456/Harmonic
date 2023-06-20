@@ -17,14 +17,14 @@ public class LivingStream : NetStream
 {
     private readonly List<Action> _cleanupActions = new();
     private PublishingType _publishingType;
-    private readonly PublisherSessionService _publisherSessionService;
-    public DataMessage? _flvMetadata;
-    public AudioMessage? _aacConfigureRecord;
-    public VideoMessage? _avcConfigureRecord;
+    private readonly PublisherSessionService _publisherSessionService = null;
+    public DataMessage FlvMetadata = null;
+    public AudioMessage AACConfigureRecord = null;
+    public VideoMessage AVCConfigureRecord = null;
     public event Action<VideoMessage> OnVideoMessage;
     public event Action<AudioMessage> OnAudioMessage;
-    private RtmpChunkStream _videoChunkStream;
-    private RtmpChunkStream _audioChunkStream;
+    private RtmpChunkStream _videoChunkStream = null;
+    private RtmpChunkStream _audioChunkStream = null;
 
     public LivingStream(PublisherSessionService publisherSessionService)
     {
@@ -33,7 +33,7 @@ public class LivingStream : NetStream
 
     [RpcMethod("play")]
     public async Task Play(
-        [FromOptionalArgument] string? streamName,
+        [FromOptionalArgument] string streamName,
         [FromOptionalArgument] double start = -1,
         [FromOptionalArgument] double duration = -1,
         [FromOptionalArgument] bool reset = false)
@@ -50,9 +50,9 @@ public class LivingStream : NetStream
             {"description", "Resetting and playing stream." },
             {"details", streamName }
         };
-        var resetStatus = this.RtmpSession.CreateCommandMessage<OnStatusCommandMessage>();
+        var resetStatus = RtmpSession.CreateCommandMessage<OnStatusCommandMessage>();
         resetStatus.InfoObject = resetData;
-        await this.MessageStream.SendMessageAsync(this.ChunkStream, resetStatus);
+        await MessageStream.SendMessageAsync(ChunkStream, resetStatus);
 
         var startData = new AmfObject
         {
@@ -61,22 +61,25 @@ public class LivingStream : NetStream
             {"description", "Started playing." },
             {"details", streamName }
         };
-        var startStatus = this.RtmpSession.CreateCommandMessage<OnStatusCommandMessage>();
+        var startStatus = RtmpSession.CreateCommandMessage<OnStatusCommandMessage>();
         startStatus.InfoObject = startData;
-        await this.MessageStream.SendMessageAsync(this.ChunkStream, startStatus);
+        await MessageStream.SendMessageAsync(ChunkStream, startStatus);
 
-        var flvMetadata = this.RtmpSession.CreateData<DataMessage>();
-        flvMetadata.MessageHeader = (MessageHeader)publisher._flvMetadata.MessageHeader.Clone();
-        flvMetadata.Data = publisher._flvMetadata.Data;
-        await this.MessageStream.SendMessageAsync(this.ChunkStream, flvMetadata);
+        var flvMetadata = RtmpSession.CreateData<DataMessage>();
+        flvMetadata.MessageHeader = (MessageHeader)publisher.FlvMetadata.MessageHeader.Clone();
+        flvMetadata.Data = publisher.FlvMetadata.Data;
+        await MessageStream.SendMessageAsync(ChunkStream, flvMetadata);
 
-        _videoChunkStream = this.RtmpSession.CreateChunkStream();
-        _audioChunkStream = this.RtmpSession.CreateChunkStream();
+        _videoChunkStream = RtmpSession.CreateChunkStream();
+        _audioChunkStream = RtmpSession.CreateChunkStream();
 
-        await this.MessageStream.SendMessageAsync(_audioChunkStream, publisher._aacConfigureRecord.Clone() as AudioMessage);
-        if (publisher._avcConfigureRecord is null)
+        if (publisher.AACConfigureRecord != null)
         {
-            await this.MessageStream.SendMessageAsync(_videoChunkStream, publisher._avcConfigureRecord.Clone() as VideoMessage);
+            await MessageStream.SendMessageAsync(_audioChunkStream, publisher.AACConfigureRecord.Clone() as AudioMessage);
+        }
+        if (publisher.AVCConfigureRecord != null)
+        {
+            await MessageStream.SendMessageAsync(_videoChunkStream, publisher.AVCConfigureRecord.Clone() as VideoMessage);
         }
 
         publisher.OnAudioMessage += SendAudio;
@@ -94,7 +97,7 @@ public class LivingStream : NetStream
             
         try
         {
-            await this.MessageStream.SendMessageAsync(_videoChunkStream, video);
+            await MessageStream.SendMessageAsync(_videoChunkStream, video);
         }
         catch
         {
@@ -102,8 +105,7 @@ public class LivingStream : NetStream
             {
                 a();
             }
-
-            this.RtmpSession.Close();
+            RtmpSession.Close();
         }
     }
 
@@ -112,7 +114,7 @@ public class LivingStream : NetStream
         var audio = message.Clone();
         try
         {
-            await this.MessageStream.SendMessageAsync(_audioChunkStream, audio as AudioMessage);
+            await MessageStream.SendMessageAsync(_audioChunkStream, audio as AudioMessage);
         }
         catch
         {
@@ -120,13 +122,12 @@ public class LivingStream : NetStream
             {
                 a();
             }
-
-            this.RtmpSession.Close();
+            RtmpSession.Close();
         }
     }
 
     [RpcMethod(Name = "publish")]
-    public void Publish([FromOptionalArgument] string? publishingName, [FromOptionalArgument] string publishingType)
+    public void Publish([FromOptionalArgument] string publishingName, [FromOptionalArgument] string publishingType)
     {
         if (string.IsNullOrEmpty(publishingName))
         {
@@ -141,11 +142,11 @@ public class LivingStream : NetStream
 
         _publisherSessionService.RegisterPublisher(publishingName, this);
 
-        this.RtmpSession.SendControlMessageAsync(new StreamBeginMessage() { StreamId = this.MessageStream.MessageStreamId });
-        var onStatus = this.RtmpSession.CreateCommandMessage<OnStatusCommandMessage>();
-        this.MessageStream.RegisterMessageHandler<DataMessage>(HandleDataMessage);
-        this.MessageStream.RegisterMessageHandler<AudioMessage>(HandleAudioMessage);
-        this.MessageStream.RegisterMessageHandler<VideoMessage>(HandleVideoMessage);
+        RtmpSession.SendControlMessageAsync(new StreamBeginMessage() { StreamID = MessageStream.MessageStreamId });
+        var onStatus = RtmpSession.CreateCommandMessage<OnStatusCommandMessage>();
+        MessageStream.RegisterMessageHandler<DataMessage>(HandleDataMessage);
+        MessageStream.RegisterMessageHandler<AudioMessage>(HandleAudioMessage);
+        MessageStream.RegisterMessageHandler<VideoMessage>(HandleVideoMessage);
         onStatus.InfoObject = new AmfObject
         {
             {"level", "status" },
@@ -153,47 +154,47 @@ public class LivingStream : NetStream
             {"description", "Stream is now published." },
             {"details", publishingName }
         };
-        this.MessageStream.SendMessageAsync(this.ChunkStream, onStatus);
+        MessageStream.SendMessageAsync(ChunkStream, onStatus);
     }
 
     private void HandleDataMessage(DataMessage msg)
     {
-        _flvMetadata = msg;
+        FlvMetadata = msg;
     }
 
     private void HandleAudioMessage(AudioMessage audioData)
     {
-        if (_aacConfigureRecord == null && audioData.Data.Length >= 2)
+        if (AACConfigureRecord == null && audioData.Data.Length >= 2)
         {
-            _aacConfigureRecord = audioData;
+            AACConfigureRecord = audioData;
             return;
         }
-        OnAudioMessage.Invoke(audioData);
+        OnAudioMessage?.Invoke(audioData);
     }
 
     private void HandleVideoMessage(VideoMessage videoData)
     {
-        if (_avcConfigureRecord == null && videoData.Data.Length >= 2)
+        if (AVCConfigureRecord == null && videoData.Data.Length >= 2)
         {
-            _avcConfigureRecord = videoData;
+            AVCConfigureRecord = videoData;
         }
-        OnVideoMessage(videoData);
+        OnVideoMessage?.Invoke(videoData);
     }
 
     #region Disposable Support
 
-    private bool _disposedValue;
+    private bool disposedValue = false;
 
     protected override void Dispose(bool disposing)
     {
-        if (!_disposedValue)
+        if (!disposedValue)
         {
             base.Dispose(disposing);
             _publisherSessionService.RemovePublisher(this);
             _videoChunkStream?.Dispose();
             _audioChunkStream?.Dispose();
 
-            _disposedValue = true;
+            disposedValue = true;
         }
     }
     #endregion

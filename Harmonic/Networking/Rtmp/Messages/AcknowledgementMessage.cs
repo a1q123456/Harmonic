@@ -21,7 +21,7 @@ public class AcknowledgementMessage : ControlMessage
 
     public override void Serialize(SerializationContext context)
     {
-        var buffer = this._arrayPool.Rent(sizeof(uint));
+        var buffer = _arrayPool.Rent(sizeof(uint));
         try
         {
             NetworkBitConverter.TryGetBytes(BytesReceived, buffer);
@@ -29,7 +29,7 @@ public class AcknowledgementMessage : ControlMessage
         }
         finally
         {
-            this._arrayPool.Return(buffer);
+            _arrayPool.Return(buffer);
         }
             
     }
