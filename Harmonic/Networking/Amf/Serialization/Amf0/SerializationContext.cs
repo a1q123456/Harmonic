@@ -11,7 +11,7 @@ public class SerializationContext : IDisposable
 
     public int MessageLength => Buffer.Length;
 
-    private bool _disposeBuffer = true;
+    private readonly bool _disposeBuffer = true;
 
     public SerializationContext()
     {

@@ -20,7 +20,7 @@ public class AbortMessage : ControlMessage
 
     public override void Serialize(SerializationContext context)
     {
-        var buffer = _arrayPool.Rent(sizeof(uint));
+        var buffer = this._arrayPool.Rent(sizeof(uint));
         try
         {
             NetworkBitConverter.TryGetBytes(AbortedChunkStreamId, buffer);

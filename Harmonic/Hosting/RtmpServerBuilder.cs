@@ -16,7 +16,7 @@ public class RtmpServerBuilder
     private bool _useSsl = false;
     private WebSocketOptions? _websocketOptions = null;
 
-    private RtmpServerOptions _options = null;
+    private readonly RtmpServerOptions _options = null;
 
     public RtmpServerBuilder UseStartup<T>() where T: IStartup, new()
     {
@@ -40,14 +40,12 @@ public class RtmpServerBuilder
 
     public RtmpServerBuilder UseHarmonic(Action<RtmpServerOptions> config)
     {
-        _options = new RtmpServerOptions();
         config(_options);
         return this;
     }
 
     public RtmpServer Build()
     {
-        _options = _options ?? new RtmpServerOptions();
         _options.Startup = _startup;
         var types = Assembly.GetCallingAssembly().GetTypes();
 

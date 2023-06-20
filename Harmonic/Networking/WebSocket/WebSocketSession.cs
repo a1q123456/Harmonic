@@ -12,10 +12,10 @@ namespace Harmonic.Networking.WebSocket;
 
 public class WebSocketSession
 {
-    private IWebSocketConnection _webSocketConnection = null;
-    private WebSocketOptions? _options = null;
+    private readonly IWebSocketConnection _webSocketConnection = null;
+    private readonly WebSocketOptions? _options = null;
     private WebSocketController _controller = null;
-    private FlvMuxer _flvMuxer = null;
+    private readonly FlvMuxer _flvMuxer = null;
     public RtmpServerOptions Options => _options._serverOptions;
 
     public WebSocketSession(IWebSocketConnection connection, WebSocketOptions? options)

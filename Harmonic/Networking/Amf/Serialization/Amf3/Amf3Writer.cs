@@ -20,13 +20,13 @@ public class Amf3Writer
     private delegate void WriteHandler<T>(T value, SerializationContext context);
     private delegate void WriteHandler(object value, SerializationContext context);
 
-    private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
+    private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
 
-    private Dictionary<Type, WriteHandler> _writeHandlers = new();
+    private readonly Dictionary<Type, WriteHandler> _writeHandlers = new();
 
     public static readonly uint U29MAX = 0x1FFFFFFF;
-    private MethodInfo _writeVectorTMethod = null;
-    private MethodInfo _writeDictionaryTMethod = null;
+    private readonly MethodInfo _writeVectorTMethod = null;
+    private readonly MethodInfo _writeDictionaryTMethod = null;
 
     public Amf3Writer()
     {

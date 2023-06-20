@@ -12,7 +12,7 @@ public class RtmpMessageStream : IDisposable
 { 
     public uint MessageStreamId { get; }
     internal RtmpSession RtmpSession { get; }
-    private Dictionary<MessageType, Action<Message>> _messageHandlers = new();
+    private readonly Dictionary<MessageType, Action<Message>> _messageHandlers = new();
 
     internal RtmpMessageStream(RtmpSession rtmpSession, uint messageStreamId)
     {

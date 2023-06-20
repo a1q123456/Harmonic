@@ -6,7 +6,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3;
 
 public class Vector<T> : List<T>, IEquatable<List<T>>
 {
-    private List<T> _data = new();
+    private readonly List<T> _data = new();
     public bool IsFixedSize { get; set; } = false;
 
     public new void Add(T item)

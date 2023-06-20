@@ -9,10 +9,10 @@ sealed class HandshakeContext : IDisposable
 {
     private uint _readerTimestampEpoch = 0;
     private uint _writerTimestampEpoch = 0;
-    private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
-    private Random _random = new();
+    private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
+    private readonly Random _random = new();
     private byte[] _s1Data = null;
-    private IOPipeLine _ioPipeline = null;
+    private readonly IOPipeLine _ioPipeline = null;
 
     public HandshakeContext(IOPipeLine ioPipeline)
     {

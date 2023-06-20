@@ -17,11 +17,11 @@ namespace Harmonic.Networking.Flv;
 
 public class FlvDemuxer
 {
-    private Amf0Reader _amf0Reader = new();
-    private Amf3Reader _amf3Reader = new();
-    private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
+    private readonly Amf0Reader _amf0Reader = new();
+    private readonly Amf3Reader _amf3Reader = new();
+    private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
     private Stream _stream = null;
-    private IReadOnlyDictionary<MessageType, MessageFactory> _factories = null;
+    private readonly IReadOnlyDictionary<MessageType, MessageFactory> _factories = null;
 
     public FlvDemuxer(IReadOnlyDictionary<MessageType, MessageFactory> factories)
     {

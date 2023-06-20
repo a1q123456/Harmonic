@@ -4,7 +4,7 @@ namespace Harmonic.Service;
 
 public class RecordService
 {
-    private RecordServiceConfiguration _configuration;
+    private readonly RecordServiceConfiguration _configuration;
 
     public RecordService(RecordServiceConfiguration configuration)
     {

@@ -25,14 +25,14 @@ enum ProcessState
 class IOPipeLine : IDisposable
 {
     internal delegate bool BufferProcessor(ReadOnlySequence<byte> buffer, ref int consumed);
-    private SemaphoreSlim _writerSignal = new(0);
+    private readonly SemaphoreSlim _writerSignal = new(0);
 
-    private Socket _socket;
-    private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
+    private readonly Socket _socket;
+    private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
     private readonly int _resumeWriterThreshole;
     internal Dictionary<ProcessState, BufferProcessor> _bufferProcessors;
 
-    private ConcurrentQueue<WriteState> _writerQueue = new();
+    private readonly ConcurrentQueue<WriteState> _writerQueue = new();
 
     internal ProcessState NextProcessState { get; set; } = ProcessState.HandshakeC0C1;
     internal ChunkStreamContext ChunkStreamContext { get; set; } = null;

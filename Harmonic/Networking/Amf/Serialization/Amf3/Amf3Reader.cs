@@ -18,15 +18,15 @@ public class Amf3Reader
     private delegate bool ReaderHandler<T>(Span<byte> buffer, out T value, out int consumed);
     private delegate bool ReaderHandler(Span<byte> buffer, out object value, out int consumed);
 
-    private List<object> _objectReferenceTable = new();
-    private List<string> _stringReferenceTable = new();
-    private List<Amf3ClassTraits> _objectTraitsReferenceTable = new();
-    private Dictionary<Amf3Type, ReaderHandler> _readerHandlers = new();
-    private Dictionary<string, TypeRegisterState> _registeredTypedObejectStates = new();
-    private List<Type> _registeredTypes = new();
-    private Dictionary<string, Type> _registeredExternalizable = new();
+    private readonly List<object> _objectReferenceTable = new();
+    private readonly List<string> _stringReferenceTable = new();
+    private readonly List<Amf3ClassTraits> _objectTraitsReferenceTable = new();
+    private readonly Dictionary<Amf3Type, ReaderHandler> _readerHandlers = new();
+    private readonly Dictionary<string, TypeRegisterState> _registeredTypedObejectStates = new();
+    private readonly List<Type> _registeredTypes = new();
+    private readonly Dictionary<string, Type> _registeredExternalizable = new();
     private readonly IReadOnlyList<Amf3Type> _supportedTypes = null;
-    private MemoryPool<byte> _memoryPool = MemoryPool<byte>.Shared;
+    private readonly MemoryPool<byte> _memoryPool = MemoryPool<byte>.Shared;
 
     public IReadOnlyList<Type> RegisteredTypes { get => _registeredTypes; }
 

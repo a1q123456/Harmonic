@@ -5,7 +5,7 @@ namespace Harmonic.Networking.Utils;
 
 public static class NetworkBitConverter
 {
-    private static MemoryPool<byte> _memoryPool = MemoryPool<byte>.Shared;
+    private static readonly MemoryPool<byte> _memoryPool = MemoryPool<byte>.Shared;
 
     public static int ToInt32(Span<byte> buffer, bool littleEndian = false)
     {

@@ -18,7 +18,7 @@ namespace Harmonic.Networking.Rtmp;
 
 class ChunkStreamContext : IDisposable
 {
-    private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
+    private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
     internal ChunkHeader _processingChunk = null;
     internal int ReadMinimumBufferSize { get => (ReadChunkSize + TYPE0_SIZE) * 4; }
     internal Dictionary<uint, MessageHeader> _previousWriteMessageHeader = new();
@@ -44,8 +44,8 @@ class ChunkStreamContext : IDisposable
     internal Amf3Writer _amf3Writer = new();
 
 
-    private IOPipeLine _ioPipeline = null;
-    private SemaphoreSlim _sync = new(1);
+    private readonly IOPipeLine _ioPipeline = null;
+    private readonly SemaphoreSlim _sync = new(1);
     internal LimitType? PreviousLimitType { get; set; } = null;
 
     public ChunkStreamContext(IOPipeLine stream)

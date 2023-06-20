@@ -16,8 +16,8 @@ public class Amf0Writer
 {
     private delegate void GetBytesHandler<T>(T value, SerializationContext context);
     private delegate void GetBytesHandler(object value, SerializationContext context);
-    private IReadOnlyDictionary<Type, GetBytesHandler> _getBytesHandlers = null;
-    private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
+    private readonly IReadOnlyDictionary<Type, GetBytesHandler> _getBytesHandlers = null;
+    private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
 
     public Amf0Writer()
     {

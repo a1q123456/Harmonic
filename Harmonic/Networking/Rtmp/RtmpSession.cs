@@ -17,15 +17,15 @@ namespace Harmonic.Networking.Rtmp;
 public class RtmpSession : IDisposable
 {
     internal IOPipeLine IOPipeline { get; set; } = null;
-    private Dictionary<uint, RtmpMessageStream> _messageStreams = new();
-    private Random _random = new();
+    private readonly Dictionary<uint, RtmpMessageStream> _messageStreams = new();
+    private readonly Random _random = new();
     internal RtmpControlChunkStream ControlChunkStream { get; }
     public RtmpControlMessageStream ControlMessageStream { get; }
     public NetConnection NetConnection { get; }
-    private RpcService _rpcService = null;
+    private readonly RpcService _rpcService = null;
     public ConnectionInformation ConnectionInformation { get; internal set; }
-    private object _allocCsidLocker = new();
-    private SortedList<uint, uint> _allocatedCsid = new();
+    private readonly object _allocCsidLocker = new();
+    private readonly SortedList<uint, uint> _allocatedCsid = new();
 
     internal RtmpSession(IOPipeLine ioPipeline)
     {

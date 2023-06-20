@@ -12,11 +12,11 @@ namespace Harmonic.Controllers;
 
 public class WebSocketPlayController : WebSocketController, IDisposable
 {
-    private RecordService _recordService = null;
-    private PublisherSessionService _publisherSessionService = null;
-    private List<Action> _cleanupActions = new();
+    private readonly RecordService _recordService = null;
+    private readonly PublisherSessionService _publisherSessionService = null;
+    private readonly List<Action> _cleanupActions = new();
     private FileStream _recordFile = null;
-    private SemaphoreSlim _playLock = new(1);
+    private readonly SemaphoreSlim _playLock = new(1);
     private int _playing = 0;
     private long _playRangeTo = 0;
 

@@ -12,7 +12,7 @@ public class SerializationContext : IDisposable
     public List<Amf3ClassTraits> ObjectTraitsReferenceTable { get; set; } = new();
 
     public int MessageLength => Buffer.Length;
-    private bool _disposeBuffer = true;
+    private readonly bool _disposeBuffer = true;
 
     public SerializationContext()
     {

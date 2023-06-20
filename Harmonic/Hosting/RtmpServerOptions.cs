@@ -21,9 +21,9 @@ public class RtmpServerOptions
     internal Dictionary<MessageType, MessageFactory> _messageFactories = new();
     public IReadOnlyDictionary<MessageType, MessageFactory> MessageFactories => _messageFactories;
     public delegate Message MessageFactory(MessageHeader header, Networking.Rtmp.Serialization.SerializationContext context, out int consumed);
-    private Dictionary<string, Type> _registeredControllers = new();
+    private readonly Dictionary<string, Type> _registeredControllers = new();
     internal ContainerBuilder _builder = null;
-    private RpcService _rpcService = null;
+    private readonly RpcService _rpcService = null;
     internal IStartup _startup = null;
     internal IStartup Startup
     {
@@ -48,8 +48,10 @@ public class RtmpServerOptions
     internal bool UseWebsocket { get; set; } = true;
     internal X509Certificate2? Cert { get; set; }
 
-    internal RtmpServerOptions()
+    internal RtmpServerOptions(IContainer serviceContainer, ILifetimeScope serverLifetime)
     {
+        ServiceContainer = serviceContainer;
+        ServerLifetime = serverLifetime;
         var userControlMessageFactory = new UserControlMessageFactory();
         var commandMessageFactory = new CommandMessageFactory();
         RegisterMessage<AbortMessage>();

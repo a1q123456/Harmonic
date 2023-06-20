@@ -21,10 +21,10 @@ public class RecordStream : NetStream
     private PublishingType _publishingType;
     private FileStream _recordFile = null;
     private FileStream _recordFileData = null;
-    private RecordService _recordService = null;
+    private readonly RecordService _recordService = null;
     private DataMessage _metaData = null;
     private uint _currentTimestamp = 0;
-    private SemaphoreSlim _playLock = new(1);
+    private readonly SemaphoreSlim _playLock = new(1);
     private int _playing = 0;
     private AmfObject _keyframes = null;
     private List<object> _keyframeTimes;
