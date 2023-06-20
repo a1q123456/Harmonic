@@ -20,14 +20,12 @@ public class TestAmf0Reader
         foreach (var file in files)
         {
             var value = double.Parse(Path.GetFileNameWithoutExtension(file));
-            using (var f = new FileStream(file, FileMode.Open))
-            {
-                var data = new byte[f.Length];
-                f.Read(data);
-                Assert.IsTrue(reader.TryGetNumber(data, out var dataRead, out var consumed));
-                Assert.AreEqual(dataRead, value);
-                Assert.AreEqual(consumed, f.Length);
-            }
+            using var f = new FileStream(file, FileMode.Open);
+            var data = new byte[f.Length];
+            f.Read(data);
+            Assert.IsTrue(reader.TryGetNumber(data, out var dataRead, out var consumed));
+            Assert.AreEqual(dataRead, value);
+            Assert.AreEqual(consumed, f.Length);
         }
     }
 
@@ -41,14 +39,12 @@ public class TestAmf0Reader
         foreach (var file in files)
         {
             var value = Path.GetFileNameWithoutExtension(file);
-            using (var f = new FileStream(file, FileMode.Open))
-            {
-                var data = new byte[f.Length];
-                f.Read(data);
-                Assert.IsTrue(reader.TryGetString(data, out var dataRead, out var consumed));
-                Assert.AreEqual(dataRead, value);
-                Assert.AreEqual(consumed, f.Length);
-            }
+            using var f = new FileStream(file, FileMode.Open);
+            var data = new byte[f.Length];
+            f.Read(data);
+            Assert.IsTrue(reader.TryGetString(data, out var dataRead, out var consumed));
+            Assert.AreEqual(dataRead, value);
+            Assert.AreEqual(consumed, f.Length);
         }
     }
 
@@ -62,14 +58,12 @@ public class TestAmf0Reader
         foreach (var file in files)
         {
             var value = bool.Parse(Path.GetFileNameWithoutExtension(file));
-            using (var f = new FileStream(file, FileMode.Open))
-            {
-                var data = new byte[f.Length];
-                f.Read(data);
-                Assert.IsTrue(reader.TryGetBoolean(data, out var dataRead, out var consumed));
-                Assert.AreEqual(dataRead, value);
-                Assert.AreEqual(consumed, f.Length);
-            }
+            using var f = new FileStream(file, FileMode.Open);
+            var data = new byte[f.Length];
+            f.Read(data);
+            Assert.IsTrue(reader.TryGetBoolean(data, out var dataRead, out var consumed));
+            Assert.AreEqual(dataRead, value);
+            Assert.AreEqual(consumed, f.Length);
         }
     }
 
@@ -79,15 +73,13 @@ public class TestAmf0Reader
         var reader = new Amf0Reader();
 
 
-        using (var f = new FileStream("../../../../samples/amf0/misc/array.amf0", FileMode.Open))
-        {
-            var data = new byte[f.Length];
-            f.Read(data);
-            var arrayData = new List<object> { 1.0d, 2.0d, 3.0d, 4.0d, "a", "asdf", "eee" };
-            Assert.IsTrue(reader.TryGetStrictArray(data, out var dataRead, out var consumed));
-            Assert.IsTrue(arrayData.SequenceEqual(dataRead));
-            Assert.AreEqual(consumed, data.Length);
-        }
+        using var f = new FileStream("../../../../samples/amf0/misc/array.amf0", FileMode.Open);
+        var data = new byte[f.Length];
+        f.Read(data);
+        var arrayData = new List<object?> { 1.0d, 2.0d, 3.0d, 4.0d, "a", "asdf", "eee" };
+        Assert.IsTrue(reader.TryGetStrictArray(data, out var dataRead, out var consumed));
+        Assert.IsTrue(arrayData.SequenceEqual(dataRead));
+        Assert.AreEqual(consumed, data.Length);
     }
 
     [TestMethod]
@@ -96,17 +88,15 @@ public class TestAmf0Reader
         var reader = new Amf0Reader();
 
 
-        using (var f = new FileStream("../../../../samples/amf0/misc/date.amf0", FileMode.Open))
-        {
-            var data = new byte[f.Length];
-            f.Read(data);
+        using var f = new FileStream("../../../../samples/amf0/misc/date.amf0", FileMode.Open);
+        var data = new byte[f.Length];
+        f.Read(data);
 
-            Assert.IsTrue(reader.TryGetDate(data, out var dataRead, out var consumed));
-            Assert.AreEqual(dataRead.Year, 2019);
-            Assert.AreEqual(dataRead.Month, 2);
-            Assert.AreEqual(dataRead.Day, 11);
-            Assert.AreEqual(consumed, data.Length);
-        }
+        Assert.IsTrue(reader.TryGetDate(data, out var dataRead, out var consumed));
+        Assert.AreEqual(dataRead.Year, 2019);
+        Assert.AreEqual(dataRead.Month, 2);
+        Assert.AreEqual(dataRead.Day, 11);
+        Assert.AreEqual(consumed, data.Length);
     }
 
     [TestMethod]
@@ -115,15 +105,13 @@ public class TestAmf0Reader
         var reader = new Amf0Reader();
 
 
-        using (var f = new FileStream("../../../../samples/amf0/misc/longstring.amf0", FileMode.Open))
-        {
-            var data = new byte[f.Length];
-            f.Read(data);
+        using var f = new FileStream("../../../../samples/amf0/misc/longstring.amf0", FileMode.Open);
+        var data = new byte[f.Length];
+        f.Read(data);
 
-            Assert.IsTrue(reader.TryGetLongString(data, out var dataRead, out var consumed));
-            Assert.AreEqual(string.Concat(Enumerable.Repeat("abc", 32767)), dataRead);
-            Assert.AreEqual(consumed, f.Length);
-        }
+        Assert.IsTrue(reader.TryGetLongString(data, out var dataRead, out var consumed));
+        Assert.AreEqual(string.Concat(Enumerable.Repeat("abc", 32767)), dataRead);
+        Assert.AreEqual(consumed, f.Length);
     }
 
     [TestMethod]
@@ -132,15 +120,13 @@ public class TestAmf0Reader
         var reader = new Amf0Reader();
 
 
-        using (var f = new FileStream("../../../../samples/amf0/misc/null.amf0", FileMode.Open))
-        {
-            var data = new byte[f.Length];
-            f.Read(data);
+        using var f = new FileStream("../../../../samples/amf0/misc/null.amf0", FileMode.Open);
+        var data = new byte[f.Length];
+        f.Read(data);
 
-            Assert.IsTrue(reader.TryGetNull(data, out var dataRead, out var consumed));
-            Assert.AreEqual(null, dataRead);
-            Assert.AreEqual(consumed, f.Length);
-        }
+        Assert.IsTrue(reader.TryGetNull(data, out var dataRead, out var consumed));
+        Assert.AreEqual(null, dataRead);
+        Assert.AreEqual(consumed, f.Length);
     }
 
     [TestMethod]
@@ -149,15 +135,13 @@ public class TestAmf0Reader
         var reader = new Amf0Reader();
 
 
-        using (var f = new FileStream("../../../../samples/amf0/misc/null.amf0", FileMode.Open))
-        {
-            var data = new byte[f.Length];
-            f.Read(data);
+        using var f = new FileStream("../../../../samples/amf0/misc/null.amf0", FileMode.Open);
+        var data = new byte[f.Length];
+        f.Read(data);
 
-            Assert.IsTrue(reader.TryGetObject(data, out var dataRead, out var consumed));
-            Assert.AreEqual(null, dataRead);
-            Assert.AreEqual(consumed, f.Length);
-        }
+        Assert.IsTrue(reader.TryGetObject(data, out var dataRead, out var consumed));
+        Assert.AreEqual(null, dataRead);
+        Assert.AreEqual(consumed, f.Length);
     }
 
     [TestMethod]
@@ -166,17 +150,15 @@ public class TestAmf0Reader
         var reader = new Amf0Reader();
 
 
-        using (var f = new FileStream("../../../../samples/amf0/misc/xml.amf0", FileMode.Open))
-        {
-            var data = new byte[f.Length];
-            f.Read(data);
+        using var f = new FileStream("../../../../samples/amf0/misc/xml.amf0", FileMode.Open);
+        var data = new byte[f.Length];
+        f.Read(data);
 
-            Assert.IsTrue(reader.TryGetXmlDocument(data, out var dataRead, out var consumed));
-            Assert.AreNotEqual(dataRead.GetElementsByTagName("a").Count, 0);
-            Assert.AreNotEqual(dataRead.GetElementsByTagName("b").Count, 0);
-            Assert.IsNotNull(dataRead.GetElementsByTagName("b")[0].Attributes["value"], "1");
-            Assert.AreEqual(consumed, f.Length);
-        }
+        Assert.IsTrue(reader.TryGetXmlDocument(data, out var dataRead, out var consumed));
+        Assert.AreNotEqual(dataRead.GetElementsByTagName("a").Count, 0);
+        Assert.AreNotEqual(dataRead.GetElementsByTagName("b").Count, 0);
+        Assert.IsNotNull(dataRead.GetElementsByTagName("b")[0].Attributes["value"], "1");
+        Assert.AreEqual(consumed, f.Length);
     }
 
     [TestMethod]
@@ -185,14 +167,12 @@ public class TestAmf0Reader
         var reader = new Amf0Reader();
 
 
-        using (var f = new FileStream("../../../../samples/amf0/misc/undefined.amf0", FileMode.Open))
-        {
-            var data = new byte[f.Length];
-            f.Read(data);
+        using var f = new FileStream("../../../../samples/amf0/misc/undefined.amf0", FileMode.Open);
+        var data = new byte[f.Length];
+        f.Read(data);
 
-            Assert.IsTrue(reader.TryGetUndefined(data, out var dataRead, out var consumed));
-            Assert.AreEqual(consumed, f.Length);
-        }
+        Assert.IsTrue(reader.TryGetUndefined(data, out var dataRead, out var consumed));
+        Assert.AreEqual(consumed, f.Length);
     }
         
     [TestMethod]
@@ -204,15 +184,13 @@ public class TestAmf0Reader
         // https://github.com/hydralabs/pyamf/blob/master/pyamf/amf0.py#L567
         reader.StrictMode = false;
 
-        using (var f = new FileStream("../../../../samples/amf0/misc/ecmaarray.amf0", FileMode.Open))
-        {
-            var data = new byte[f.Length];
-            f.Read(data);
+        using var f = new FileStream("../../../../samples/amf0/misc/ecmaarray.amf0", FileMode.Open);
+        var data = new byte[f.Length];
+        f.Read(data);
 
-            Assert.IsTrue(reader.TryGetEcmaArray(data, out var dataRead, out var consumed));
-            Assert.IsTrue(dataRead.SequenceEqual(new Dictionary<string, object>() { ["a"] = 1.0d, ["b"] = "a", ["c"] = "a" }));
-            Assert.AreEqual(consumed, data.Length);
-        }
+        Assert.IsTrue(reader.TryGetEcmaArray(data, out var dataRead, out var consumed));
+        Assert.IsTrue(dataRead.SequenceEqual(new Dictionary<string, object>() { ["a"] = 1.0d, ["b"] = "a", ["c"] = "a" }));
+        Assert.AreEqual(consumed, data.Length);
     }
 
     [TestMethod]
@@ -224,15 +202,13 @@ public class TestAmf0Reader
         // https://github.com/hydralabs/pyamf/blob/master/pyamf/amf0.py#L567
         reader.StrictMode = false;
 
-        using (var f = new FileStream("../../../../samples/amf0/misc/object.amf0", FileMode.Open))
-        {
-            var data = new byte[f.Length];
-            f.Read(data);
+        using var f = new FileStream("../../../../samples/amf0/misc/object.amf0", FileMode.Open);
+        var data = new byte[f.Length];
+        f.Read(data);
 
-            Assert.IsTrue(reader.TryGetObject(data, out var dataRead, out var consumed));
-            Assert.IsTrue(dataRead.Fields.SequenceEqual(new Dictionary<string, object>() { ["a"] = "b", ["c"] = 1.0 }));
-            Assert.AreEqual(consumed, data.Length);
-        }
+        Assert.IsTrue(reader.TryGetObject(data, out var dataRead, out var consumed));
+        Assert.IsTrue(dataRead.Fields.SequenceEqual(new Dictionary<string, object>() { ["a"] = "b", ["c"] = 1.0 }));
+        Assert.AreEqual(consumed, data.Length);
     }
         
     [TestMethod]

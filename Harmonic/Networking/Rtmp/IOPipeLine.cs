@@ -22,7 +22,7 @@ enum ProcessState
 }
 
 // TBD: retransfer bytes when acknowledgement not received
-class IOPipeLine : IDisposable
+class IoPipeLine : IDisposable
 {
     internal delegate bool BufferProcessor(ReadOnlySequence<byte> buffer, ref int consumed);
     private readonly SemaphoreSlim _writerSignal = new(0);
@@ -35,12 +35,12 @@ class IOPipeLine : IDisposable
     private readonly ConcurrentQueue<WriteState> _writerQueue = new();
 
     internal ProcessState NextProcessState { get; set; } = ProcessState.HandshakeC0C1;
-    internal ChunkStreamContext ChunkStreamContext { get; set; } = null;
-    private HandshakeContext _handshakeContext = null;
-    public RtmpServerOptions Options { get; set; } = null;
+    internal ChunkStreamContext ChunkStreamContext { get; set; }
+    private HandshakeContext _handshakeContext;
+    public RtmpServerOptions Options { get; set; }
 
 
-    public IOPipeLine(Socket socket, RtmpServerOptions options, int resumeWriterThreshole = 65535)
+    public IoPipeLine(Socket socket, RtmpServerOptions options, int resumeWriterThreshole = 65535)
     {
         _socket = socket;
         _resumeWriterThreshole = resumeWriterThreshole;
@@ -115,9 +115,9 @@ class IOPipeLine : IDisposable
 
         _writerQueue.Enqueue(new WriteState()
         {
-            Buffer = buffer,
-            TaskSource = tcs,
-            Length = data.Length
+            _buffer = buffer,
+            _taskSource = tcs,
+            _length = data.Length
         });
         _writerSignal.Release();
         await tcs.Task;
@@ -125,17 +125,17 @@ class IOPipeLine : IDisposable
 
     private async Task Writer(CancellationToken ct)
     { 
-        while (!ct.IsCancellationRequested && !disposedValue)
+        while (!ct.IsCancellationRequested && !_disposedValue)
         {
             await _writerSignal.WaitAsync(ct);
             if (_writerQueue.TryDequeue(out var data))
             {
                 Debug.Assert(data != null);
                 Debug.Assert(_socket != null);
-                Debug.Assert((data.Buffer[0] & 0x3F) < 10);
-                await _socket.SendAsync(data.Buffer.AsMemory(0, data.Length), SocketFlags.None, ct);
-                _arrayPool.Return(data.Buffer);
-                data.TaskSource?.SetResult(1);
+                Debug.Assert((data._buffer[0] & 0x3F) < 10);
+                await _socket.SendAsync(data._buffer.AsMemory(0, data._length), SocketFlags.None, ct);
+                _arrayPool.Return(data._buffer);
+                data._taskSource?.SetResult(1);
             }
             else
             {
@@ -148,7 +148,7 @@ class IOPipeLine : IDisposable
     #region Receiver
     private async Task Producer(Socket s, PipeWriter writer, CancellationToken ct = default)
     {
-        while (!ct.IsCancellationRequested && !disposedValue)
+        while (!ct.IsCancellationRequested && !_disposedValue)
         {
             var memory = writer.GetMemory(ChunkStreamContext == null ? 1536 : ChunkStreamContext.ReadMinimumBufferSize);
             var bytesRead = await s.ReceiveAsync(memory, SocketFlags.None);
@@ -169,7 +169,7 @@ class IOPipeLine : IDisposable
 
     private async Task Consumer(PipeReader reader, CancellationToken ct = default)
     {
-        while (!ct.IsCancellationRequested && !disposedValue)
+        while (!ct.IsCancellationRequested && !_disposedValue)
         {
             var result = await reader.ReadAsync(ct);
             var buffer = result.Buffer;
@@ -187,13 +187,13 @@ class IOPipeLine : IDisposable
             reader.AdvanceTo(buffer.Start, buffer.End);
             if (ChunkStreamContext != null)
             {
-                ChunkStreamContext.ReadUnAcknowledgedSize += consumed;
+                ChunkStreamContext._readUnAcknowledgedSize += consumed;
                 if (ChunkStreamContext.ReadWindowAcknowledgementSize.HasValue)
                 {
-                    if (ChunkStreamContext.ReadUnAcknowledgedSize >= ChunkStreamContext.ReadWindowAcknowledgementSize)
+                    if (ChunkStreamContext._readUnAcknowledgedSize >= ChunkStreamContext.ReadWindowAcknowledgementSize)
                     {
-                        ChunkStreamContext._rtmpSession.Acknowledgement((uint)ChunkStreamContext.ReadUnAcknowledgedSize);
-                        ChunkStreamContext.ReadUnAcknowledgedSize -= 0;
+                        ChunkStreamContext._rtmpSession.Acknowledgement((uint)ChunkStreamContext._readUnAcknowledgedSize);
+                        ChunkStreamContext._readUnAcknowledgedSize -= 0;
                     }
                 }
             }
@@ -217,11 +217,11 @@ class IOPipeLine : IDisposable
 
 
     #region IDisposable Support
-    private bool disposedValue = false;
+    private bool _disposedValue;
 
     protected virtual void Dispose(bool disposing)
     {
-        if (!disposedValue)
+        if (!_disposedValue)
         {
             if (disposing)
             {
@@ -233,7 +233,7 @@ class IOPipeLine : IDisposable
             }
 
 
-            disposedValue = true;
+            _disposedValue = true;
         }
     }
 

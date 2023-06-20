@@ -4,7 +4,7 @@ namespace Harmonic.Networking.Rtmp;
 
 public class RtmpChunkStream : IDisposable
 {
-    internal RtmpSession RtmpSession { get; set; } = null;
+    internal RtmpSession RtmpSession { get; set; }
     public uint ChunkStreamId { get; protected set; }
 
     internal RtmpChunkStream(RtmpSession rtmpSession, uint chunkStreamId)
@@ -25,18 +25,18 @@ public class RtmpChunkStream : IDisposable
     }
 
     #region IDisposable Support
-    private bool disposedValue = false;
+    private bool _disposedValue;
 
     protected virtual void Dispose(bool disposing)
     {
-        if (!disposedValue)
+        if (!_disposedValue)
         {
             if (disposing)
             {
                 RtmpSession.ChunkStreamDestroyed(this);
             }
 
-            disposedValue = true;
+            _disposedValue = true;
         }
     }
 

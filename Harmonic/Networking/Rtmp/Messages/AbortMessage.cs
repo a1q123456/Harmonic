@@ -28,7 +28,7 @@ public class AbortMessage : ControlMessage
         }
         finally
         {
-            _arrayPool.Return(buffer);
+            this._arrayPool.Return(buffer);
         }
     }
 }

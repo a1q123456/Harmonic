@@ -6,7 +6,7 @@ namespace Harmonic.Networking.Rtmp.Messages.Commands;
 public class DeleteStreamCommandMessage : CommandMessage
 {
     [OptionalArgument]
-    public double StreamID { get; set; }
+    public double StreamId { get; set; }
 
     public DeleteStreamCommandMessage(AmfEncodingVersion encoding) : base(encoding)
     {

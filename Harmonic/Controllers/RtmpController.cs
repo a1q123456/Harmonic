@@ -11,8 +11,8 @@ public abstract class RtmpController
     public RtmpSession RtmpSession { get; internal set; } = null;
 
 
-    private FlvMuxer _flvMuxer = null;
-    private FlvDemuxer _flvDemuxer = null;
+    private FlvMuxer _flvMuxer;
+    private FlvDemuxer _flvDemuxer;
 
     public FlvMuxer FlvMuxer
     {
@@ -31,7 +31,7 @@ public abstract class RtmpController
         {
             if (_flvDemuxer == null)
             {
-                _flvDemuxer = new FlvDemuxer(RtmpSession.IOPipeline.Options.MessageFactories);
+                _flvDemuxer = new FlvDemuxer(RtmpSession.IoPipeline.Options.MessageFactories);
             }
             return _flvDemuxer;
         }

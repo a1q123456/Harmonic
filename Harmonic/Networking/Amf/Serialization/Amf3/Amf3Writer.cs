@@ -18,15 +18,15 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3;
 public class Amf3Writer
 {
     private delegate void WriteHandler<T>(T value, SerializationContext context);
-    private delegate void WriteHandler(object value, SerializationContext context);
+    private delegate void WriteHandler(object? value, SerializationContext context);
 
     private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
 
     private readonly Dictionary<Type, WriteHandler> _writeHandlers = new();
 
-    public static readonly uint U29MAX = 0x1FFFFFFF;
-    private readonly MethodInfo _writeVectorTMethod = null;
-    private readonly MethodInfo _writeDictionaryTMethod = null;
+    public static readonly uint U29_MAX = 0x1FFFFFFF;
+    private readonly MethodInfo _writeVectorTMethod;
+    private readonly MethodInfo _writeDictionaryTMethod;
 
     public Amf3Writer()
     {
@@ -105,15 +105,13 @@ public class Amf3Writer
         };
     }
 
-    private string XmlToString(XmlDocument xml)
+    private string? XmlToString(XmlDocument xml)
     {
-        using (var stringWriter = new StringWriter())
-        using (var xmlTextWriter = XmlWriter.Create(stringWriter))
-        {
-            xml.WriteTo(xmlTextWriter);
-            xmlTextWriter.Flush();
-            return stringWriter.GetStringBuilder().ToString();
-        }
+        using var stringWriter = new StringWriter();
+        using var xmlTextWriter = XmlWriter.Create(stringWriter);
+        xml.WriteTo(xmlTextWriter);
+        xmlTextWriter.Flush();
+        return stringWriter.GetStringBuilder().ToString();
     }
 
     public void WriteBytes(Undefined value, SerializationContext context)
@@ -149,7 +147,7 @@ public class Amf3Writer
         {
             length = 3;
         }
-        else if (value <= U29MAX)
+        else if (value <= U29_MAX)
         {
             length = 4;
         }
@@ -217,7 +215,7 @@ public class Amf3Writer
 
     }
 
-    private void WriteStringBytesImpl<T>(string value, SerializationContext context, List<T> referenceTable)
+    private void WriteStringBytesImpl<T>(string? value, SerializationContext context, List<T?> referenceTable)
     {
         if (value is T tValue)
         {
@@ -256,7 +254,7 @@ public class Amf3Writer
         }
     }
 
-    public void WriteBytes(string value, SerializationContext context)
+    public void WriteBytes(string? value, SerializationContext context)
     {
         context.Buffer.WriteToBuffer((byte)Amf3Type.String);
         WriteStringBytesImpl(value, context, context.StringReferenceTable);
@@ -330,7 +328,7 @@ public class Amf3Writer
         context.ObjectReferenceTable.Add(value);
     }
 
-    public void WriteValueBytes(object value, SerializationContext context)
+    public void WriteValueBytes(object? value, SerializationContext context)
     {
         if (value == null)
         {
@@ -367,7 +365,7 @@ public class Amf3Writer
 
     }
 
-    public void WriteBytes(object value, SerializationContext context)
+    public void WriteBytes(object? value, SerializationContext context)
     {
         uint header = 0;
         if (value == null)
@@ -389,14 +387,14 @@ public class Amf3Writer
         }
 
         var objType = value.GetType();
-        string attrTypeName = null;
+        string? attrTypeName = null;
         var classAttr = objType.GetCustomAttribute<TypedObjectAttribute>();
         if (classAttr != null)
         {
             attrTypeName = classAttr.Name;
         }
         var traits = new Amf3ClassTraits();
-        var memberValues = new List<object>();
+        var memberValues = new List<object?>();
         if (value is AmfObject amf3Object)
         {
             if (amf3Object.IsAnonymous)
@@ -410,8 +408,8 @@ public class Amf3Writer
                 traits.ClassType = Amf3ClassType.Typed;
             }
             traits.IsDynamic = amf3Object.IsDynamic;
-            traits.Members = new List<string>(amf3Object.Fields.Keys);
-            memberValues = new List<object>(amf3Object.Fields.Keys.Select(k => amf3Object.Fields[k]));
+            traits.Members = new List<string?>(amf3Object.Fields.Keys);
+            memberValues = new List<object?>(amf3Object.Fields.Keys.Select(k => amf3Object.Fields[k]));
         }
         else if (value is IExternalizable)
         {
@@ -492,7 +490,7 @@ public class Amf3Writer
         }
     }
 
-    public void WriteBytes(Vector<uint> value, SerializationContext context)
+    public void WriteBytes(Vector<uint>? value, SerializationContext context)
     {
         context.Buffer.WriteToBuffer((byte)Amf3Type.VectorUInt);
 
@@ -526,7 +524,7 @@ public class Amf3Writer
         }
     }
 
-    public void WriteBytes(Vector<int> value, SerializationContext context)
+    public void WriteBytes(Vector<int>? value, SerializationContext context)
     {
         context.Buffer.WriteToBuffer((byte)Amf3Type.VectorInt);
 
@@ -562,7 +560,7 @@ public class Amf3Writer
         }
     }
 
-    public void WriteBytes(Vector<double> value, SerializationContext context)
+    public void WriteBytes(Vector<double>? value, SerializationContext context)
     {
         context.Buffer.WriteToBuffer((byte)Amf3Type.VectorDouble);
 
@@ -597,7 +595,7 @@ public class Amf3Writer
         }
     }
 
-    public void WriteBytes<T>(Vector<T> value, SerializationContext context)
+    public void WriteBytes<T>(Vector<T?> value, SerializationContext context)
     {
         context.Buffer.WriteToBuffer((byte)Amf3Type.VectorObject);
 
@@ -616,7 +614,7 @@ public class Amf3Writer
             context.Buffer.WriteToBuffer(value.IsFixedSize ? (byte)0x01 : (byte)0x00);
             var tType = typeof(T);
 
-            string typeName = tType.Name;
+            string? typeName = tType.Name;
             var attr = tType.GetCustomAttribute<TypedObjectAttribute>();
             if (attr != null)
             {
@@ -667,7 +665,7 @@ public class Amf3Writer
         }
     }
 
-    public void WriteBytes<TKey, TValue>(Amf3Dictionary<TKey, TValue> value, SerializationContext context)
+    public void WriteBytes<TKey, TValue>(Amf3Dictionary<TKey?, TValue> value, SerializationContext context)
     {
         context.Buffer.WriteToBuffer((byte)Amf3Type.Dictionary);
 

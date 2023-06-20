@@ -12,7 +12,7 @@ public sealed class AudioMessage : Message, ICloneable
     {
         var ret = new AudioMessage
         {
-            MessageHeader = (MessageHeader)MessageHeader.Clone()
+            MessageHeader = (MessageHeader)this.MessageHeader.Clone()
         };
         ret.MessageHeader.MessageStreamId = null;
         ret.Data = Data;
@@ -23,7 +23,7 @@ public sealed class AudioMessage : Message, ICloneable
     {
         // TODO: optimize performance
         var data = new byte[context.ReadBuffer.Length];
-        context.ReadBuffer.Span.Slice(0, (int)MessageHeader.MessageLength).CopyTo(data);
+        context.ReadBuffer.Span.Slice(0, (int)this.MessageHeader.MessageLength).CopyTo(data);
         Data = data;
     }
 

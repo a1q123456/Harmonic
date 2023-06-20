@@ -16,16 +16,16 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3;
 public class Amf3Reader
 {
     private delegate bool ReaderHandler<T>(Span<byte> buffer, out T value, out int consumed);
-    private delegate bool ReaderHandler(Span<byte> buffer, out object value, out int consumed);
+    private delegate bool ReaderHandler(Span<byte> buffer, out object? value, out int consumed);
 
-    private readonly List<object> _objectReferenceTable = new();
-    private readonly List<string> _stringReferenceTable = new();
-    private readonly List<Amf3ClassTraits> _objectTraitsReferenceTable = new();
+    private readonly List<object?> _objectReferenceTable = new();
+    private readonly List<string?> _stringReferenceTable = new();
+    private readonly List<Amf3ClassTraits?> _objectTraitsReferenceTable = new();
     private readonly Dictionary<Amf3Type, ReaderHandler> _readerHandlers = new();
-    private readonly Dictionary<string, TypeRegisterState> _registeredTypedObejectStates = new();
+    private readonly Dictionary<string?, TypeRegisterState> _registeredTypedObejectStates = new();
     private readonly List<Type> _registeredTypes = new();
-    private readonly Dictionary<string, Type> _registeredExternalizable = new();
-    private readonly IReadOnlyList<Amf3Type> _supportedTypes = null;
+    private readonly Dictionary<string?, Type> _registeredExternalizable = new();
+    private readonly IReadOnlyList<Amf3Type> _supportedTypes;
     private readonly MemoryPool<byte> _memoryPool = MemoryPool<byte>.Shared;
 
     public IReadOnlyList<Type> RegisteredTypes { get => _registeredTypes; }
@@ -102,7 +102,7 @@ public class Amf3Reader
         };
     }
 
-    internal void RegisterTypedObject(string mappedName, TypeRegisterState state)
+    internal void RegisterTypedObject(string? mappedName, TypeRegisterState state)
     {
         _registeredTypedObejectStates.Add(mappedName, state);
     }
@@ -117,7 +117,7 @@ public class Amf3Reader
         {
             throw new InvalidOperationException("Field name cannot be empty or null");
         }
-        string mapedName = null;
+        string? mapedName = null;
         var attr = type.GetCustomAttribute<TypedObjectAttribute>();
         if (attr != null)
         {
@@ -137,7 +137,7 @@ public class Amf3Reader
     public void RegisterExternalizable<T>() where T : IExternalizable, new()
     {
         var type = typeof(T);
-        string mapedName = null;
+        string? mapedName = null;
         var attr = type.GetCustomAttribute<TypedObjectAttribute>();
         if (attr != null)
         {
@@ -308,17 +308,13 @@ public class Amf3Reader
                 break;
         }
 
-        using (var mem = _memoryPool.Rent(sizeof(uint)))
-        {
-            var buffer = mem.Memory.Span;
-            buffer.Clear();
-            dataBuffer.Slice(0, bytesNeed).CopyTo(buffer.Slice(sizeof(uint) - bytesNeed));
-            value = NetworkBitConverter.ToUInt32(buffer);
-            consumed = bytesNeed;
-            return true;
-        }
-
-
+        using var mem = _memoryPool.Rent(sizeof(uint));
+        var buffer = mem.Memory.Span;
+        buffer.Clear();
+        dataBuffer.Slice(0, bytesNeed).CopyTo(buffer.Slice(sizeof(uint) - bytesNeed));
+        value = NetworkBitConverter.ToUInt32(buffer);
+        consumed = bytesNeed;
+        return true;
     }
 
     public bool TryGetDouble(Span<byte> buffer, out double value, out int consumed)
@@ -334,7 +330,7 @@ public class Amf3Reader
         consumed = Amf3CommonValues.MARKER_LENGTH + sizeof(double);
         return true;
     }
-    public bool TryGetString(Span<byte> buffer, out string value, out int consumed)
+    public bool TryGetString(Span<byte> buffer, out string? value, out int consumed)
     {
         value = default;
         consumed = default;
@@ -350,7 +346,7 @@ public class Amf3Reader
         return true;
     }
 
-    private bool TryGetStringImpl<T>(Span<byte> objectBuffer, List<T> referenceTable, out string value, out int consumed) where T : class
+    private bool TryGetStringImpl<T>(Span<byte> objectBuffer, List<T?> referenceTable, out string? value, out int consumed) where T : class
     {
         value = default;
         consumed = default;
@@ -358,7 +354,7 @@ public class Amf3Reader
         {
             return false;
         }
-        if (!TryGetReference(header, _stringReferenceTable, out var headerData, out string refValue, out var isRef))
+        if (!TryGetReference(header, _stringReferenceTable, out var headerData, out string? refValue, out var isRef))
         {
             return false;
         }
@@ -436,7 +432,7 @@ public class Amf3Reader
         return true;
     }
 
-    public bool TryGetArray(Span<byte> buffer, out Amf3Array value, out int consumed)
+    public bool TryGetArray(Span<byte> buffer, out Amf3Array? value, out int consumed)
     {
         value = default;
         consumed = default;
@@ -450,7 +446,7 @@ public class Amf3Reader
             return false;
         }
 
-        if (!TryGetReference(header, _objectReferenceTable, out var headerData, out Amf3Array refValue, out var isRef))
+        if (!TryGetReference(header, _objectReferenceTable, out var headerData, out Amf3Array? refValue, out var isRef))
         {
             return false;
         }
@@ -511,7 +507,7 @@ public class Amf3Reader
         return true;
     }
 
-    public bool TryGetObject(Span<byte> buffer, out object value, out int consumed)
+    public bool TryGetObject(Span<byte> buffer, out object? value, out int consumed)
     {
         value = default;
         consumed = 0;
@@ -520,13 +516,13 @@ public class Amf3Reader
             return false;
         }
         consumed = Amf3CommonValues.MARKER_LENGTH;
-        if (!TryGetU29Impl(buffer.Slice(Amf3CommonValues.MARKER_LENGTH), out var header, out var headerLength))
+        if (!TryGetU29Impl(buffer[Amf3CommonValues.MARKER_LENGTH..], out var header, out var headerLength))
         {
             return false;
         }
         consumed += headerLength;
 
-        if (!TryGetReference(header, _objectReferenceTable, out var headerData, out object refValue, out var isRef))
+        if (!TryGetReference(header, _objectReferenceTable, out var headerData, out object? refValue, out var isRef))
         {
             return false;
         }
@@ -536,7 +532,7 @@ public class Amf3Reader
             value = refValue;
             return true;
         }
-        Amf3ClassTraits traits = null;
+        Amf3ClassTraits? traits = null;
         if ((header & 0x02) == 0x00)
         {
             var referenceIndex = (int)((header >> 2) & 0x3FFFFFFF);
@@ -618,7 +614,7 @@ public class Amf3Reader
             _objectTraitsReferenceTable.Add(traits);
         }
 
-        object deserailziedObject = null;
+        object? deserailziedObject = null;
         var valueBuffer = buffer.Slice(consumed);
         if (traits.ClassType == Amf3ClassType.Typed)
         {
@@ -720,7 +716,7 @@ public class Amf3Reader
         return true;
     }
 
-    public bool TryGetByteArray(Span<byte> buffer, out byte[] value, out int consumed)
+    public bool TryGetByteArray(Span<byte> buffer, out byte[]? value, out int consumed)
     {
         value = default;
         consumed = default;
@@ -736,7 +732,7 @@ public class Amf3Reader
             return false;
         }
 
-        if (!TryGetReference(header, _objectReferenceTable, out var headerData, out byte[] refValue, out var isRef))
+        if (!TryGetReference(header, _objectReferenceTable, out var headerData, out byte[]? refValue, out var isRef))
         {
             return false;
         }
@@ -761,7 +757,7 @@ public class Amf3Reader
         return true;
     }
 
-    public bool TryGetValue(Span<byte> buffer, out object value, out int consumed)
+    public bool TryGetValue(Span<byte> buffer, out object? value, out int consumed)
     {
         value = default;
         consumed = default;
@@ -783,7 +779,7 @@ public class Amf3Reader
         return true;
     }
 
-    public bool TryGetVectorInt(Span<byte> buffer, out Vector<int> value, out int consumed)
+    public bool TryGetVectorInt(Span<byte> buffer, out Vector<int>? value, out int consumed)
     {
         value = default;
         consumed = Amf3CommonValues.MARKER_LENGTH;
@@ -816,7 +812,7 @@ public class Amf3Reader
         return true;
     }
 
-    public bool TryGetVectorUint(Span<byte> buffer, out Vector<uint> value, out int consumed)
+    public bool TryGetVectorUint(Span<byte> buffer, out Vector<uint>? value, out int consumed)
     {
         value = default;
         consumed = Amf3CommonValues.MARKER_LENGTH;
@@ -850,7 +846,7 @@ public class Amf3Reader
         return true;
     }
 
-    public bool TryGetVectorDouble(Span<byte> buffer, out Vector<double> value, out int consumed)
+    public bool TryGetVectorDouble(Span<byte> buffer, out Vector<double>? value, out int consumed)
     {
         value = default;
         consumed = default;
@@ -884,7 +880,7 @@ public class Amf3Reader
         return true;
     }
 
-    private bool TryGetIntVectorData(ref Span<byte> buffer, Vector<int> vector, ref int consumed)
+    private bool TryGetIntVectorData(ref Span<byte> buffer, Vector<int>? vector, ref int consumed)
     {
         var value = NetworkBitConverter.ToInt32(buffer);
         vector.Add(value);
@@ -894,7 +890,7 @@ public class Amf3Reader
 
     }
 
-    private bool TryGetUIntVectorData(ref Span<byte> buffer, Vector<uint> vector, ref int consumed)
+    private bool TryGetUIntVectorData(ref Span<byte> buffer, Vector<uint>? vector, ref int consumed)
     {
         var value = NetworkBitConverter.ToUInt32(buffer);
         vector.Add(value);
@@ -903,7 +899,7 @@ public class Amf3Reader
         return true;
     }
 
-    private bool TryGetDoubleVectorData(ref Span<byte> buffer, Vector<double> vector, ref int consumed)
+    private bool TryGetDoubleVectorData(ref Span<byte> buffer, Vector<double>? vector, ref int consumed)
     {
         var value = NetworkBitConverter.ToDouble(buffer);
         vector.Add(value);
@@ -913,7 +909,7 @@ public class Amf3Reader
 
     }
 
-    private bool TryGetReference<T, TTableEle>(uint header, List<TTableEle> referenceTable, out uint headerData, out T value, out bool isRef)
+    private bool TryGetReference<T, TTableEle>(uint header, List<TTableEle?> referenceTable, out uint headerData, out T? value, out bool isRef)
     {
         isRef = default;
         value = default;
@@ -940,7 +936,7 @@ public class Amf3Reader
         return true;
     }
 
-    private bool ReadVectorHeader<T>(ref Span<byte> buffer, ref T value, ref int consumed, out int itemCount, out bool isFixedSize, out bool isRef)
+    private bool ReadVectorHeader<T>(ref Span<byte> buffer, ref T? value, ref int consumed, out int itemCount, out bool isFixedSize, out bool isRef)
     {
         isFixedSize = default;
         itemCount = default;
@@ -950,7 +946,7 @@ public class Amf3Reader
             return false;
         }
 
-        if (!TryGetReference(header, _objectReferenceTable, out var headerData, out T refValue, out isRef))
+        if (!TryGetReference(header, _objectReferenceTable, out var headerData, out T? refValue, out isRef))
         {
             return false;
         }
@@ -977,7 +973,7 @@ public class Amf3Reader
         return true;
     }
 
-    private bool ReadVectorTypeName(ref Span<byte> typeNameBuffer, out string typeName, out int typeNameConsumed)
+    private bool ReadVectorTypeName(ref Span<byte> typeNameBuffer, out string? typeName, out int typeNameConsumed)
     {
         typeName = default;
         typeNameConsumed = default;
@@ -989,7 +985,7 @@ public class Amf3Reader
         return true;
     }
 
-    public bool TryGetVectorObject(Span<byte> buffer, out object value, out int consumed)
+    public bool TryGetVectorObject(Span<byte> buffer, out object? value, out int consumed)
     {
         value = default;
         consumed = default;
@@ -1021,9 +1017,9 @@ public class Amf3Reader
 
         var arrayBodyBuffer = buffer;
 
-        object resultVector = null;
+        object? resultVector = null;
         Type elementType = null;
-        Action<object> addAction = null;
+        Action<object>? addAction = null;
         if (typeName == "*")
         {
             elementType = typeof(object);
@@ -1064,7 +1060,7 @@ public class Amf3Reader
         return true;
     }
 
-    public bool TryGetDictionary(Span<byte> buffer, out Amf3Dictionary<object, object> value, out int consumed)
+    public bool TryGetDictionary(Span<byte> buffer, out Amf3Dictionary<object?, object> value, out int consumed)
     {
         value = default;
         consumed = default;
@@ -1078,7 +1074,7 @@ public class Amf3Reader
             return false;
         }
 
-        if (!TryGetReference(header, _objectReferenceTable, out var headerData, out Amf3Dictionary<object, object> refValue, out var isRef))
+        if (!TryGetReference(header, _objectReferenceTable, out var headerData, out Amf3Dictionary<object?, object> refValue, out var isRef))
         {
             return false;
         }
@@ -1098,7 +1094,7 @@ public class Amf3Reader
         var weakKeys = buffer[Amf3CommonValues.MARKER_LENGTH + headerLength] == 0x01;
 
         var dictBuffer = buffer.Slice(Amf3CommonValues.MARKER_LENGTH + headerLength + /* weak key flag */ sizeof(byte));
-        var dict = new Amf3Dictionary<object, object>()
+        var dict = new Amf3Dictionary<object?, object>()
         {
             WeakKeys = weakKeys
         };

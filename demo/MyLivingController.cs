@@ -10,7 +10,7 @@ class MyLivingController : LivingController
     [RpcMethod("createStream")]
     public new uint CreateStream()
     {
-        var stream = RtmpSession.CreateNetStream<MyLivingStream>();
+        var stream = this.RtmpSession.CreateNetStream<MyLivingStream>();
         return stream.MessageStream.MessageStreamId;
     }
 }

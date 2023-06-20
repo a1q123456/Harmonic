@@ -4,11 +4,11 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3;
 
 public class Amf3Array
 {
-    public Dictionary<string, object> SparsePart { get; set; } = new();
-    public List<object> DensePart { get; set; } = new();
+    public Dictionary<string?, object> SparsePart { get; set; } = new();
+    public List<object?> DensePart { get; set; } = new();
 
         
-    public object this[string key]
+    public object this[string? key]
     {
         get
         {
@@ -20,7 +20,7 @@ public class Amf3Array
         }
     }
 
-    public object this[int index]
+    public object? this[int index]
     {
         get
         {

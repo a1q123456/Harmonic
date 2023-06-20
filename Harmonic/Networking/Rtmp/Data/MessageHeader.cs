@@ -11,6 +11,6 @@ public class MessageHeader: ICloneable
 
     public object Clone()
     {
-        return MemberwiseClone();
+        return this.MemberwiseClone();
     }
 }

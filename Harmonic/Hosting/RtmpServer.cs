@@ -16,7 +16,7 @@ public class RtmpServer
     private WebSocketServer? _webSocketServer;
     private readonly WebSocketOptions? _webSocketOptions;
 
-    public bool Started { get; private set; } = false;
+    public bool Started { get; private set; }
 
     internal RtmpServer(RtmpServerOptions options, WebSocketOptions? webSocketOptions)
     {
@@ -112,7 +112,7 @@ public class RtmpServer
         client.NoDelay = true;
         // Signal the main thread to continue.
         _allDone.Set();
-        IOPipeLine pipe = new IOPipeLine(client, _options);
+        IoPipeLine pipe = new IoPipeLine(client, _options);
         try
         {
             await pipe.StartAsync(ct);

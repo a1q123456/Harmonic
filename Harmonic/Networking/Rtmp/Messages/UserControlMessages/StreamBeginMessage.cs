@@ -8,7 +8,7 @@ namespace Harmonic.Networking.Rtmp.Messages.UserControlMessages;
 [UserControlMessage(Type = UserControlEventType.StreamBegin)]
 public class StreamBeginMessage : UserControlMessage
 {
-    public uint StreamID { get; set; }
+    public uint StreamId { get; set; }
 
     public StreamBeginMessage()
     {
@@ -21,23 +21,23 @@ public class StreamBeginMessage : UserControlMessage
         var eventType = (UserControlEventType)NetworkBitConverter.ToUInt16(span);
         span = span.Slice(sizeof(ushort));
         Contract.Assert(eventType == UserControlEventType.StreamIsRecorded);
-        StreamID = NetworkBitConverter.ToUInt32(span);
+        StreamId = NetworkBitConverter.ToUInt32(span);
     }
 
     public override void Serialize(SerializationContext context)
     {
         var length = sizeof(ushort) + sizeof(uint);
-        var buffer = _arrayPool.Rent(length);
+        var buffer = this._arrayPool.Rent(length);
         try
         {
             var span = buffer.AsSpan();
             NetworkBitConverter.TryGetBytes((ushort)UserControlEventType.StreamBegin, span);
             span = span.Slice(sizeof(ushort));
-            NetworkBitConverter.TryGetBytes(StreamID, span);
+            NetworkBitConverter.TryGetBytes(StreamId, span);
         }
         finally
         {
-            _arrayPool.Return(buffer);
+            this._arrayPool.Return(buffer);
         }
         context.WriteBuffer.WriteToBuffer(buffer.AsSpan(0, length));
     }

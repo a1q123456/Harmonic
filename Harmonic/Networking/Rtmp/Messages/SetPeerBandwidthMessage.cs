@@ -30,7 +30,7 @@ public class SetPeerBandwidthMessage : ControlMessage
 
     public override void Serialize(SerializationContext context)
     {
-        var buffer = _arrayPool.Rent(sizeof(uint) + sizeof(byte));
+        var buffer = this._arrayPool.Rent(sizeof(uint) + sizeof(byte));
         try
         {
             NetworkBitConverter.TryGetBytes(WindowSize, buffer);
@@ -39,7 +39,7 @@ public class SetPeerBandwidthMessage : ControlMessage
         }
         finally
         {
-            _arrayPool.Return(buffer);
+            this._arrayPool.Return(buffer);
         }
     }
 }

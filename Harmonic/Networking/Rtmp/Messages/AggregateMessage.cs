@@ -44,7 +44,7 @@ internal class AggregateMessage : Message
         var offset = consumed;
         consumed += (int)header.MessageLength;
 
-        header.Timestamp += MessageHeader.Timestamp;
+        header.Timestamp += this.MessageHeader.Timestamp;
 
         return new MessageData()
         {
@@ -67,7 +67,7 @@ internal class AggregateMessage : Message
     public override void Serialize(SerializationContext context)
     {
         int bytesNeed = (int)(Messages.Count * 11 + Messages.Sum(m => m.DataLength));
-        var buffer = _arrayPool.Rent(bytesNeed);
+        var buffer = this._arrayPool.Rent(bytesNeed);
         try
         {
             var span = buffer.AsSpan(0, bytesNeed);
@@ -80,7 +80,7 @@ internal class AggregateMessage : Message
                 span = span.Slice(3);
                 NetworkBitConverter.TryGetBytes(message.Header.Timestamp, span);
                 span = span.Slice(4);
-                NetworkBitConverter.TryGetUInt24Bytes((uint)MessageHeader.MessageStreamId, span);
+                NetworkBitConverter.TryGetUInt24Bytes((uint)this.MessageHeader.MessageStreamId, span);
                 span = span.Slice(3);
                 MessageBuffer.AsSpan(consumed, (int)message.Header.MessageLength).CopyTo(span);
                 consumed += (int)message.Header.MessageLength;
@@ -90,7 +90,7 @@ internal class AggregateMessage : Message
         }
         finally
         {
-            _arrayPool.Return(buffer);
+            this._arrayPool.Return(buffer);
         }
     }
 }

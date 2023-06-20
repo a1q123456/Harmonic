@@ -8,7 +8,7 @@ namespace Harmonic.Networking.Rtmp.Messages.UserControlMessages;
 [UserControlMessage(Type = UserControlEventType.SetBufferLength)]
 public class SetBufferLengthMessage : UserControlMessage
 {
-    public uint StreamID { get; set; }
+    public uint StreamId { get; set; }
     public uint BufferMilliseconds { get; set; }
 
     public SetBufferLengthMessage()
@@ -22,7 +22,7 @@ public class SetBufferLengthMessage : UserControlMessage
         var eventType = (UserControlEventType)NetworkBitConverter.ToUInt16(span);
         span = span.Slice(sizeof(ushort));
         Contract.Assert(eventType == UserControlEventType.StreamIsRecorded);
-        StreamID = NetworkBitConverter.ToUInt32(span);
+        StreamId = NetworkBitConverter.ToUInt32(span);
         span = span.Slice(sizeof(uint));
         BufferMilliseconds = NetworkBitConverter.ToUInt32(span);
     }
@@ -30,19 +30,19 @@ public class SetBufferLengthMessage : UserControlMessage
     public override void Serialize(SerializationContext context)
     {
         var length = sizeof(ushort) + sizeof(uint) + sizeof(uint);
-        var buffer = _arrayPool.Rent(length);
+        var buffer = this._arrayPool.Rent(length);
         try
         {
             var span = buffer.AsSpan();
             NetworkBitConverter.TryGetBytes((ushort)UserControlEventType.StreamBegin, span);
             span = span.Slice(sizeof(ushort));
-            NetworkBitConverter.TryGetBytes(StreamID, span);
+            NetworkBitConverter.TryGetBytes(StreamId, span);
             span = span.Slice(sizeof(uint));
             NetworkBitConverter.TryGetBytes(BufferMilliseconds, span);
         }
         finally
         {
-            _arrayPool.Return(buffer);
+            this._arrayPool.Return(buffer);
         }
         context.WriteBuffer.WriteToBuffer(buffer.AsSpan(0, length));
     }

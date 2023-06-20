@@ -11,13 +11,13 @@ namespace Harmonic.Networking.Rtmp;
 
 public class NetConnection : IDisposable
 {
-    private readonly RtmpSession _rtmpSession = null;
-    private readonly RtmpChunkStream _rtmpChunkStream = null;
+    private readonly RtmpSession _rtmpSession;
+    private readonly RtmpChunkStream _rtmpChunkStream;
     private readonly Dictionary<uint, RtmpController> _netStreams = new();
-    private readonly RtmpControlMessageStream _controlMessageStream = null;
+    private readonly RtmpControlMessageStream _controlMessageStream;
     public IReadOnlyDictionary<uint, RtmpController> NetStreams { get => _netStreams; }
     private RtmpController _controller;
-    private bool _connected = false;
+    private bool _connected;
     private readonly object _streamsLock = new();
 
     private RtmpController Controller
@@ -73,7 +73,7 @@ public class NetConnection : IDisposable
     public void Connect(CommandMessage command)
     {
         var commandObj = command.CommandObject;
-        _rtmpSession.ConnectionInformation = new Networking.ConnectionInformation();
+        _rtmpSession.ConnectionInformation = new ConnectionInformation();
         var props = _rtmpSession.ConnectionInformation.GetType().GetProperties();
         foreach (var prop in props)
         {
@@ -92,7 +92,7 @@ public class NetConnection : IDisposable
         }
         if (_rtmpSession.FindController(_rtmpSession.ConnectionInformation.App, out var controllerType))
         {
-            Controller = _rtmpSession.IOPipeline.Options.ServerLifetime.Resolve(controllerType) as RtmpController;
+            Controller = _rtmpSession.IoPipeline.Options.ServerLifetime.Resolve(controllerType) as RtmpController;
         }
         else
         {
@@ -115,7 +115,7 @@ public class NetConnection : IDisposable
         };
         msg.ReturnValue = param;
         msg.IsSuccess = true;
-        msg.TranscationID = command.TranscationID;
+        msg.TranscationId = command.TranscationId;
         _rtmpSession.ControlMessageStream.SendMessageAsync(_rtmpChunkStream, msg);
     }
 
@@ -151,11 +151,11 @@ public class NetConnection : IDisposable
 
 
     #region IDisposable Support
-    private bool disposedValue = false;
+    private bool _disposedValue;
 
     protected virtual void Dispose(bool disposing)
     {
-        if (!disposedValue)
+        if (!_disposedValue)
         {
             if (disposing)
             {
@@ -174,7 +174,7 @@ public class NetConnection : IDisposable
                 _rtmpChunkStream.Dispose();
             }
 
-            disposedValue = true;
+            _disposedValue = true;
         }
     }
 

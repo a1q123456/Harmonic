@@ -19,24 +19,24 @@ namespace Harmonic.Networking.Rtmp;
 class ChunkStreamContext : IDisposable
 {
     private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
-    internal ChunkHeader _processingChunk = null;
-    internal int ReadMinimumBufferSize { get => (ReadChunkSize + TYPE0_SIZE) * 4; }
+    internal ChunkHeader _processingChunk;
+    internal int ReadMinimumBufferSize { get => (ReadChunkSize + _type0_size) * 4; }
     internal Dictionary<uint, MessageHeader> _previousWriteMessageHeader = new();
     internal Dictionary<uint, MessageHeader> _previousReadMessageHeader = new();
     internal Dictionary<uint, MessageReadingState> _incompleteMessageState = new();
-    internal uint? ReadWindowAcknowledgementSize { get; set; } = null;
-    internal uint? WriteWindowAcknowledgementSize { get; set; } = null;
+    internal uint? ReadWindowAcknowledgementSize { get; set; }
+    internal uint? WriteWindowAcknowledgementSize { get; set; }
     internal int ReadChunkSize { get; set; } = 128;
-    internal long ReadUnAcknowledgedSize = 0;
-    internal long WriteUnAcknowledgedSize = 0;
+    internal long _readUnAcknowledgedSize = 0;
+    internal long _writeUnAcknowledgedSize;
 
     internal uint _writeChunkSize = 128;
-    internal readonly int EXTENDED_TIMESTAMP_LENGTH = 4;
-    internal readonly int TYPE0_SIZE = 11;
-    internal readonly int TYPE1_SIZE = 7;
-    internal readonly int TYPE2_SIZE = 3;
+    internal readonly int _extended_timestamp_length = 4;
+    internal readonly int _type0_size = 11;
+    internal readonly int _type1_size = 7;
+    internal readonly int _type2_size = 3;
 
-    internal RtmpSession _rtmpSession = null;
+    internal RtmpSession _rtmpSession;
 
     internal Amf0Reader _amf0Reader = new();
     internal Amf0Writer _amf0Writer = new();
@@ -44,11 +44,11 @@ class ChunkStreamContext : IDisposable
     internal Amf3Writer _amf3Writer = new();
 
 
-    private readonly IOPipeLine _ioPipeline = null;
+    private readonly IoPipeLine _ioPipeline;
     private readonly SemaphoreSlim _sync = new(1);
     internal LimitType? PreviousLimitType { get; set; } = null;
 
-    public ChunkStreamContext(IOPipeLine stream)
+    public ChunkStreamContext(IoPipeLine stream)
     {
         _rtmpSession = new RtmpSession(stream);
         _ioPipeline = stream;
@@ -131,11 +131,11 @@ class ChunkStreamContext : IDisposable
 
                     while (offset != (headerLength + bodySize))
                     {
-                        if (WriteWindowAcknowledgementSize.HasValue && Interlocked.Read(ref WriteUnAcknowledgedSize) + headerLength + bodySize > WriteWindowAcknowledgementSize.Value)
+                        if (WriteWindowAcknowledgementSize.HasValue && Interlocked.Read(ref _writeUnAcknowledgedSize) + headerLength + bodySize > WriteWindowAcknowledgementSize.Value)
                         {
                             currentSendSize = Math.Min(WriteWindowAcknowledgementSize.Value, currentSendSize);
                             //var delayCount = 0;
-                            while (currentSendSize + Interlocked.Read(ref WriteUnAcknowledgedSize) >= WriteWindowAcknowledgementSize.Value)
+                            while (currentSendSize + Interlocked.Read(ref _writeUnAcknowledgedSize) >= WriteWindowAcknowledgementSize.Value)
                             {
                                 await Task.Delay(1);
                             }
@@ -146,7 +146,7 @@ class ChunkStreamContext : IDisposable
 
                         if (WriteWindowAcknowledgementSize.HasValue)
                         {
-                            Interlocked.Add(ref WriteUnAcknowledgedSize, currentSendSize);
+                            Interlocked.Add(ref _writeUnAcknowledgedSize, currentSendSize);
                         }
                             
                         if (isLastChunk)
@@ -196,29 +196,29 @@ class ChunkStreamContext : IDisposable
         switch (chunkHeaderType)
         {
             case ChunkHeaderType.Type0:
-                buffer = _arrayPool.Rent(TYPE0_SIZE + EXTENDED_TIMESTAMP_LENGTH);
+                buffer = _arrayPool.Rent(_type0_size + _extended_timestamp_length);
                 NetworkBitConverter.TryGetUInt24Bytes(timestamp >= 0xFFFFFF ? 0xFFFFFF : timestamp, buffer.AsSpan(0, 3));
                 NetworkBitConverter.TryGetUInt24Bytes(header.MessageLength, buffer.AsSpan(3, 3));
                 NetworkBitConverter.TryGetBytes((byte)header.MessageType, buffer.AsSpan(6, 1));
                 NetworkBitConverter.TryGetBytes(header.MessageStreamId.Value, buffer.AsSpan(7, 4), true);
-                length = TYPE0_SIZE;
+                length = _type0_size;
                 break;
             case ChunkHeaderType.Type1:
-                buffer = _arrayPool.Rent(TYPE1_SIZE + EXTENDED_TIMESTAMP_LENGTH);
+                buffer = _arrayPool.Rent(_type1_size + _extended_timestamp_length);
                 timestamp = timestamp - prevHeader.Timestamp;
                 NetworkBitConverter.TryGetUInt24Bytes(timestamp >= 0xFFFFFF ? 0xFFFFFF : timestamp, buffer.AsSpan(0, 3));
                 NetworkBitConverter.TryGetUInt24Bytes(header.MessageLength, buffer.AsSpan(3, 3));
                 NetworkBitConverter.TryGetBytes((byte)header.MessageType, buffer.AsSpan(6, 1));
-                length = TYPE1_SIZE;
+                length = _type1_size;
                 break;
             case ChunkHeaderType.Type2:
-                buffer = _arrayPool.Rent(TYPE2_SIZE + EXTENDED_TIMESTAMP_LENGTH);
+                buffer = _arrayPool.Rent(_type2_size + _extended_timestamp_length);
                 timestamp = timestamp - prevHeader.Timestamp;
                 NetworkBitConverter.TryGetUInt24Bytes(timestamp >= 0xFFFFFF ? 0xFFFFFF : timestamp, buffer.AsSpan(0, 3));
-                length = TYPE2_SIZE;
+                length = _type2_size;
                 break;
             case ChunkHeaderType.Type3:
-                buffer = _arrayPool.Rent(EXTENDED_TIMESTAMP_LENGTH);
+                buffer = _arrayPool.Rent(_extended_timestamp_length);
                 length = 0;
                 break;
             default:
@@ -226,8 +226,8 @@ class ChunkStreamContext : IDisposable
         }
         if (timestamp >= 0xFFFFFF)
         {
-            NetworkBitConverter.TryGetBytes(timestamp, buffer.AsSpan(length, EXTENDED_TIMESTAMP_LENGTH));
-            length += EXTENDED_TIMESTAMP_LENGTH;
+            NetworkBitConverter.TryGetBytes(timestamp, buffer.AsSpan(length, _extended_timestamp_length));
+            length += _extended_timestamp_length;
         }
     }
 
@@ -374,13 +374,13 @@ class ChunkStreamContext : IDisposable
         switch (_processingChunk.ChunkBasicHeader.RtmpChunkHeaderType)
         {
             case ChunkHeaderType.Type0:
-                bytesNeed += TYPE0_SIZE;
+                bytesNeed += _type0_size;
                 break;
             case ChunkHeaderType.Type1:
-                bytesNeed += TYPE1_SIZE;
+                bytesNeed += _type1_size;
                 break;
             case ChunkHeaderType.Type2:
-                bytesNeed += TYPE2_SIZE;
+                bytesNeed += _type2_size;
                 break;
         }
 
@@ -410,26 +410,26 @@ class ChunkStreamContext : IDisposable
         switch (header.ChunkBasicHeader.RtmpChunkHeaderType)
         {
             case ChunkHeaderType.Type0:
-                arr = _arrayPool.Rent(TYPE0_SIZE);
-                buffer.Slice(consumed, TYPE0_SIZE).CopyTo(arr);
-                consumed += TYPE0_SIZE;
+                arr = _arrayPool.Rent(_type0_size);
+                buffer.Slice(consumed, _type0_size).CopyTo(arr);
+                consumed += _type0_size;
                 header.MessageHeader.Timestamp = NetworkBitConverter.ToUInt24(arr.AsSpan(0, 3));
                 header.MessageHeader.MessageLength = NetworkBitConverter.ToUInt24(arr.AsSpan(3, 3));
                 header.MessageHeader.MessageType = (MessageType)arr[6];
                 header.MessageHeader.MessageStreamId = NetworkBitConverter.ToUInt32(arr.AsSpan(7, 4), true);
                 break;
             case ChunkHeaderType.Type1:
-                arr = _arrayPool.Rent(TYPE1_SIZE);
-                buffer.Slice(consumed, TYPE1_SIZE).CopyTo(arr);
-                consumed += TYPE1_SIZE;
+                arr = _arrayPool.Rent(_type1_size);
+                buffer.Slice(consumed, _type1_size).CopyTo(arr);
+                consumed += _type1_size;
                 header.MessageHeader.Timestamp = NetworkBitConverter.ToUInt24(arr.AsSpan(0, 3));
                 header.MessageHeader.MessageLength = NetworkBitConverter.ToUInt24(arr.AsSpan(3, 3));
                 header.MessageHeader.MessageType = (MessageType)arr[6];
                 break;
             case ChunkHeaderType.Type2:
-                arr = _arrayPool.Rent(TYPE2_SIZE);
-                buffer.Slice(consumed, TYPE2_SIZE).CopyTo(arr);
-                consumed += TYPE2_SIZE;
+                arr = _arrayPool.Rent(_type2_size);
+                buffer.Slice(consumed, _type2_size).CopyTo(arr);
+                consumed += _type2_size;
                 header.MessageHeader.Timestamp = NetworkBitConverter.ToUInt24(arr.AsSpan(0, 3));
                 break;
         }
@@ -472,9 +472,9 @@ class ChunkStreamContext : IDisposable
         {
             state = new MessageReadingState()
             {
-                CurrentIndex = 0,
-                MessageLength = header.MessageHeader.MessageLength,
-                Body = _arrayPool.Rent((int)header.MessageHeader.MessageLength)
+                _currentIndex = 0,
+                _messageLength = header.MessageHeader.MessageLength,
+                _body = _arrayPool.Rent((int)header.MessageHeader.MessageLength)
             };
             _incompleteMessageState.Add(header.ChunkBasicHeader.ChunkStreamId, state);
         }
@@ -497,9 +497,9 @@ class ChunkStreamContext : IDisposable
         _previousReadMessageHeader[_processingChunk.ChunkBasicHeader.ChunkStreamId] = (MessageHeader)_processingChunk.MessageHeader.Clone();
         _processingChunk = null;
 
-        buffer.Slice(consumed, bytesNeed).CopyTo(state.Body.AsSpan(state.CurrentIndex));
+        buffer.Slice(consumed, bytesNeed).CopyTo(state._body.AsSpan(state._currentIndex));
         consumed += bytesNeed;
-        state.CurrentIndex += bytesNeed;
+        state._currentIndex += bytesNeed;
 
         if (state.IsCompleted)
         {
@@ -512,7 +512,7 @@ class ChunkStreamContext : IDisposable
                     Amf0Writer = _amf0Writer,
                     Amf3Reader = _amf3Reader,
                     Amf3Writer = _amf3Writer,
-                    ReadBuffer = state.Body.AsMemory(0, (int)state.MessageLength)
+                    ReadBuffer = state._body.AsMemory(0, (int)state._messageLength)
                 };
                 if (header.MessageHeader.MessageType == MessageType.AggregateMessage)
                 {
@@ -573,7 +573,7 @@ class ChunkStreamContext : IDisposable
             }
             finally
             {
-                _arrayPool.Return(state.Body);
+                _arrayPool.Return(state._body);
             }
         }
         _ioPipeline.NextProcessState = ProcessState.FirstByteBasicHeader;

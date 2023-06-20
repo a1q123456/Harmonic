@@ -8,17 +8,17 @@ namespace Harmonic.Networking.Rtmp.Messages;
 [RtmpMessage(MessageType.Amf0Data, MessageType.Amf3Data)]
 public class DataMessage : Message
 {
-    public List<object> Data { get; set; }
+    public List<object?> Data { get; set; }
     public DataMessage(AmfEncodingVersion encoding) : base()
     {
-        MessageHeader.MessageType = encoding == AmfEncodingVersion.Amf0 ? MessageType.Amf0Data : MessageType.Amf3Data;
+        this.MessageHeader.MessageType = encoding == AmfEncodingVersion.Amf0 ? MessageType.Amf0Data : MessageType.Amf3Data;
     }
 
     public override void Deserialize(SerializationContext context)
     {
-        Data = new List<object>();
+        Data = new List<object?>();
         var span = context.ReadBuffer.Span;
-        if (MessageHeader.MessageType == MessageType.Amf0Data)
+        if (this.MessageHeader.MessageType == MessageType.Amf0Data)
         {
             while (span.Length != 0)
             {
@@ -48,7 +48,7 @@ public class DataMessage : Message
 
     public override void Serialize(SerializationContext context)
     {
-        if (MessageHeader.MessageType == MessageType.Amf0Data)
+        if (this.MessageHeader.MessageType == MessageType.Amf0Data)
         {
             var sc = new Amf.Serialization.Amf0.SerializationContext(context.WriteBuffer);
             foreach (var data in Data)

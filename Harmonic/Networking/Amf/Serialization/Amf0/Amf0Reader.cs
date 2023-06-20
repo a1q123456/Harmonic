@@ -14,7 +14,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0;
 
 public class Amf0Reader
 {
-    public readonly IReadOnlyDictionary<Amf0Type, long> TypeLengthMap = new Dictionary<Amf0Type, long>()
+    public readonly IReadOnlyDictionary<Amf0Type, long> _typeLengthMap = new Dictionary<Amf0Type, long>()
     {
         { Amf0Type.Number, 8 },
         { Amf0Type.Boolean, sizeof(byte) },
@@ -35,13 +35,13 @@ public class Amf0Reader
     };
 
     private delegate bool ReadDataHandler<T>(Span<byte> buffer, out T data, out int consumedLength);
-    private delegate bool ReadDataHandler(Span<byte> buffer, out object data, out int consumedLength);
+    private delegate bool ReadDataHandler(Span<byte> buffer, out object? data, out int consumedLength);
 
     private readonly List<Type> _registeredTypes = new();
     public IReadOnlyList<Type> RegisteredTypes { get; }
     private readonly IReadOnlyDictionary<Amf0Type, ReadDataHandler> _readDataHandlers;
-    private readonly Dictionary<string, TypeRegisterState> _registeredTypeStates = new();
-    private readonly List<object> _referenceTable = new();
+    private readonly Dictionary<string?, TypeRegisterState> _registeredTypeStates = new();
+    private readonly List<object?> _referenceTable = new();
     private readonly Amf3.Amf3Reader _amf3Reader = new();
     public bool StrictMode { get; set; } = true;
 
@@ -82,7 +82,7 @@ public class Amf0Reader
         {
             throw new InvalidOperationException("Field name cannot be empty or null");
         }
-        string mapedName = null;
+        string? mapedName = null;
         var attr = type.GetCustomAttribute<TypedObjectAttribute>();
         if (attr != null)
         {
@@ -114,11 +114,11 @@ public class Amf0Reader
         };
     }
 
-    private bool TryReadHeader(Span<byte> buffer, out KeyValuePair<string, object> header, out int consumed)
+    private bool TryReadHeader(Span<byte> buffer, out KeyValuePair<string?, object> header, out int consumed)
     {
         header = default;
         consumed = 0;
-        if (!TryGetStringImpl(buffer, Amf0.Amf0CommonValues.STRING_HEADER_LENGTH, out var headerName, out var nameConsumed))
+        if (!TryGetStringImpl(buffer, Amf0CommonValues.STRING_HEADER_LENGTH, out var headerName, out var nameConsumed))
         {
             return false;
         }
@@ -140,7 +140,7 @@ public class Amf0Reader
         {
             return false;
         }
-        header = new KeyValuePair<string, object>(headerName, headerValue);
+        header = new KeyValuePair<string?, object>(headerName, headerValue);
         consumed = nameConsumed + 1 + sizeof(uint) + valueConsumed;
         return true;
     }
@@ -190,7 +190,7 @@ public class Amf0Reader
         return true;
     }
 
-    public bool TryGetPacket(Span<byte> buffer, out List<KeyValuePair<string, object>> headers, out List<Message> messages, out int consumed)
+    public bool TryGetPacket(Span<byte> buffer, out List<KeyValuePair<string?, object>> headers, out List<Message> messages, out int consumed)
     {
         headers = default;
         messages = default;
@@ -206,7 +206,7 @@ public class Amf0Reader
         var headerCount = NetworkBitConverter.ToUInt16(buffer);
         buffer = buffer.Slice(sizeof(ushort));
         consumed += sizeof(ushort);
-        headers = new List<KeyValuePair<string, object>>();
+        headers = new List<KeyValuePair<string?, object>>();
         messages = new List<Message>();
         for (int i = 0; i < headerCount; i++)
         {
@@ -244,7 +244,7 @@ public class Amf0Reader
         }
 
         var marker = (Amf0Type)buffer[0];
-        if (!TypeLengthMap.TryGetValue(marker, out var bytesNeed))
+        if (!_typeLengthMap.TryGetValue(marker, out var bytesNeed))
         {
             return false;
         }
@@ -295,7 +295,7 @@ public class Amf0Reader
         bytesConsumed = length;
         return true;
     }
-    public bool TryGetString(Span<byte> buffer, out string value, out int bytesConsumed)
+    public bool TryGetString(Span<byte> buffer, out string? value, out int bytesConsumed)
     {
         value = default;
         bytesConsumed = default;
@@ -320,11 +320,11 @@ public class Amf0Reader
         return true;
     }
 
-    private bool TryGetObjectImpl(Span<byte> objectBuffer, out Dictionary<string, object> value, out int bytesConsumed)
+    private bool TryGetObjectImpl(Span<byte> objectBuffer, out Dictionary<string?, object> value, out int bytesConsumed)
     {
         value = default;
         bytesConsumed = default;
-        var obj = new Dictionary<string, object>();
+        var obj = new Dictionary<string?, object>();
         _referenceTable.Add(obj);
         var consumed = 0;
         while (true)
@@ -354,7 +354,7 @@ public class Amf0Reader
         return true;
     }
 
-    public bool TryGetObject(Span<byte> buffer, out AmfObject value, out int bytesConsumed)
+    public bool TryGetObject(Span<byte> buffer, out AmfObject? value, out int bytesConsumed)
     {
         value = default;
         bytesConsumed = default;
@@ -429,7 +429,7 @@ public class Amf0Reader
         return true;
     }
 
-    private bool TryGetReference(Span<byte> buffer, out object value, out int consumedLength)
+    private bool TryGetReference(Span<byte> buffer, out object? value, out int consumedLength)
     {
         var index = 0;
         value = default;
@@ -454,7 +454,7 @@ public class Amf0Reader
         return true;
     }
 
-    private bool TryGetKeyValuePair(Span<byte> buffer, out KeyValuePair<string, object> value, out bool kvEnd, out int consumed)
+    private bool TryGetKeyValuePair(Span<byte> buffer, out KeyValuePair<string?, object> value, out bool kvEnd, out int consumed)
     {
         value = default;
         kvEnd = default;
@@ -476,13 +476,13 @@ public class Amf0Reader
             return false;
         }
         consumed += valueLength;
-        value = new KeyValuePair<string, object>(key, element);
+        value = new KeyValuePair<string?, object>(key, element);
         kvEnd = !key.Any() && elementType == Amf0Type.ObjectEnd;
 
         return true;
     }
 
-    public bool TryGetEcmaArray(Span<byte> buffer, out Dictionary<string, object> value, out int consumedLength)
+    public bool TryGetEcmaArray(Span<byte> buffer, out Dictionary<string?, object> value, out int consumedLength)
     {
         value = default;
         consumedLength = default;
@@ -498,7 +498,7 @@ public class Amf0Reader
             return false;
         }
 
-        var obj = new Dictionary<string, object>();
+        var obj = new Dictionary<string?, object>();
         _referenceTable.Add(obj);
 
         var elementCount = NetworkBitConverter.ToUInt32(buffer.Slice(Amf0CommonValues.MARKER_LENGTH, sizeof(uint)));
@@ -561,7 +561,7 @@ public class Amf0Reader
         return true;
     }
 
-    public bool TryGetStrictArray(Span<byte> buffer, out List<object> array, out int consumedLength)
+    public bool TryGetStrictArray(Span<byte> buffer, out List<object?> array, out int consumedLength)
     {
         array = default;
         consumedLength = default;
@@ -576,7 +576,7 @@ public class Amf0Reader
             return false;
         }
 
-        var obj = new List<object>();
+        var obj = new List<object?>();
         _referenceTable.Add(obj);
 
         var elementCount = NetworkBitConverter.ToUInt32(buffer.Slice(Amf0CommonValues.MARKER_LENGTH, sizeof(uint)));
@@ -627,7 +627,7 @@ public class Amf0Reader
         return true;
     }
 
-    public bool TryGetLongString(Span<byte> buffer, out string value, out int consumedLength)
+    public bool TryGetLongString(Span<byte> buffer, out string? value, out int consumedLength)
     {
         value = default;
         consumedLength = default;
@@ -652,7 +652,7 @@ public class Amf0Reader
         return true;
     }
 
-    internal bool TryGetStringImpl(Span<byte> buffer, int lengthOfLengthField, out string value, out int consumedLength)
+    internal bool TryGetStringImpl(Span<byte> buffer, int lengthOfLengthField, out string? value, out int consumedLength)
     {
         value = default;
         consumedLength = default;
@@ -778,7 +778,7 @@ public class Amf0Reader
         return true;
     }
 
-    public bool TryGetAvmPlusObject(Span<byte> buffer, out object value, out int consumed)
+    public bool TryGetAvmPlusObject(Span<byte> buffer, out object? value, out int consumed)
     {
         value = default;
         consumed = default;
@@ -804,7 +804,7 @@ public class Amf0Reader
         return true;
     }
 
-    public bool TryGetValue(Span<byte> objectBuffer, out Amf0Type objectType, out object data, out int valueLength)
+    public bool TryGetValue(Span<byte> objectBuffer, out Amf0Type objectType, out object? data, out int valueLength)
     {
         data = default;
         valueLength = default;

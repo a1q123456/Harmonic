@@ -42,18 +42,16 @@ public static class NetworkBitConverter
     }
     public static uint ToUInt24(ReadOnlySpan<byte> buffer, bool littleEndian = false)
     {
-        using (var owner = _memoryPool.Rent(4))
+        using var owner = _memoryPool.Rent(4);
+        var memory = owner.Memory.Slice(0, 4);
+        memory.Span.Clear();
+        buffer.CopyTo(memory.Span.Slice(1));
+        if (!littleEndian)
         {
-            var memory = owner.Memory.Slice(0, 4);
-            memory.Span.Clear();
-            buffer.CopyTo(memory.Span.Slice(1));
-            if (!littleEndian)
-            {
-                memory.Span.Reverse();
-            }
-
-            return BitConverter.ToUInt32(memory.Span);
+            memory.Span.Reverse();
         }
+
+        return BitConverter.ToUInt32(memory.Span);
     }
     public static double ToDouble(Span<byte> buffer, bool littleEndian = false)
     {
@@ -70,21 +68,20 @@ public static class NetworkBitConverter
         {
             return false;
         }
-        using (var owner = _memoryPool.Rent(4))
+
+        using var owner = _memoryPool.Rent(4);
+        if (!BitConverter.TryWriteBytes(owner.Memory.Span, value))
         {
-            if (!BitConverter.TryWriteBytes(owner.Memory.Span, value))
-            {
-                return false;
-            }
-
-            var valueSpan = owner.Memory.Span.Slice(0, 3);
-
-            if (!littleEndian)
-            {
-                valueSpan.Reverse();
-            }
-            valueSpan.CopyTo(buffer);
+            return false;
         }
+
+        var valueSpan = owner.Memory.Span.Slice(0, 3);
+
+        if (!littleEndian)
+        {
+            valueSpan.Reverse();
+        }
+        valueSpan.CopyTo(buffer);
         return true;
     }
     public static bool TryGetBytes(int value, Span<byte> buffer, bool littleEndian = false)

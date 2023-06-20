@@ -27,7 +27,7 @@ public class PingResponseMessage : UserControlMessage
     public override void Serialize(SerializationContext context)
     {
         var length = sizeof(ushort) + sizeof(uint);
-        var buffer = _arrayPool.Rent(length);
+        var buffer = this._arrayPool.Rent(length);
         try
         {
             var span = buffer.AsSpan();
@@ -37,7 +37,7 @@ public class PingResponseMessage : UserControlMessage
         }
         finally
         {
-            _arrayPool.Return(buffer);
+            this._arrayPool.Return(buffer);
         }
         context.WriteBuffer.WriteToBuffer(buffer.AsSpan(0, length));
     }

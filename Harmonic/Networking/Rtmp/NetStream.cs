@@ -13,18 +13,18 @@ public abstract class NetStream : RtmpController, IDisposable
     }
 
     #region IDisposable Support
-    private bool disposedValue = false;
+    private bool _disposedValue;
 
     protected virtual void Dispose(bool disposing)
     {
-        if (!disposedValue)
+        if (!_disposedValue)
         {
             if (disposing)
             {
-                MessageStream.RtmpSession.NetConnection.MessageStreamDestroying(this);
+                this.MessageStream.RtmpSession.NetConnection.MessageStreamDestroying(this);
             }
 
-            disposedValue = true;
+            _disposedValue = true;
         }
     }
 

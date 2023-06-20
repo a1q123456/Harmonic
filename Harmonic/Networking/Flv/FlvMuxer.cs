@@ -39,7 +39,7 @@ public class FlvMuxer
         if (data.MessageHeader.MessageLength == 0)
         {
             var messageBuffer = new ByteBuffer();
-            var context = new Networking.Rtmp.Serialization.SerializationContext()
+            var context = new Rtmp.Serialization.SerializationContext()
             {
                 Amf0Writer = _amf0Writer,
                 Amf3Writer = _amf3Writer,
@@ -73,7 +73,7 @@ public class FlvMuxer
             dataBuffer.WriteToBuffer(buffer.AsSpan(0, 1));
             buffer.AsSpan().Clear();
             dataBuffer.WriteToBuffer(buffer.AsSpan(0, 3));
-            var context = new Networking.Rtmp.Serialization.SerializationContext()
+            var context = new Rtmp.Serialization.SerializationContext()
             {
                 Amf0Writer = _amf0Writer,
                 Amf3Writer = _amf3Writer,

@@ -9,5 +9,5 @@ public class FromCommandObjectAttribute : Attribute
     {
         Key = key;
     }
-    public string Key { get; set; } = null;
+    public string Key { get; set; }
 }

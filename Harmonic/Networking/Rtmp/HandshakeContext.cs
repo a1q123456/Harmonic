@@ -7,14 +7,14 @@ namespace Harmonic.Networking.Rtmp;
 
 sealed class HandshakeContext : IDisposable
 {
-    private uint _readerTimestampEpoch = 0;
-    private uint _writerTimestampEpoch = 0;
+    private uint _readerTimestampEpoch;
+    private uint _writerTimestampEpoch;
     private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
     private readonly Random _random = new();
-    private byte[] _s1Data = null;
-    private readonly IOPipeLine _ioPipeline = null;
+    private byte[] _s1Data;
+    private readonly IoPipeLine _ioPipeline;
 
-    public HandshakeContext(IOPipeLine ioPipeline)
+    public HandshakeContext(IoPipeLine ioPipeline)
     {
         _ioPipeline = ioPipeline;
         _ioPipeline._bufferProcessors.Add(ProcessState.HandshakeC0C1, ProcessHandshakeC0C1);

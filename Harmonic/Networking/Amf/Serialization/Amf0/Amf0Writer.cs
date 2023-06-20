@@ -15,8 +15,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0;
 public class Amf0Writer
 {
     private delegate void GetBytesHandler<T>(T value, SerializationContext context);
-    private delegate void GetBytesHandler(object value, SerializationContext context);
-    private readonly IReadOnlyDictionary<Type, GetBytesHandler> _getBytesHandlers = null;
+    private delegate void GetBytesHandler(object? value, SerializationContext context);
+    private readonly IReadOnlyDictionary<Type, GetBytesHandler> _getBytesHandlers;
     private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
 
     public Amf0Writer()
@@ -64,7 +64,7 @@ public class Amf0Writer
         context.Buffer.WriteToBuffer((byte)Amf0Type.AvmPlusObject);
     }
 
-    private void WriteStringBytesImpl(string str, SerializationContext context, out bool isLongString, bool marker = false, bool forceLongString = false)
+    private void WriteStringBytesImpl(string? str, SerializationContext context, out bool isLongString, bool marker = false, bool forceLongString = false)
     {
         var bytesNeed = 0;
         var headerLength = 0;
@@ -118,7 +118,7 @@ public class Amf0Writer
 
     }
 
-    public void WriteBytes(string str, SerializationContext context)
+    public void WriteBytes(string? str, SerializationContext context)
     {
         var bytesNeed = Amf0CommonValues.MARKER_LENGTH;
 
@@ -225,7 +225,7 @@ public class Amf0Writer
 
     public void WriteBytes(XmlDocument xml, SerializationContext context)
     {
-        string content = null;
+        string? content = null;
         using (var stringWriter = new StringWriter())
         using (var xmlTextWriter = XmlWriter.Create(stringWriter))
         {
@@ -243,7 +243,7 @@ public class Amf0Writer
         context.Buffer.WriteToBuffer((byte)Amf0Type.Null);
     }
 
-    public void WriteValueBytes(object value, SerializationContext context)
+    public void WriteValueBytes(object? value, SerializationContext context)
     {
         var valueType = value != null ? value.GetType() : typeof(object);
         if (!_getBytesHandlers.TryGetValue(valueType, out var handler))
@@ -256,7 +256,7 @@ public class Amf0Writer
     }
 
     // strict array
-    public void WriteBytes(List<object> value, SerializationContext context)
+    public void WriteBytes(List<object?> value, SerializationContext context)
     {
         if (value == null)
         {
@@ -295,7 +295,7 @@ public class Amf0Writer
     }
 
     // ecma array
-    public void WriteBytes(Dictionary<string, object> value, SerializationContext context)
+    public void WriteBytes(Dictionary<string?, object> value, SerializationContext context)
     {
         if (value == null)
         {
@@ -333,7 +333,7 @@ public class Amf0Writer
         WriteObjectEndBytes(context);
     }
 
-    public void WriteTypedBytes(object value, SerializationContext context)
+    public void WriteTypedBytes(object? value, SerializationContext context)
     {
         if (value == null)
         {

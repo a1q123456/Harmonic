@@ -6,10 +6,10 @@ namespace Harmonic.Service;
 
 public class PublisherSessionService
 {
-    private readonly Dictionary<string, LivingStream> _pathMapToSession = new();
-    private readonly Dictionary<LivingStream, string> _sessionMapToPath = new();
+    private readonly Dictionary<string?, LivingStream> _pathMapToSession = new();
+    private readonly Dictionary<LivingStream, string?> _sessionMapToPath = new();
 
-    internal void RegisterPublisher(string publishingName, LivingStream session)
+    internal void RegisterPublisher(string? publishingName, LivingStream session)
     {
         if (_pathMapToSession.ContainsKey(publishingName))
         {
@@ -31,13 +31,9 @@ public class PublisherSessionService
             _pathMapToSession.Remove(publishingName);
         }
     }
-    public LivingStream FindPublisher(string publishingName)
+    public LivingStream? FindPublisher(string? publishingName)
     {
-        if (_pathMapToSession.TryGetValue(publishingName, out var session))
-        {
-            return session;
-        }
-        return null;
+        return _pathMapToSession.TryGetValue(publishingName, out var session) ? session : null;
     }
 
 }
