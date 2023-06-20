@@ -2,10 +2,9 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Networking.Rtmp
+namespace Harmonic.Networking.Rtmp;
+
+[AttributeUsage(AttributeTargets.Parameter)]
+public class CommandObjectAttribute : Attribute
 {
-    [AttributeUsage(AttributeTargets.Parameter)]
-    public class CommandObjectAttribute : Attribute
-    {
-    }
 }

@@ -3,12 +3,11 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Harmonic.Networking.Rtmp
+namespace Harmonic.Networking.Rtmp;
+
+class WriteState
 {
-    class WriteState
-    {
-        public byte[] Buffer;
-        public int Length;
-        public TaskCompletionSource<int> TaskSource = null;
-    }
+    public byte[] Buffer;
+    public int Length;
+    public TaskCompletionSource<int> TaskSource = null;
 }

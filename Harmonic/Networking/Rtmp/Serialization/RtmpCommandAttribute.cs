@@ -2,11 +2,10 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Networking.Rtmp.Serialization
+namespace Harmonic.Networking.Rtmp.Serialization;
+
+[AttributeUsage(AttributeTargets.Class)]
+public class RtmpCommandAttribute : Attribute
 {
-    [AttributeUsage(AttributeTargets.Class)]
-    public class RtmpCommandAttribute : Attribute
-    {
-        public string Name { get; set; }
-    }
+    public string Name { get; set; }
 }

@@ -2,10 +2,9 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Rpc
+namespace Harmonic.Rpc;
+
+[AttributeUsage(AttributeTargets.Parameter)]
+public class FromOptionalArgumentAttribute : Attribute
 {
-    [AttributeUsage(AttributeTargets.Parameter)]
-    public class FromOptionalArgumentAttribute : Attribute
-    {
-    }
 }

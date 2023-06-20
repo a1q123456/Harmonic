@@ -2,20 +2,19 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Networking.Rtmp
+namespace Harmonic.Networking.Rtmp;
+
+class MessageReadingState
 {
-    class MessageReadingState
+    public uint MessageLength;
+    public byte[] Body;
+    public int CurrentIndex;
+    public long RemainBytes
     {
-        public uint MessageLength;
-        public byte[] Body;
-        public int CurrentIndex;
-        public long RemainBytes
-        {
-            get => MessageLength - CurrentIndex;
-        }
-        public bool IsCompleted
-        {
-            get => RemainBytes == 0;
-        }
+        get => MessageLength - CurrentIndex;
+    }
+    public bool IsCompleted
+    {
+        get => RemainBytes == 0;
     }
 }

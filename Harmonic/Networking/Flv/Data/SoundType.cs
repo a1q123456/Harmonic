@@ -2,11 +2,10 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Networking.Flv.Data
+namespace Harmonic.Networking.Flv.Data;
+
+public enum SoundType
 {
-    public enum SoundType
-    {
-        SndMono,
-        SndStereo
-    }
+    SndMono,
+    SndStereo
 }

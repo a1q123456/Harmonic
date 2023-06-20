@@ -3,11 +3,10 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Networking.Rtmp.Messages
+namespace Harmonic.Networking.Rtmp.Messages;
+
+public abstract class ControlMessage : Message
 {
-    public abstract class ControlMessage : Message
-    {
-        internal ControlMessage() : base()
-        { }
-    }
+    internal ControlMessage() : base()
+    { }
 }

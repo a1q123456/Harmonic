@@ -1,14 +1,13 @@
 using System;
 
-namespace Harmonic.Rpc
+namespace Harmonic.Rpc;
+
+[AttributeUsage(AttributeTargets.Parameter)]
+public class FromCommandObjectAttribute : Attribute
 {
-    [AttributeUsage(AttributeTargets.Parameter)]
-    public class FromCommandObjectAttribute : Attribute
+    public FromCommandObjectAttribute(string key = null)
     {
-        public FromCommandObjectAttribute(string key = null)
-        {
-            Key = key;
-        }
-        public string Key { get; set; } = null;
+        Key = key;
     }
+    public string Key { get; set; } = null;
 }

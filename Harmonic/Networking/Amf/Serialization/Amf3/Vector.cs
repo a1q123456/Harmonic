@@ -3,45 +3,44 @@ using System.Collections.Generic;
 using System.Text;
 using System.Linq;
 
-namespace Harmonic.Networking.Amf.Serialization.Amf3
+namespace Harmonic.Networking.Amf.Serialization.Amf3;
+
+public class Vector<T> : List<T>, IEquatable<List<T>>
 {
-    public class Vector<T> : List<T>, IEquatable<List<T>>
+    private List<T> _data = new List<T>();
+    public bool IsFixedSize { get; set; } = false;
+
+    public new void Add(T item)
     {
-        private List<T> _data = new List<T>();
-        public bool IsFixedSize { get; set; } = false;
-
-        public new void Add(T item)
+        if (IsFixedSize)
         {
-            if (IsFixedSize)
-            {
-                throw new NotSupportedException();
-            }
-            ((List<T>)this).Add(item);
+            throw new NotSupportedException();
         }
+        ((List<T>)this).Add(item);
+    }
 
-        public override bool Equals(object obj)
+    public override bool Equals(object obj)
+    {
+        if (obj is Vector<T> en)
         {
-            if (obj is Vector<T> en)
-            {
-                return IsFixedSize == en.IsFixedSize && en.SequenceEqual(this);
-            }
-            return base.Equals(obj);
+            return IsFixedSize == en.IsFixedSize && en.SequenceEqual(this);
         }
+        return base.Equals(obj);
+    }
 
-        public bool Equals(List<T> other)
-        {
-            return other.SequenceEqual(this);
-        }
+    public bool Equals(List<T> other)
+    {
+        return other.SequenceEqual(this);
+    }
 
-        public override int GetHashCode()
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        foreach (var d in _data)
         {
-            var hash = new HashCode();
-            foreach (var d in _data)
-            {
-                hash.Add(d);
-            }
-            hash.Add(IsFixedSize);
-            return hash.ToHashCode();
+            hash.Add(d);
         }
+        hash.Add(IsFixedSize);
+        return hash.ToHashCode();
     }
 }

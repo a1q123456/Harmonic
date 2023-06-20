@@ -2,11 +2,10 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Networking.Amf.Common
+namespace Harmonic.Networking.Amf.Common;
+
+class TypeRegisterState
 {
-    class TypeRegisterState
-    {
-        public Type Type { get; set; }
-        public Dictionary<string, Action<object, object>> Members { get; set; }
-    }
+    public Type Type { get; set; }
+    public Dictionary<string, Action<object, object>> Members { get; set; }
 }

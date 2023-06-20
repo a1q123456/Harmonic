@@ -4,16 +4,15 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Networking.Rtmp.Messages.Commands
-{
-    [RtmpCommand(Name = "seek")]
-    public class SeekCommandMessage : CommandMessage
-    {
-        [OptionalArgument]
-        public double MilliSeconds { get; set; }
+namespace Harmonic.Networking.Rtmp.Messages.Commands;
 
-        public SeekCommandMessage(AmfEncodingVersion encoding) : base(encoding)
-        {
-        }
+[RtmpCommand(Name = "seek")]
+public class SeekCommandMessage : CommandMessage
+{
+    [OptionalArgument]
+    public double MilliSeconds { get; set; }
+
+    public SeekCommandMessage(AmfEncodingVersion encoding) : base(encoding)
+    {
     }
 }

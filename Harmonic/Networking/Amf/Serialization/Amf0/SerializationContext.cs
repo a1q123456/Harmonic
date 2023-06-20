@@ -3,40 +3,39 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Networking.Amf.Serialization.Amf0
+namespace Harmonic.Networking.Amf.Serialization.Amf0;
+
+public class SerializationContext : IDisposable
 {
-    public class SerializationContext : IDisposable
+    public ByteBuffer Buffer { get; private set; }
+    public List<object> ReferenceTable { get; set; } = new List<object>();
+
+    public int MessageLength => Buffer.Length;
+
+    private bool _disposeBuffer = true;
+
+    public SerializationContext()
     {
-        public ByteBuffer Buffer { get; private set; }
-        public List<object> ReferenceTable { get; set; } = new List<object>();
+        Buffer = new ByteBuffer();
+    }
 
-        public int MessageLength => Buffer.Length;
+    public SerializationContext(ByteBuffer buffer)
+    {
+        Buffer = buffer;
+        _disposeBuffer = false;
+    }
 
-        private bool _disposeBuffer = true;
+    public void GetMessage(Span<byte> buffer)
+    {
+        ReferenceTable.Clear();
+        Buffer.TakeOutMemory(buffer);
+    }
 
-        public SerializationContext()
+    public void Dispose()
+    {
+        if (_disposeBuffer)
         {
-            Buffer = new ByteBuffer();
-        }
-
-        public SerializationContext(ByteBuffer buffer)
-        {
-            Buffer = buffer;
-            _disposeBuffer = false;
-        }
-
-        public void GetMessage(Span<byte> buffer)
-        {
-            ReferenceTable.Clear();
-            Buffer.TakeOutMemory(buffer);
-        }
-
-        public void Dispose()
-        {
-            if (_disposeBuffer)
-            {
-                ((IDisposable)Buffer).Dispose();
-            }
+            ((IDisposable)Buffer).Dispose();
         }
     }
 }

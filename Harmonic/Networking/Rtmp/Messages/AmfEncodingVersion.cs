@@ -2,11 +2,10 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Networking.Rtmp.Messages
+namespace Harmonic.Networking.Rtmp.Messages;
+
+public enum AmfEncodingVersion
 {
-    public enum AmfEncodingVersion
-    {
-        Amf0,
-        Amf3
-    }
+    Amf0,
+    Amf3
 }

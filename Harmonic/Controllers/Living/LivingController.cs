@@ -4,15 +4,14 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Controllers.Living
+namespace Harmonic.Controllers.Living;
+
+public class LivingController : RtmpController
 {
-    public class LivingController : RtmpController
+    [RpcMethod("createStream")]
+    public uint CreateStream()
     {
-        [RpcMethod("createStream")]
-        public uint CreateStream()
-        {
-            var stream = RtmpSession.CreateNetStream<LivingStream>();
-            return stream.MessageStream.MessageStreamId;
-        }
+        var stream = RtmpSession.CreateNetStream<LivingStream>();
+        return stream.MessageStream.MessageStreamId;
     }
 }

@@ -2,13 +2,12 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Harmonic.Networking.Flv.Data
+namespace Harmonic.Networking.Flv.Data;
+
+public enum SoundRate
 {
-    public enum SoundRate
-    {
-        Hz5Dot5,
-        Hz11,
-        Hz22,
-        Hz44
-    }
+    Hz5Dot5,
+    Hz11,
+    Hz22,
+    Hz44
 }

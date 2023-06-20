@@ -6,66 +6,65 @@ using System.Collections.Generic;
 using System.Net;
 using System.Text;
 
-namespace Harmonic.Networking.Rtmp.Messages
+namespace Harmonic.Networking.Rtmp.Messages;
+
+[RtmpMessage(MessageType.Amf0Data, MessageType.Amf3Data)]
+public class DataMessage : Message
 {
-    [RtmpMessage(MessageType.Amf0Data, MessageType.Amf3Data)]
-    public class DataMessage : Message
+    public List<object> Data { get; set; }
+    public DataMessage(AmfEncodingVersion encoding) : base()
     {
-        public List<object> Data { get; set; }
-        public DataMessage(AmfEncodingVersion encoding) : base()
-        {
-            MessageHeader.MessageType = encoding == AmfEncodingVersion.Amf0 ? MessageType.Amf0Data : MessageType.Amf3Data;
-        }
+        MessageHeader.MessageType = encoding == AmfEncodingVersion.Amf0 ? MessageType.Amf0Data : MessageType.Amf3Data;
+    }
 
-        public override void Deserialize(SerializationContext context)
+    public override void Deserialize(SerializationContext context)
+    {
+        Data = new List<object>();
+        var span = context.ReadBuffer.Span;
+        if (MessageHeader.MessageType == MessageType.Amf0Data)
         {
-            Data = new List<object>();
-            var span = context.ReadBuffer.Span;
-            if (MessageHeader.MessageType == MessageType.Amf0Data)
+            while (span.Length != 0)
             {
-                while (span.Length != 0)
+                if (!context.Amf0Reader.TryGetValue(span, out _, out var data, out var consumed))
                 {
-                    if (!context.Amf0Reader.TryGetValue(span, out _, out var data, out var consumed))
-                    {
-                        throw new ProtocolViolationException();
-                    }
-                    Data.Add(data);
-                    span = span.Slice(consumed);
+                    throw new ProtocolViolationException();
                 }
-
-            }
-            else
-            {
-                while (span.Length != 0)
-                {
-                    if (!context.Amf3Reader.TryGetValue(span, out var data, out var consumed))
-                    {
-                        throw new ProtocolViolationException();
-                    }
-                    Data.Add(data);
-                    span = span.Slice(consumed);
-                }
+                Data.Add(data);
+                span = span.Slice(consumed);
             }
 
         }
-
-        public override void Serialize(SerializationContext context)
+        else
         {
-            if (MessageHeader.MessageType == MessageType.Amf0Data)
+            while (span.Length != 0)
             {
-                var sc = new Amf.Serialization.Amf0.SerializationContext(context.WriteBuffer);
-                foreach (var data in Data)
+                if (!context.Amf3Reader.TryGetValue(span, out var data, out var consumed))
                 {
-                    context.Amf0Writer.WriteValueBytes(data, sc);
+                    throw new ProtocolViolationException();
                 }
+                Data.Add(data);
+                span = span.Slice(consumed);
             }
-            else
+        }
+
+    }
+
+    public override void Serialize(SerializationContext context)
+    {
+        if (MessageHeader.MessageType == MessageType.Amf0Data)
+        {
+            var sc = new Amf.Serialization.Amf0.SerializationContext(context.WriteBuffer);
+            foreach (var data in Data)
             {
-                var sc = new Amf.Serialization.Amf3.SerializationContext(context.WriteBuffer);
-                foreach (var data in Data)
-                {
-                    context.Amf3Writer.WriteValueBytes(data, sc);
-                }
+                context.Amf0Writer.WriteValueBytes(data, sc);
+            }
+        }
+        else
+        {
+            var sc = new Amf.Serialization.Amf3.SerializationContext(context.WriteBuffer);
+            foreach (var data in Data)
+            {
+                context.Amf3Writer.WriteValueBytes(data, sc);
             }
         }
     }
