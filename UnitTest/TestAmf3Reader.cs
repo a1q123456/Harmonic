@@ -26,7 +26,7 @@ public class TestCls : IDynamicObject, IEquatable<TestCls>
     [ClassField]
     public Vector<int> t4 { get; set; }
 
-    private Dictionary<string, object> _dynamicFields = new Dictionary<string, object>();
+    private Dictionary<string, object> _dynamicFields = new();
 
     public IReadOnlyDictionary<string, object> DynamicFields => _dynamicFields;
 
@@ -76,7 +76,7 @@ public class iexternalizable : IExternalizable
 [TypedObject(Name = "flex.messaging.messages.RemotingMessage")]
 public class RemotingMessage : IDynamicObject
 {
-    private Dictionary<string, object> _dynamicFields = new Dictionary<string, object>();
+    private Dictionary<string, object> _dynamicFields = new();
 
     [ClassField(Name = "body")]
     public object Body { get; set; }

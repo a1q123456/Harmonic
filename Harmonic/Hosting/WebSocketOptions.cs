@@ -11,9 +11,9 @@ namespace Harmonic.Hosting;
 public class WebSocketOptions
 {
     public IPEndPoint BindEndPoint { get; set; }
-    public Regex UrlMapping { get; set; } = new Regex(@"/(?<controller>[a-zA-Z0-9]+)/(?<streamName>[a-zA-Z0-9\.]+)", RegexOptions.IgnoreCase);
+    public Regex UrlMapping { get; set; } = new(@"/(?<controller>[a-zA-Z0-9]+)/(?<streamName>[a-zA-Z0-9\.]+)", RegexOptions.IgnoreCase);
 
-    internal Dictionary<string, Type> _controllers = new Dictionary<string, Type>();
+    internal Dictionary<string, Type> _controllers = new();
 
     internal RtmpServerOptions _serverOptions = null;
 

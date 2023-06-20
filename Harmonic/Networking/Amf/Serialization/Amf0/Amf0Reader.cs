@@ -38,12 +38,12 @@ public class Amf0Reader
     private delegate bool ReadDataHandler<T>(Span<byte> buffer, out T data, out int consumedLength);
     private delegate bool ReadDataHandler(Span<byte> buffer, out object data, out int consumedLength);
 
-    private List<Type> _registeredTypes = new List<Type>();
+    private List<Type> _registeredTypes = new();
     public IReadOnlyList<Type> RegisteredTypes { get; }
     private IReadOnlyDictionary<Amf0Type, ReadDataHandler> _readDataHandlers;
-    private Dictionary<string, TypeRegisterState> _registeredTypeStates = new Dictionary<string, TypeRegisterState>();
-    private List<object> _referenceTable = new List<object>();
-    private Amf3.Amf3Reader _amf3Reader = new Amf3.Amf3Reader();
+    private Dictionary<string, TypeRegisterState> _registeredTypeStates = new();
+    private List<object> _referenceTable = new();
+    private Amf3.Amf3Reader _amf3Reader = new();
     public bool StrictMode { get; set; } = true;
 
     public Amf0Reader()

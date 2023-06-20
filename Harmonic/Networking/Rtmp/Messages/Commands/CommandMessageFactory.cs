@@ -13,7 +13,7 @@ namespace Harmonic.Networking.Rtmp.Messages.UserControlMessages;
 
 public class CommandMessageFactory
 {
-    public Dictionary<string, Type> _messageFactories = new Dictionary<string, Type>();
+    public Dictionary<string, Type> _messageFactories = new();
 
     public CommandMessageFactory()
     {

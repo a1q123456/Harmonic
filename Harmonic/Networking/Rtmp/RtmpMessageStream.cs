@@ -12,9 +12,9 @@ namespace Harmonic.Networking.Rtmp;
 
 public class RtmpMessageStream : IDisposable
 { 
-    public uint MessageStreamId { get; private set; }
+    public uint MessageStreamId { get; }
     internal RtmpSession RtmpSession { get; }
-    private Dictionary<MessageType, Action<Message>> _messageHandlers = new Dictionary<MessageType, Action<Message>>();
+    private Dictionary<MessageType, Action<Message>> _messageHandlers = new();
 
     internal RtmpMessageStream(RtmpSession rtmpSession, uint messageStreamId)
     {

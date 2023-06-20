@@ -310,7 +310,7 @@ public class TestAmf0Writer
         [ClassField]
         public List<object> test6 { get; set; }
 
-        private Dictionary<string, object> _dynamicFields = new Dictionary<string, object>();
+        private Dictionary<string, object> _dynamicFields = new();
 
         public IReadOnlyDictionary<string, object> DynamicFields => _dynamicFields;
 

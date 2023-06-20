@@ -7,8 +7,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0;
 
 public class SerializationContext : IDisposable
 {
-    public ByteBuffer Buffer { get; private set; }
-    public List<object> ReferenceTable { get; set; } = new List<object>();
+    public ByteBuffer Buffer { get; }
+    public List<object> ReferenceTable { get; set; } = new();
 
     public int MessageLength => Buffer.Length;
 

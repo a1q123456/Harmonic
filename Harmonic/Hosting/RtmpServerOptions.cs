@@ -20,10 +20,10 @@ namespace Harmonic.Hosting;
 
 public class RtmpServerOptions
 {
-    internal Dictionary<MessageType, MessageFactory> _messageFactories = new Dictionary<MessageType, MessageFactory>();
+    internal Dictionary<MessageType, MessageFactory> _messageFactories = new();
     public IReadOnlyDictionary<MessageType, MessageFactory> MessageFactories => _messageFactories;
     public delegate Message MessageFactory(MessageHeader header, Networking.Rtmp.Serialization.SerializationContext context, out int consumed);
-    private Dictionary<string, Type> _registeredControllers = new Dictionary<string, Type>();
+    private Dictionary<string, Type> _registeredControllers = new();
     internal ContainerBuilder _builder = null;
     private RpcService _rpcService = null;
     internal IStartup _startup = null;
@@ -45,7 +45,7 @@ public class RtmpServerOptions
     internal ILifetimeScope ServerLifetime { get; private set; }
 
     internal IReadOnlyDictionary<string, Type> RegisteredControllers => _registeredControllers;
-    internal IPEndPoint RtmpEndPoint { get; set; } = new IPEndPoint(IPAddress.Any, 1935);
+    internal IPEndPoint RtmpEndPoint { get; set; } = new(IPAddress.Any, 1935);
     internal bool UseUdp { get; set; } = true;
     internal bool UseWebsocket { get; set; } = true;
     internal X509Certificate2 Cert { get; set; }

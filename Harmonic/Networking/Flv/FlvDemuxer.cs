@@ -21,8 +21,8 @@ namespace Harmonic.Networking.Flv;
 
 public class FlvDemuxer
 {
-    private Amf0Reader _amf0Reader = new Amf0Reader();
-    private Amf3Reader _amf3Reader = new Amf3Reader();
+    private Amf0Reader _amf0Reader = new();
+    private Amf3Reader _amf3Reader = new();
     private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
     private Stream _stream = null;
     private IReadOnlyDictionary<MessageType, MessageFactory> _factories = null;

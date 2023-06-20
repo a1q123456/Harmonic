@@ -11,8 +11,8 @@ namespace Harmonic.Networking.Flv;
 
 public class FlvMuxer
 {
-    private Amf0Writer _amf0Writer = new Amf0Writer();
-    private Amf3Writer _amf3Writer = new Amf3Writer();
+    private Amf0Writer _amf0Writer = new();
+    private Amf3Writer _amf3Writer = new();
 
     public byte[] MultiplexFlvHeader(bool hasAudio, bool hasVideo)
     {

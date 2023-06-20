@@ -16,7 +16,7 @@ namespace Harmonic.Hosting;
 public class RtmpServer
 {
     private readonly Socket _listener;
-    private ManualResetEvent _allDone = new ManualResetEvent(false);
+    private ManualResetEvent _allDone = new(false);
     private readonly RtmpServerOptions _options;
     private WebSocketServer _webSocketServer = null;
     private WebSocketOptions _webSocketOptions = null;

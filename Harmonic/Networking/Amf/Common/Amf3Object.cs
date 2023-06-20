@@ -9,9 +9,9 @@ namespace Harmonic.Networking.Amf.Common;
 
 public class AmfObject : IDynamicObject, IEnumerable
 {
-    private Dictionary<string, object> _fields = new Dictionary<string, object>();
+    private Dictionary<string, object> _fields = new();
 
-    private Dictionary<string, object> _dynamicFields = new Dictionary<string, object>();
+    private Dictionary<string, object> _dynamicFields = new();
 
     public bool IsAnonymous { get => GetType() == typeof(AmfObject); }
     public bool IsDynamic { get => _dynamicFields.Any(); }

@@ -19,7 +19,7 @@ internal class MessageData
 [RtmpMessage(MessageType.AggregateMessage)]
 internal class AggregateMessage : Message
 {
-    public List<MessageData> Messages { get; set; } = new List<MessageData>();
+    public List<MessageData> Messages { get; set; } = new();
     public byte[] MessageBuffer { get; set; } = null;
 
     public AggregateMessage() : base()

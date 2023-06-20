@@ -8,8 +8,8 @@ namespace Harmonic.Service;
 
 public class PublisherSessionService
 {
-    private Dictionary<string, LivingStream> _pathMapToSession = new Dictionary<string, LivingStream>();
-    private Dictionary<LivingStream, string> _sessionMapToPath = new Dictionary<LivingStream, string>();
+    private Dictionary<string, LivingStream> _pathMapToSession = new();
+    private Dictionary<LivingStream, string> _sessionMapToPath = new();
 
     internal void RegisterPublisher(string publishingName, LivingStream session)
     {

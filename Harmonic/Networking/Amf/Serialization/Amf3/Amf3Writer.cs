@@ -23,7 +23,7 @@ public class Amf3Writer
 
     private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
 
-    private Dictionary<Type, WriteHandler> _writeHandlers = new Dictionary<Type, WriteHandler>();
+    private Dictionary<Type, WriteHandler> _writeHandlers = new();
 
     public static readonly uint U29MAX = 0x1FFFFFFF;
     private MethodInfo _writeVectorTMethod = null;

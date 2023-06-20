@@ -24,9 +24,9 @@ class ChunkStreamContext : IDisposable
     private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
     internal ChunkHeader _processingChunk = null;
     internal int ReadMinimumBufferSize { get => (ReadChunkSize + TYPE0_SIZE) * 4; }
-    internal Dictionary<uint, MessageHeader> _previousWriteMessageHeader = new Dictionary<uint, MessageHeader>();
-    internal Dictionary<uint, MessageHeader> _previousReadMessageHeader = new Dictionary<uint, MessageHeader>();
-    internal Dictionary<uint, MessageReadingState> _incompleteMessageState = new Dictionary<uint, MessageReadingState>();
+    internal Dictionary<uint, MessageHeader> _previousWriteMessageHeader = new();
+    internal Dictionary<uint, MessageHeader> _previousReadMessageHeader = new();
+    internal Dictionary<uint, MessageReadingState> _incompleteMessageState = new();
     internal uint? ReadWindowAcknowledgementSize { get; set; } = null;
     internal uint? WriteWindowAcknowledgementSize { get; set; } = null;
     internal int ReadChunkSize { get; set; } = 128;
@@ -41,14 +41,14 @@ class ChunkStreamContext : IDisposable
 
     internal RtmpSession _rtmpSession = null;
 
-    internal Amf0Reader _amf0Reader = new Amf0Reader();
-    internal Amf0Writer _amf0Writer = new Amf0Writer();
-    internal Amf3Reader _amf3Reader = new Amf3Reader();
-    internal Amf3Writer _amf3Writer = new Amf3Writer();
+    internal Amf0Reader _amf0Reader = new();
+    internal Amf0Writer _amf0Writer = new();
+    internal Amf3Reader _amf3Reader = new();
+    internal Amf3Writer _amf3Writer = new();
 
 
     private IOPipeLine _ioPipeline = null;
-    private SemaphoreSlim _sync = new SemaphoreSlim(1);
+    private SemaphoreSlim _sync = new(1);
     internal LimitType? PreviousLimitType { get; set; } = null;
 
     public ChunkStreamContext(IOPipeLine stream)

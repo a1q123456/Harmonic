@@ -10,7 +10,7 @@ namespace Harmonic.Networking.Rtmp.Messages.UserControlMessages;
 
 public class UserControlMessageFactory
 {
-    public Dictionary<UserControlEventType, Type> _messageFactories = new Dictionary<UserControlEventType, Type>();
+    public Dictionary<UserControlEventType, Type> _messageFactories = new();
 
     public void RegisterMessage<T>() where T: UserControlMessage, new()
     {

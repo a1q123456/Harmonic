@@ -12,13 +12,13 @@ namespace Harmonic.Buffers;
 
 public class ByteBuffer : IDisposable
 {
-    private List<byte[]> _buffers = new List<byte[]>();
+    private List<byte[]> _buffers = new();
     private int _bufferEnd = 0;
     private int _bufferStart = 0;
     private readonly int _maxiumBufferSize = 0;
     private event Action _memoryUnderLimit;
     private event Action _dataWritten;
-    private object _sync = new object();
+    private object _sync = new();
     private ArrayPool<byte> _arrayPool;
     public int BufferSegmentSize { get; }
     public int Length
@@ -126,7 +126,7 @@ public class ByteBuffer : IDisposable
     {
         private static readonly Action<object> CallbackCompleted = _ => { Debug.Assert(false, "Should not be invoked"); };
 
-        private List<Action> cb = new List<Action>();
+        private List<Action> cb = new();
         private ValueTaskSourceStatus status = ValueTaskSourceStatus.Pending;
         private ExecutionContext executionContext;
         private object scheduler;

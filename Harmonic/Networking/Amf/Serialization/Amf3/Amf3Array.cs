@@ -7,8 +7,8 @@ namespace Harmonic.Networking.Amf.Serialization.Amf3;
 
 public class Amf3Array
 {
-    public Dictionary<string, object> SparsePart { get; set; } = new Dictionary<string, object>();
-    public List<object> DensePart { get; set; } = new List<object>();
+    public Dictionary<string, object> SparsePart { get; set; } = new();
+    public List<object> DensePart { get; set; } = new();
 
         
     public object this[string key]

@@ -19,12 +19,12 @@ public class NetConnection : IDisposable
 {
     private RtmpSession _rtmpSession = null;
     private RtmpChunkStream _rtmpChunkStream = null;
-    private Dictionary<uint, RtmpController> _netStreams = new Dictionary<uint, RtmpController>();
+    private Dictionary<uint, RtmpController> _netStreams = new();
     private RtmpControlMessageStream _controlMessageStream = null;
     public IReadOnlyDictionary<uint, RtmpController> NetStreams { get => _netStreams; }
     private RtmpController _controller;
     private bool _connected = false;
-    private object _streamsLock = new object();
+    private object _streamsLock = new();
 
     private RtmpController Controller
     {

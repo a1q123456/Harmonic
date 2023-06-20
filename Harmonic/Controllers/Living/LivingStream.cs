@@ -16,7 +16,7 @@ namespace Harmonic.Controllers.Living;
 
 public class LivingStream : NetStream
 {
-    private List<Action> _cleanupActions = new List<Action>();
+    private List<Action> _cleanupActions = new();
     private PublishingType _publishingType;
     private PublisherSessionService _publisherSessionService = null;
     public DataMessage FlvMetadata = null;

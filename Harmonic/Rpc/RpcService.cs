@@ -27,12 +27,12 @@ internal class RpcMethod
     public string MethodName;
     public MethodInfo Method;
 
-    public List<RpcParameter> Parameters = new List<RpcParameter>();
+    public List<RpcParameter> Parameters = new();
 }
 
 internal class RpcService
 {
-    public Dictionary<Type, List<RpcMethod>> Controllers = new Dictionary<Type, List<RpcMethod>>();
+    public Dictionary<Type, List<RpcMethod>> Controllers = new();
 
     public void PrepareMethod<T>(T instance, CommandMessage command, out MethodInfo methodInfo, out object[] callArguments) where T: RtmpController
     {

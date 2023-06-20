@@ -18,9 +18,9 @@ public class WebSocketPlayController : WebSocketController, IDisposable
 {
     private RecordService _recordService = null;
     private PublisherSessionService _publisherSessionService = null;
-    private List<Action> _cleanupActions = new List<Action>();
+    private List<Action> _cleanupActions = new();
     private FileStream _recordFile = null;
-    private SemaphoreSlim _playLock = new SemaphoreSlim(1);
+    private SemaphoreSlim _playLock = new(1);
     private int _playing = 0;
     private long _playRangeTo = 0;
 

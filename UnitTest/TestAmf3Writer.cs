@@ -483,7 +483,7 @@ public class TestAmf3Writer
             T3 = "abd",
             t4 = new Vector<int>() { 2000, 30000, 400000 }
         };
-        t.AddDynamic("t5", new Vector<TestCls>() { new TestCls { T1 = 5.6 } });
+        t.AddDynamic("t5", new Vector<TestCls>() { new() { T1 = 5.6 } });
 
         using (var sc = new SerializationContext())
         {
