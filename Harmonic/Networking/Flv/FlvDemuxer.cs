@@ -1,6 +1,4 @@
-﻿using Harmonic.Buffers;
-using Harmonic.Networking;
-using Harmonic.Networking.Amf.Common;
+﻿using Harmonic.Networking.Amf.Common;
 using Harmonic.Networking.Amf.Serialization.Amf0;
 using Harmonic.Networking.Amf.Serialization.Amf3;
 using Harmonic.Networking.Flv.Data;
@@ -11,8 +9,6 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using static Harmonic.Hosting.RtmpServerOptions;

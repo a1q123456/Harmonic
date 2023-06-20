@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Text;
 using System.Xml;
 using System.IO;
-using Harmonic.Buffers;
 using Harmonic.Networking.Utils;
 using Harmonic.Networking.Amf.Data;
 using System.Diagnostics.Contracts;

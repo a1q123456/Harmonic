@@ -14,7 +14,7 @@ public class RtmpServerBuilder
     private X509Certificate2 _cert = null;
     private bool _useWebSocket = false;
     private bool _useSsl = false;
-    private WebSocketOptions _websocketOptions = null;
+    private WebSocketOptions? _websocketOptions = null;
 
     private RtmpServerOptions _options = null;
 

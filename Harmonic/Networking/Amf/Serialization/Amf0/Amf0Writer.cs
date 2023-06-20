@@ -1,5 +1,4 @@
-﻿using Harmonic.Buffers;
-using Harmonic.Networking.Amf.Attributes;
+﻿using Harmonic.Networking.Amf.Attributes;
 using Harmonic.Networking.Amf.Common;
 using Harmonic.Networking.Amf.Serialization.Attributes;
 using Harmonic.Networking.Utils;
@@ -8,9 +7,6 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics.Contracts;
 using System.IO;
-using System.IO.Pipelines;
-using System.Linq;
-using System.Reflection;
 using System.Text;
 using System.Xml;
 

@@ -1,6 +1,5 @@
 ﻿using Autofac;
 using Harmonic.Controllers;
-using Harmonic.Controllers.Living;
 using Harmonic.Networking.Rtmp;
 using Harmonic.Networking.Rtmp.Data;
 using Harmonic.Networking.Rtmp.Messages;
@@ -13,7 +12,6 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Reflection;
-using System.Text;
 using System.Security.Cryptography.X509Certificates;
 
 namespace Harmonic.Hosting;
@@ -48,7 +46,7 @@ public class RtmpServerOptions
     internal IPEndPoint RtmpEndPoint { get; set; } = new(IPAddress.Any, 1935);
     internal bool UseUdp { get; set; } = true;
     internal bool UseWebsocket { get; set; } = true;
-    internal X509Certificate2 Cert { get; set; }
+    internal X509Certificate2? Cert { get; set; }
 
     internal RtmpServerOptions()
     {

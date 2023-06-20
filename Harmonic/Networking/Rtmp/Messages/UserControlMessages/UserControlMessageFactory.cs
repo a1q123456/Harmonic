@@ -4,7 +4,6 @@ using Harmonic.Networking.Utils;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using System.Text;
 
 namespace Harmonic.Networking.Rtmp.Messages.UserControlMessages;
 

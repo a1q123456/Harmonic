@@ -1,19 +1,9 @@
 ﻿using Autofac;
 using Fleck;
-using Harmonic.Buffers;
 using Harmonic.Controllers;
 using Harmonic.Hosting;
-using Harmonic.Networking.Amf.Serialization.Amf0;
-using Harmonic.Networking.Amf.Serialization.Amf3;
-using Harmonic.Networking.Rtmp.Messages;
-using Harmonic.Networking.Rtmp.Serialization;
 using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Text.RegularExpressions;
-using Harmonic.Networking.Utils;
 using Harmonic.Networking.Rtmp.Data;
-using System.Linq;
 using Harmonic.Networking.Flv;
 using System.Threading.Tasks;
 using System.Web;
@@ -23,12 +13,12 @@ namespace Harmonic.Networking.WebSocket;
 public class WebSocketSession
 {
     private IWebSocketConnection _webSocketConnection = null;
-    private WebSocketOptions _options = null;
+    private WebSocketOptions? _options = null;
     private WebSocketController _controller = null;
     private FlvMuxer _flvMuxer = null;
     public RtmpServerOptions Options => _options._serverOptions;
 
-    public WebSocketSession(IWebSocketConnection connection, WebSocketOptions options)
+    public WebSocketSession(IWebSocketConnection connection, WebSocketOptions? options)
     {
         _webSocketConnection = connection;
         _options = options;

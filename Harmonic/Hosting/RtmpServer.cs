@@ -1,11 +1,6 @@
-﻿using Autofac;
-using Harmonic.Networking.Rtmp;
-using Harmonic.Service;
+﻿using Harmonic.Networking.Rtmp;
 using System;
-using System.Collections.Generic;
-using System.Net;
 using System.Net.Sockets;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Fleck;
@@ -16,14 +11,14 @@ namespace Harmonic.Hosting;
 public class RtmpServer
 {
     private readonly Socket _listener;
-    private ManualResetEvent _allDone = new(false);
+    private readonly ManualResetEvent _allDone = new(false);
     private readonly RtmpServerOptions _options;
-    private WebSocketServer _webSocketServer = null;
-    private WebSocketOptions _webSocketOptions = null;
+    private WebSocketServer? _webSocketServer;
+    private readonly WebSocketOptions? _webSocketOptions;
 
     public bool Started { get; private set; } = false;
 
-    internal RtmpServer(RtmpServerOptions options, WebSocketOptions webSocketOptions)
+    internal RtmpServer(RtmpServerOptions options, WebSocketOptions? webSocketOptions)
     {
         _options = options;
         _listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
@@ -33,7 +28,7 @@ public class RtmpServer
         _webSocketOptions = webSocketOptions;
         if (webSocketOptions != null)
         {
-            _webSocketServer = new WebSocketServer($"{(options.Cert == null ? "ws" : "wss")}://{webSocketOptions.BindEndPoint.ToString()}");
+            _webSocketServer = new WebSocketServer($"{(options.Cert is null ? "ws" : "wss")}://{webSocketOptions.BindEndPoint}");
                 
         }
 
@@ -59,7 +54,7 @@ public class RtmpServer
             {
                 reg.Dispose();
                 _webSocketServer.Dispose();
-                _webSocketServer = new WebSocketServer(_webSocketOptions.BindEndPoint.ToString());
+                _webSocketServer = new WebSocketServer(_webSocketOptions?.BindEndPoint.ToString());
             });
         }
         Started = true;
@@ -104,16 +99,27 @@ public class RtmpServer
     }
     private async void AcceptCallback(IAsyncResult ar, CancellationToken ct)
     {
-        Socket listener = (Socket)ar.AsyncState;
-        Socket client = listener.EndAccept(ar);
+        if(ar.AsyncState is Socket listener)
+        {
+            Socket client = listener.EndAccept(ar);
+            await HandleClientAsync(client, ct);    
+        }
+        
+    }
+
+    private async Task HandleClientAsync(Socket client, CancellationToken ct)
+    {
         client.NoDelay = true;
         // Signal the main thread to continue.
         _allDone.Set();
-        IOPipeLine pipe = null;
+        IOPipeLine pipe = new IOPipeLine(client, _options);
         try
         {
-            pipe = new IOPipeLine(client, _options);
             await pipe.StartAsync(ct);
+        }
+        catch (TaskCanceledException)
+        {
+            client.Close();
         }
         catch (TimeoutException)
         {
@@ -121,13 +127,13 @@ public class RtmpServer
         }
         catch (Exception e)
         {
-            Console.WriteLine("{0} Message: {1}", e.GetType().ToString(), e.Message);
+            Console.WriteLine("{0} Message: {1}", e.GetType(), e.Message);
             Console.WriteLine(e.StackTrace);
             client.Close();
         }
         finally
         {
-            pipe?.Dispose();
+            pipe.Dispose();
         }
     }
 }

@@ -1,7 +1,5 @@
 ﻿using Harmonic.Buffers;
 using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Harmonic.Networking.Amf.Data;
 

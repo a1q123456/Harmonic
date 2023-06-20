@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Harmonic.Networking.Rtmp.Data;
+﻿namespace Harmonic.Networking.Rtmp.Data;
 
 public enum ChunkHeaderType : byte
 {

@@ -2,8 +2,6 @@
 using Harmonic.Networking.Amf.Serialization.Amf0;
 using Harmonic.Networking.Amf.Serialization.Amf3;
 using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Harmonic.Networking.Rtmp.Serialization;
 

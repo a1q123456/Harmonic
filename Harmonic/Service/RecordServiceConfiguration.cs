@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Harmonic.Service;
+﻿namespace Harmonic.Service;
 
 public class RecordServiceConfiguration
 {

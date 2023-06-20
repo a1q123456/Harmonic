@@ -1,15 +1,9 @@
-﻿using Harmonic.Buffers;
-using Harmonic.Networking.Amf.Attributes;
-using Harmonic.Networking.Amf.Common;
-using Harmonic.Networking.Amf.Data;
+﻿using Harmonic.Networking.Amf.Common;
 using Harmonic.Networking.Amf.Serialization.Amf3;
 using Harmonic.Networking.Amf.Serialization.Attributes;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Text;
 using System.Xml;
 
 namespace UnitTest;

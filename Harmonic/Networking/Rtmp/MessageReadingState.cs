@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Harmonic.Networking.Rtmp;
+﻿namespace Harmonic.Networking.Rtmp;
 
 class MessageReadingState
 {
