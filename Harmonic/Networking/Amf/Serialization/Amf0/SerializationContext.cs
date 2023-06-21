@@ -32,9 +32,7 @@ public class SerializationContext : IDisposable
 
     public void Dispose()
     {
-        if (_disposeBuffer)
-        {
-            ((IDisposable)Buffer).Dispose();
-        }
+        if (_disposeBuffer) 
+            Buffer.Dispose();
     }
 }

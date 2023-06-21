@@ -184,9 +184,7 @@ public class TestUnlimitedBuffer
         });
         th2.IsBackground = true;
         th2.Start();
-
         Thread.Sleep(TimeSpan.FromSeconds(30));
-
     }
 
     [TestMethod]

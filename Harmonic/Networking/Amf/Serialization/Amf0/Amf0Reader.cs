@@ -14,7 +14,7 @@ namespace Harmonic.Networking.Amf.Serialization.Amf0;
 
 public class Amf0Reader
 {
-    public readonly IReadOnlyDictionary<Amf0Type, long> TypeLengthMap = new Dictionary<Amf0Type, long>()
+    public readonly IReadOnlyDictionary<Amf0Type, long> _typeLengthMap = new Dictionary<Amf0Type, long>()
     {
         { Amf0Type.Number, 8 },
         { Amf0Type.Boolean, sizeof(byte) },
@@ -234,7 +234,7 @@ public class Amf0Reader
         return true;
     }
 
-    public bool TryDescribeData(Span<byte> buffer, out Amf0Type type, out int consumedLength)
+    private bool TryDescribeData(Span<byte> buffer, out Amf0Type type, out int consumedLength)
     {
         type = default;
         consumedLength = default;
@@ -244,7 +244,7 @@ public class Amf0Reader
         }
 
         var marker = (Amf0Type)buffer[0];
-        if (!TypeLengthMap.TryGetValue(marker, out var bytesNeed))
+        if (!_typeLengthMap.TryGetValue(marker, out var bytesNeed))
         {
             return false;
         }
@@ -278,18 +278,14 @@ public class Amf0Reader
 
     public bool TryGetBoolean(Span<byte> buffer, out bool value, out int bytesConsumed)
     {
-        value = default;
-        bytesConsumed = default;
+        value = default(bool);
+        bytesConsumed = default(int);
 
-        if (!TryDescribeData(buffer, out var type, out var length))
-        {
+        if (!TryDescribeData(buffer, out var type, out var length)) 
             return false;
-        }
 
-        if (type != Amf0Type.Boolean)
-        {
+        if (type != Amf0Type.Boolean) 
             return false;
-        }
 
         value = buffer[1] != 0;
         bytesConsumed = length;
@@ -571,10 +567,8 @@ public class Amf0Reader
             return false;
         }
 
-        if (type != Amf0Type.StrictArray)
-        {
+        if (type is not Amf0Type.StrictArray) 
             return false;
-        }
 
         var obj = new List<object>();
         _referenceTable.Add(obj);

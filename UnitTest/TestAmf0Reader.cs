@@ -1,6 +1,7 @@
 ﻿using Harmonic.Networking.Amf.Serialization.Amf0;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -59,8 +60,9 @@ public class TestAmf0Reader
         {
             var value = bool.Parse(Path.GetFileNameWithoutExtension(file));
             using var f = new FileStream(file, FileMode.Open);
-            var data = new byte[f.Length];
-            f.Read(data);
+            var dataBuffer = ArrayPool<byte>.Shared.Rent((int)f.Length);
+            var read = f.Read(dataBuffer.AsSpan());
+            var data = dataBuffer[..read].AsSpan();
             Assert.IsTrue(reader.TryGetBoolean(data, out var dataRead, out var consumed));
             Assert.AreEqual(dataRead, value);
             Assert.AreEqual(consumed, f.Length);

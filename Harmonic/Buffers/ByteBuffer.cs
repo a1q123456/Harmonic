@@ -9,42 +9,26 @@ using System.Threading.Tasks.Sources;
 
 namespace Harmonic.Buffers;
 
-public class ByteBuffer : IDisposable
+public sealed class ByteBuffer : IDisposable
 {
     private readonly List<byte[]> _buffers = new();
-    private int _bufferEnd = 0;
-    private int _bufferStart = 0;
-    private readonly int _maxiumBufferSize = 0;
-    private event Action _memoryUnderLimit;
-    private event Action _dataWritten;
+    private int _bufferEnd;
+    private int _bufferStart;
+    private readonly int _maximumBufferSize;
+    private event Action? MemoryUnderLimit;
+    private event Action? DataWritten;
     private readonly object _sync = new();
     private readonly ArrayPool<byte> _arrayPool;
     public int BufferSegmentSize { get; }
-    public int Length
-    {
-        get
-        {
-            return _buffers.Count * BufferSegmentSize - BufferBytesAvailable() - _bufferStart;
-        }
-    }
+    public int Length => _buffers.Count * BufferSegmentSize - BufferBytesAvailable() - _bufferStart;
 
-    public ByteBuffer(int bufferSegmentSize = 1024, int maxiumBufferSize = -1, ArrayPool<byte> arrayPool = null)
+    public ByteBuffer(int bufferSegmentSize = 1024, int maximumBufferSize = -1)
     {
-        if (bufferSegmentSize == 0)
-        {
-            throw new ArgumentOutOfRangeException();
-        }
+        ArgumentOutOfRangeException.ThrowIfZero(bufferSegmentSize);
 
         BufferSegmentSize = bufferSegmentSize;
-        _maxiumBufferSize = maxiumBufferSize;
-        if (arrayPool != null)
-        {
-            _arrayPool = arrayPool;
-        }
-        else
-        {
-            _arrayPool = ArrayPool<byte>.Shared;
-        }
+        _maximumBufferSize = maximumBufferSize;
+        _arrayPool ??= ArrayPool<byte>.Shared;
         _buffers.Add(_arrayPool.Rent(bufferSegmentSize));
     }
 
@@ -63,14 +47,14 @@ public class ByteBuffer : IDisposable
 
     public void WriteToBuffer(byte data)
     {
-        if (Length > _maxiumBufferSize && _maxiumBufferSize >= 0)
+        if (Length > _maximumBufferSize && _maximumBufferSize >= 0)
         {
             throw new InvalidOperationException("buffer length exceeded");
         }
         lock (_sync)
         {
             int available = BufferBytesAvailable();
-            byte[] buffer = null;
+            byte[] buffer;
             if (available == 0)
             {
                 AddNewBufferSegment();
@@ -119,96 +103,94 @@ public class ByteBuffer : IDisposable
                 _bufferEnd += bytes.Length;
             }
         }
-        _dataWritten?.Invoke();
+        DataWritten?.Invoke();
     }
-    class _source : IValueTaskSource
+
+    private class Source : IValueTaskSource
     {
-        private static readonly Action<object> CallbackCompleted = _ => { Debug.Assert(false, "Should not be invoked"); };
+        private static readonly Action<object?>? _callbackCompleted = _ => { Debug.Assert(false, "Should not be invoked"); };
 
-        private readonly List<Action> cb = new();
-        private ValueTaskSourceStatus status = ValueTaskSourceStatus.Pending;
-        private ExecutionContext executionContext;
-        private object scheduler;
-        private object state;
-        private Action<object> continuation;
+        private readonly List<Action> _cb = new();
+        private ValueTaskSourceStatus _status = ValueTaskSourceStatus.Pending;
+        private ExecutionContext? _executionContext;
+        private object? _scheduler;
+        private object? _state;
+        private Action<object?>? _continuation;
 
-        public _source()
+        public Source()
         {
         }
 
         public void Cancel()
         {
-            status = ValueTaskSourceStatus.Canceled;
+            _status = ValueTaskSourceStatus.Canceled;
         }
         public void Success()
         {
-            status = ValueTaskSourceStatus.Succeeded;
-            var previousContinuation = Interlocked.CompareExchange(ref this.continuation, CallbackCompleted, null);
-            if (previousContinuation != null)
+            _status = ValueTaskSourceStatus.Succeeded;
+            var previousContinuation = Interlocked.CompareExchange(ref _continuation, _callbackCompleted, null);
+            if (previousContinuation is not null)
             {
                 // Async work completed, continue with... continuation
-                ExecutionContext ec = executionContext;
+                ExecutionContext? ec = _executionContext;
                 if (ec == null)
                 {
-                    InvokeContinuation(previousContinuation, this.state, forceAsync: false);
+                    InvokeContinuation(previousContinuation, _state, forceAsync: false);
                 }
                 else
                 {
                     // This case should be relatively rare, as the async Task/ValueTask method builders
                     // use the awaiter's UnsafeOnCompleted, so this will only happen with code that
                     // explicitly uses the awaiter's OnCompleted instead.
-                    executionContext = null;
+                    _executionContext = null;
                     ExecutionContext.Run(ec, runState =>
                     {
-                        var t = (Tuple<_source, Action<object>, object>)runState;
+                        var t = (Tuple<Source, Action<object?>, object?>)runState!;
                         t.Item1.InvokeContinuation(t.Item2, t.Item3, forceAsync: false);
-                    }, Tuple.Create(this, previousContinuation, this.state));
+                    }, Tuple.Create(this, previousContinuation, _state));
                 }
             }
         }
 
-        public void GetResult(short token)
-        {
-            return;
-        }
+        public void GetResult(short token) { }
 
         public ValueTaskSourceStatus GetStatus(short token)
         {
-            return status;
+            return _status;
         }
 
-        public void OnCompleted(Action<object> continuation, object state, short token, ValueTaskSourceOnCompletedFlags flags)
+        public void OnCompleted(Action<object?>? continuation, object? state, short token, ValueTaskSourceOnCompletedFlags flags)
         {
             if ((flags & ValueTaskSourceOnCompletedFlags.FlowExecutionContext) != 0)
             {
-                this.executionContext = ExecutionContext.Capture();
+                _executionContext = ExecutionContext.Capture();
             }
 
             if ((flags & ValueTaskSourceOnCompletedFlags.UseSchedulingContext) != 0)
             {
-                SynchronizationContext sc = SynchronizationContext.Current;
-                if (sc != null && sc.GetType() != typeof(SynchronizationContext))
+                SynchronizationContext? sc = SynchronizationContext.Current;
+                if (sc is not null)
                 {
-                    this.scheduler = sc;
+                    _scheduler = sc;
                 }
                 else
                 {
                     TaskScheduler ts = TaskScheduler.Current;
                     if (ts != TaskScheduler.Default)
                     {
-                        this.scheduler = ts;
+                        _scheduler = ts;
                     }
                 }
             }
 
             // Remember current state
-            this.state = state;
+            _state = state;
             // Remember continuation to be executed on completed (if not already completed, in case of which
             // continuation will be set to CallbackCompleted)
-            var previousContinuation = Interlocked.CompareExchange(ref this.continuation, continuation, null);
-            if (previousContinuation != null)
+            if (continuation is not null)
             {
-                if (!ReferenceEquals(previousContinuation, CallbackCompleted))
+                var previousContinuation = Interlocked.CompareExchange(ref _continuation, continuation, null);
+                if (!ReferenceEquals(previousContinuation, _callbackCompleted))
                 {
                     throw new InvalidOperationException();
                 }
@@ -218,28 +200,28 @@ public class ByteBuffer : IDisposable
                 // avoid a stack dive.  However, since all of the queueing mechanisms flow
                 // ExecutionContext, and since we're still in the same context where we
                 // captured it, we can just ignore the one we captured.
-                executionContext = null;
-                this.state = null; // we have the state in "state"; no need for the one in UserToken
+                _executionContext = null;
+                _state = null; // we have the state in "state"; no need for the one in UserToken
                 InvokeContinuation(continuation, state, forceAsync: true);
             }
 
-            cb.Add(() => continuation(state));
+            _cb.Add(() => continuation?.Invoke(state));
         }
 
-        private void InvokeContinuation(Action<object> continuation, object state, bool forceAsync)
+        private void InvokeContinuation(Action<object?>? continuation, object? state, bool forceAsync)
         {
-            if (continuation == null)
+            if (continuation is null)
                 return;
 
-            object scheduler = this.scheduler;
-            this.scheduler = null;
+            object? scheduler = _scheduler;
+            _scheduler = null;
             if (scheduler != null)
             {
                 if (scheduler is SynchronizationContext sc)
                 {
                     sc.Post(s =>
                     {
-                        var t = (Tuple<Action<object>, object>)s;
+                        var t = (Tuple<Action<object>, object>)s!;
                         t.Item1(t.Item2);
                     }, Tuple.Create(continuation, state));
                 }
@@ -264,28 +246,28 @@ public class ByteBuffer : IDisposable
     {
         lock (_sync)
         {
-            if (Length + bytes.Length > _maxiumBufferSize && _maxiumBufferSize >= 0)
+            if (Length + bytes.Length > _maximumBufferSize && _maximumBufferSize >= 0)
             {
-                var source = new _source();
-                Action ac = null;
+                var source = new Source();
+                Action? ac = null;
                 ac = () =>
                 {
-                    _memoryUnderLimit -= ac;
+                    MemoryUnderLimit -= ac;
                     WriteToBufferNoCheck(bytes.Span);
                     source.Success();
                 };
-                _memoryUnderLimit += ac;
+                MemoryUnderLimit += ac;
                 return new ValueTask(source, 0);
             }
         }
 
         WriteToBufferNoCheck(bytes.Span);
-        return default;
+        return default(ValueTask);
     }
 
     public void WriteToBuffer(ReadOnlySpan<byte> bytes)
     {
-        while (Length + bytes.Length > _maxiumBufferSize && _maxiumBufferSize >= 0)
+        while (Length + bytes.Length > _maximumBufferSize && _maximumBufferSize >= 0)
         {
             Thread.Yield();
         }
@@ -298,7 +280,7 @@ public class ByteBuffer : IDisposable
         {
             var discardBuffers = new List<byte[]>();
             bool prevDiscarded = false;
-            if (Length < buffer.Length && _maxiumBufferSize >= 0)
+            if (Length < buffer.Length && _maximumBufferSize >= 0)
             {
                 throw new InvalidProgramException();
             }
@@ -352,7 +334,7 @@ public class ByteBuffer : IDisposable
                 buffer = buffer[needToCopy..];
             }
             //Console.WriteLine(Length);
-            Debug.Assert(buffer.Length == 0 || _maxiumBufferSize < 0);
+            Debug.Assert(buffer.Length == 0 || _maximumBufferSize < 0);
             while (discardBuffers.Any())
             {
                 var b = discardBuffers.First();
@@ -365,9 +347,9 @@ public class ByteBuffer : IDisposable
                 AddNewBufferSegment();
             }
         }
-        if (Length <= _maxiumBufferSize && _maxiumBufferSize >= 0)
+        if (Length <= _maximumBufferSize && _maximumBufferSize >= 0)
         {
-            _memoryUnderLimit?.Invoke();
+            MemoryUnderLimit?.Invoke();
         }
     }
 
@@ -375,25 +357,25 @@ public class ByteBuffer : IDisposable
     {
         lock (_sync)
         {
-            if (buffer.Length > Length && _maxiumBufferSize >= 0)
+            if (buffer.Length > Length && _maximumBufferSize >= 0)
             {
-                var source = new _source();
+                var source = new Source();
                 var reg = ct.Register(() =>
                 {
                     source.Cancel();
                 });
-                Action ac = null;
+                Action? ac = null;
                 ac = () =>
                 {
                     if (buffer.Length <= Length)
                     {
-                        _dataWritten -= ac;
+                        DataWritten -= ac;
                         reg.Dispose();
                         TakeOutMemoryNoCheck(buffer.Span);
                         source.Success();
                     }
                 };
-                _dataWritten += ac;
+                DataWritten += ac;
                 return new ValueTask(source, 0);
             }
         }
@@ -404,19 +386,17 @@ public class ByteBuffer : IDisposable
 
     public void TakeOutMemory(Span<byte> buffer)
     {
-        while (buffer.Length > Length && _maxiumBufferSize >= 0)
-        {
+        while (buffer.Length > Length && _maximumBufferSize >= 0) 
             Thread.Yield();
-        }
         TakeOutMemoryNoCheck(buffer);
     }
 
     #region IDisposable Support
-    private bool disposedValue = false;
+    private bool _disposedValue;
 
-    protected virtual void Dispose(bool disposing)
+    private void Dispose(bool disposing)
     {
-        if (!disposedValue)
+        if (!_disposedValue)
         {
             if (disposing)
             {
@@ -426,7 +406,7 @@ public class ByteBuffer : IDisposable
                 }
                 _buffers.Clear();
             }
-            disposedValue = true;
+            _disposedValue = true;
         }
     }
 
