@@ -1,12 +1,8 @@
-using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Hosting;
 
-namespace Harmonic;
+namespace RtmpServer;
 
 public class SocketClient : BackgroundService
 {
@@ -27,7 +23,6 @@ public class SocketClient : BackgroundService
         await client.ConnectAsync(_endPoint, stoppingToken);
         while (stoppingToken.IsCancellationRequested == false)
         {
-           var address =  new SocketAddress(AddressFamily.Unix);
             // Send message.
             var message = "Hi friends 👋!<|EOM|>";
             var messageBytes = Encoding.UTF8.GetBytes(message);

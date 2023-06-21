@@ -1,9 +1,21 @@
+using System.Net;
+using System.Net.Sockets;
 using RtmpServer;
 
 var builder = WebApplication.CreateSlimBuilder(args);
 
 var sc = builder.Services;
-//sc.AddHostedService<SocketServer>(_ => new SocketServer(new IPEndPoint(IPAddress.Parse("0.0.0.0"), 1937)));
+sc.AddHostedService<SocketServer>(_ =>
+{
+    if (Socket.OSSupportsUnixDomainSockets)
+    {
+        var tmpFile = Path.GetTempFileName();
+        var socket = new UnixDomainSocketEndPoint(tmpFile);
+        var endPoint = socket.Create(new SocketAddress(AddressFamily.Unix));
+        return new SocketServer(endPoint);
+    }
+    return new SocketServer(new IPEndPoint(IPAddress.Parse("0.0.0.0"), 1937));
+});
 //sc.AddHostedService<SocketClient>(_ => new SocketClient(new IPEndPoint(IPAddress.Parse("0.0.0.0"), 1937)));
 sc.AddHostedService<RateLimitTester>();
 var app = builder.Build();

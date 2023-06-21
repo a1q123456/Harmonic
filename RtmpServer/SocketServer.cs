@@ -1,12 +1,8 @@
-using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Hosting;
 
-namespace Harmonic;
+namespace RtmpServer;
 
 public class SocketServer : BackgroundService
 {
@@ -14,11 +10,6 @@ public class SocketServer : BackgroundService
 
     public SocketServer(EndPoint endPoint)
     {
-        if (Socket.OSSupportsUnixDomainSockets)
-        {
-                { };
-            // endPoint = new UnixDomainSocketEndPoint("");
-        }
         _endPoint = endPoint;
     }
 
