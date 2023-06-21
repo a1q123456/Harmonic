@@ -19,7 +19,7 @@ public class StreamEofMessage : UserControlMessage
     {
         var span = context.ReadBuffer.Span;
         var eventType = (UserControlEventType)NetworkBitConverter.ToUInt16(span);
-        span = span.Slice(sizeof(ushort));
+        span = span[sizeof(ushort)..];
         Contract.Assert(eventType == UserControlEventType.StreamIsRecorded);
         StreamID = NetworkBitConverter.ToUInt32(span);
     }
@@ -32,7 +32,7 @@ public class StreamEofMessage : UserControlMessage
         {
             var span = buffer.AsSpan();
             NetworkBitConverter.TryGetBytes((ushort)UserControlEventType.StreamBegin, span);
-            span = span.Slice(sizeof(ushort));
+            span = span[sizeof(ushort)..];
             NetworkBitConverter.TryGetBytes(StreamID, span);
         }
         finally

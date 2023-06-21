@@ -25,7 +25,7 @@ public class SetPeerBandwidthMessage : ControlMessage
     public override void Deserialize(SerializationContext context)
     {
         WindowSize = NetworkBitConverter.ToUInt32(context.ReadBuffer.Span);
-        LimitType = (LimitType)context.ReadBuffer.Span.Slice(sizeof(uint))[0];
+        LimitType = (LimitType)context.ReadBuffer.Span[sizeof(uint)..][0];
     }
 
     public override void Serialize(SerializationContext context)

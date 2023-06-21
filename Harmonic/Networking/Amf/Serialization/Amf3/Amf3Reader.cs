@@ -258,7 +258,7 @@ public class Amf3Reader
             return false;
         }
 
-        var dataBuffer = buffer.Slice(Amf3CommonValues.MARKER_LENGTH);
+        var dataBuffer = buffer[Amf3CommonValues.MARKER_LENGTH..];
 
         if (!TryGetU29Impl(dataBuffer, out value, out var dataConsumed))
         {
@@ -308,17 +308,13 @@ public class Amf3Reader
                 break;
         }
 
-        using (var mem = _memoryPool.Rent(sizeof(uint)))
-        {
-            var buffer = mem.Memory.Span;
-            buffer.Clear();
-            dataBuffer.Slice(0, bytesNeed).CopyTo(buffer.Slice(sizeof(uint) - bytesNeed));
-            value = NetworkBitConverter.ToUInt32(buffer);
-            consumed = bytesNeed;
-            return true;
-        }
-
-
+        using var mem = _memoryPool.Rent(sizeof(uint));
+        var buffer = mem.Memory.Span;
+        buffer.Clear();
+        dataBuffer[..bytesNeed].CopyTo(buffer[(sizeof(uint) - bytesNeed)..]);
+        value = NetworkBitConverter.ToUInt32(buffer);
+        consumed = bytesNeed;
+        return true;
     }
 
     public bool TryGetDouble(Span<byte> buffer, out double value, out int consumed)
@@ -330,7 +326,7 @@ public class Amf3Reader
             return false;
         }
 
-        value = NetworkBitConverter.ToDouble(buffer.Slice(Amf3CommonValues.MARKER_LENGTH));
+        value = NetworkBitConverter.ToDouble(buffer[Amf3CommonValues.MARKER_LENGTH..]);
         consumed = Amf3CommonValues.MARKER_LENGTH + sizeof(double);
         return true;
     }
@@ -343,7 +339,7 @@ public class Amf3Reader
             return false;
         }
 
-        var objectBuffer = buffer.Slice(Amf3CommonValues.MARKER_LENGTH);
+        var objectBuffer = buffer[Amf3CommonValues.MARKER_LENGTH..];
         TryGetStringImpl(objectBuffer, _stringReferenceTable, out var str, out var strConsumed);
         value = str;
         consumed = Amf3CommonValues.MARKER_LENGTH + strConsumed;
@@ -394,7 +390,7 @@ public class Amf3Reader
             return false;
         }
 
-        var objectBuffer = buffer.Slice(Amf3CommonValues.MARKER_LENGTH);
+        var objectBuffer = buffer[Amf3CommonValues.MARKER_LENGTH..];
         TryGetStringImpl(objectBuffer, _objectReferenceTable, out var str, out var strConsumed);
         var xml = new XmlDocument();
         xml.LoadXml(str);
@@ -445,7 +441,7 @@ public class Amf3Reader
             return false;
         }
 
-        if (!TryGetU29Impl(buffer.Slice(Amf3CommonValues.MARKER_LENGTH), out var header, out var headerConsumed))
+        if (!TryGetU29Impl(buffer[Amf3CommonValues.MARKER_LENGTH..], out var header, out var headerConsumed))
         {
             return false;
         }
@@ -462,7 +458,7 @@ public class Amf3Reader
         }
 
         var arrayConsumed = 0;
-        var arrayBuffer = buffer.Slice(Amf3CommonValues.MARKER_LENGTH + headerConsumed);
+        var arrayBuffer = buffer[(Amf3CommonValues.MARKER_LENGTH + headerConsumed)..];
         var denseItemCount = (int)headerData;
 
         if (!TryGetStringImpl(arrayBuffer, _stringReferenceTable, out var key, out var keyConsumed))
@@ -475,7 +471,7 @@ public class Amf3Reader
         {
             do
             {
-                arrayBuffer = arrayBuffer.Slice(keyConsumed);
+                arrayBuffer = arrayBuffer[keyConsumed..];
                 arrayConsumed += keyConsumed;
                 if (!TryGetValue(arrayBuffer, out var item, out var itemConsumed))
                 {
@@ -483,7 +479,7 @@ public class Amf3Reader
                 }
 
                 arrayConsumed += itemConsumed;
-                arrayBuffer = arrayBuffer.Slice(itemConsumed);
+                arrayBuffer = arrayBuffer[itemConsumed..];
                 array.SparsePart.Add(key, item);
                 if (!TryGetStringImpl(arrayBuffer, _stringReferenceTable, out key, out keyConsumed))
                 {
@@ -493,7 +489,7 @@ public class Amf3Reader
             while (key.Any());
         }
         arrayConsumed += keyConsumed;
-        arrayBuffer = arrayBuffer.Slice(keyConsumed);
+        arrayBuffer = arrayBuffer[keyConsumed..];
 
         for (int i = 0; i < denseItemCount; i++)
         {
@@ -503,7 +499,7 @@ public class Amf3Reader
             }
             array.DensePart.Add(item);
             arrayConsumed += itemConsumed;
-            arrayBuffer = arrayBuffer.Slice(itemConsumed);
+            arrayBuffer = arrayBuffer[itemConsumed..];
         }
 
         value = array;
@@ -520,7 +516,7 @@ public class Amf3Reader
             return false;
         }
         consumed = Amf3CommonValues.MARKER_LENGTH;
-        if (!TryGetU29Impl(buffer.Slice(Amf3CommonValues.MARKER_LENGTH), out var header, out var headerLength))
+        if (!TryGetU29Impl(buffer[Amf3CommonValues.MARKER_LENGTH..], out var header, out var headerLength))
         {
             return false;
         }
@@ -557,7 +553,7 @@ public class Amf3Reader
         else
         {
             traits = new Amf3ClassTraits();
-            var dataBuffer = buffer.Slice(Amf3CommonValues.MARKER_LENGTH + headerLength);
+            var dataBuffer = buffer[(Amf3CommonValues.MARKER_LENGTH + headerLength)..];
             if ((header & 0x04) == 0x04)
             {
                 traits.ClassType = Amf3ClassType.Externalizable;
@@ -567,7 +563,7 @@ public class Amf3Reader
                 }
                 consumed += extClassNameConsumed;
                 traits.ClassName = extClassName;
-                var externailzableBuffer = dataBuffer.Slice(extClassNameConsumed);
+                var externailzableBuffer = dataBuffer[extClassNameConsumed..];
 
                 if (!_registeredExternalizable.TryGetValue(extClassName, out var extType))
                 {
@@ -588,7 +584,7 @@ public class Amf3Reader
             {
                 return false;
             }
-            dataBuffer = dataBuffer.Slice(classNameConsumed);
+            dataBuffer = dataBuffer[classNameConsumed..];
             consumed += classNameConsumed;
             if (className.Any())
             {
@@ -612,14 +608,14 @@ public class Amf3Reader
                     return false;
                 }
                 traits.Members.Add(key);
-                dataBuffer = dataBuffer.Slice(keyConsumed);
+                dataBuffer = dataBuffer[keyConsumed..];
                 consumed += keyConsumed;
             }
             _objectTraitsReferenceTable.Add(traits);
         }
 
         object deserailziedObject = null;
-        var valueBuffer = buffer.Slice(consumed);
+        var valueBuffer = buffer[consumed..];
         if (traits.ClassType == Amf3ClassType.Typed)
         {
             if (!_registeredTypedObejectStates.TryGetValue(traits.ClassName, out var state))
@@ -641,7 +637,7 @@ public class Amf3Reader
                 {
                     return false;
                 }
-                valueBuffer = valueBuffer.Slice(dataConsumed);
+                valueBuffer = valueBuffer[dataConsumed..];
                 consumed += dataConsumed;
                 state.Members[member](deserailziedObject, data);
             }
@@ -656,7 +652,7 @@ public class Amf3Reader
                 {
                     return false;
                 }
-                valueBuffer = valueBuffer.Slice(dataConsumed);
+                valueBuffer = valueBuffer[dataConsumed..];
                 consumed += dataConsumed;
                 obj.Add(member, data);
             }
@@ -675,14 +671,14 @@ public class Amf3Reader
                 return false;
             }
             consumed += keyConsumed;
-            valueBuffer = valueBuffer.Slice(keyConsumed);
+            valueBuffer = valueBuffer[keyConsumed..];
             while (key.Any())
             {
                 if (!TryGetValue(valueBuffer, out var data, out var dataConsumed))
                 {
                     return false;
                 }
-                valueBuffer = valueBuffer.Slice(dataConsumed);
+                valueBuffer = valueBuffer[dataConsumed..];
                 consumed += dataConsumed;
 
                 dynamicObject.AddDynamic(key, data);
@@ -691,7 +687,7 @@ public class Amf3Reader
                 {
                     return false;
                 }
-                valueBuffer = valueBuffer.Slice(keyConsumed);
+                valueBuffer = valueBuffer[keyConsumed..];
                 consumed += keyConsumed;
             }
         }
@@ -710,7 +706,7 @@ public class Amf3Reader
             return false;
         }
 
-        var objectBuffer = buffer.Slice(Amf3CommonValues.MARKER_LENGTH);
+        var objectBuffer = buffer[Amf3CommonValues.MARKER_LENGTH..];
         TryGetStringImpl(objectBuffer, _objectReferenceTable, out var str, out var strConsumed);
         var xml = new Amf3Xml();
         xml.LoadXml(str);
@@ -729,7 +725,7 @@ public class Amf3Reader
             return false;
         }
 
-        var objectBuffer = buffer.Slice(Amf3CommonValues.MARKER_LENGTH);
+        var objectBuffer = buffer[Amf3CommonValues.MARKER_LENGTH..];
 
         if (!TryGetU29Impl(objectBuffer, out var header, out int headerLen))
         {
@@ -792,7 +788,7 @@ public class Amf3Reader
             return false;
         }
 
-        buffer = buffer.Slice(Amf3CommonValues.MARKER_LENGTH);
+        buffer = buffer[Amf3CommonValues.MARKER_LENGTH..];
         if (!ReadVectorHeader(ref buffer, ref value, ref consumed, out var itemCount, out var isFixedSize, out var isRef))
         {
             return false;
@@ -825,7 +821,7 @@ public class Amf3Reader
             return false;
         }
 
-        buffer = buffer.Slice(Amf3CommonValues.MARKER_LENGTH);
+        buffer = buffer[Amf3CommonValues.MARKER_LENGTH..];
         if (!ReadVectorHeader(ref buffer, ref value, ref consumed, out var itemCount, out var isFixedSize, out var isRef))
         {
             return false;
@@ -859,7 +855,7 @@ public class Amf3Reader
             return false;
         }
 
-        buffer = buffer.Slice(Amf3CommonValues.MARKER_LENGTH);
+        buffer = buffer[Amf3CommonValues.MARKER_LENGTH..];
         if (!ReadVectorHeader(ref buffer, ref value, ref consumed, out var itemCount, out var isFixedSize, out var isRef))
         {
             return false;
@@ -889,7 +885,7 @@ public class Amf3Reader
         var value = NetworkBitConverter.ToInt32(buffer);
         vector.Add(value);
         consumed += sizeof(int);
-        buffer = buffer.Slice(sizeof(int));
+        buffer = buffer[sizeof(int)..];
         return true;
 
     }
@@ -899,7 +895,7 @@ public class Amf3Reader
         var value = NetworkBitConverter.ToUInt32(buffer);
         vector.Add(value);
         consumed += sizeof(uint);
-        buffer = buffer.Slice(sizeof(uint));
+        buffer = buffer[sizeof(uint)..];
         return true;
     }
 
@@ -908,7 +904,7 @@ public class Amf3Reader
         var value = NetworkBitConverter.ToDouble(buffer);
         vector.Add(value);
         consumed += sizeof(double);
-        buffer = buffer.Slice(sizeof(double));
+        buffer = buffer[sizeof(double)..];
         return true;
 
     }
@@ -964,7 +960,7 @@ public class Amf3Reader
 
         itemCount = (int)headerData;
 
-        var objectBuffer = buffer.Slice(headerLength);
+        var objectBuffer = buffer[headerLength..];
 
         if (objectBuffer.Length < sizeof(byte))
         {
@@ -972,7 +968,7 @@ public class Amf3Reader
         }
 
         isFixedSize = objectBuffer[0] == 0x01;
-        buffer = objectBuffer.Slice(sizeof(byte));
+        buffer = objectBuffer[sizeof(byte)..];
         consumed = Amf3CommonValues.MARKER_LENGTH + headerLength + sizeof(byte);
         return true;
     }
@@ -985,7 +981,7 @@ public class Amf3Reader
         {
             return false;
         }
-        typeNameBuffer = typeNameBuffer.Slice(typeNameConsumed);
+        typeNameBuffer = typeNameBuffer[typeNameConsumed..];
         return true;
     }
 
@@ -999,7 +995,7 @@ public class Amf3Reader
             return false;
         }
 
-        buffer = buffer.Slice(Amf3CommonValues.MARKER_LENGTH);
+        buffer = buffer[Amf3CommonValues.MARKER_LENGTH..];
 
         int arrayConsumed = 0;
 
@@ -1056,7 +1052,7 @@ public class Amf3Reader
             }
             addAction(item);
 
-            arrayBodyBuffer = arrayBodyBuffer.Slice(itemConsumed);
+            arrayBodyBuffer = arrayBodyBuffer[itemConsumed..];
             arrayConsumed += itemConsumed;
         }
         value = resultVector;
@@ -1073,7 +1069,7 @@ public class Amf3Reader
             return false;
         }
 
-        if (!TryGetU29Impl(buffer.Slice(Amf3CommonValues.MARKER_LENGTH), out var header, out var headerLength))
+        if (!TryGetU29Impl(buffer[Amf3CommonValues.MARKER_LENGTH..], out var header, out var headerLength))
         {
             return false;
         }
@@ -1097,7 +1093,7 @@ public class Amf3Reader
         }
         var weakKeys = buffer[Amf3CommonValues.MARKER_LENGTH + headerLength] == 0x01;
 
-        var dictBuffer = buffer.Slice(Amf3CommonValues.MARKER_LENGTH + headerLength + /* weak key flag */ sizeof(byte));
+        var dictBuffer = buffer[(Amf3CommonValues.MARKER_LENGTH + headerLength + /* weak key flag */ sizeof(byte))..];
         var dict = new Amf3Dictionary<object, object>()
         {
             WeakKeys = weakKeys
@@ -1109,13 +1105,13 @@ public class Amf3Reader
             {
                 return false;
             }
-            dictBuffer = dictBuffer.Slice(keyConsumed);
+            dictBuffer = dictBuffer[keyConsumed..];
             dictConsumed += keyConsumed;
             if (!TryGetValue(dictBuffer, out var data, out var dataConsumed))
             {
                 return false;
             }
-            dictBuffer = dictBuffer.Slice(dataConsumed);
+            dictBuffer = dictBuffer[dataConsumed..];
             dict.Add(key, data);
             dictConsumed += dataConsumed;
         }

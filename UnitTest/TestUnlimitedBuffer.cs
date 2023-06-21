@@ -143,14 +143,13 @@ public class TestUnlimitedBuffer
     [TestMethod]
     public void TestParalleWriteAndRead()
     {
-        var random = new Random();
         var buffer = new ByteBuffer(512, 35767);
         var th1 = new Thread(() =>
         {
             byte i = 0;
             while (true)
             {
-                var arr = new byte[new Random().Next(256, 512)];
+                var arr = new byte[Random.Shared.Next(256, 512)];
                 for (var j = 0; j < arr.Length; j++)
                 {
                     arr[j] = i;
@@ -171,7 +170,7 @@ public class TestUnlimitedBuffer
         {
             while (true)
             {
-                var arr = new byte[new Random().Next(129, 136)];
+                var arr = new byte[Random.Shared.Next(129, 136)];
                 if (buffer.Length >= arr.Length)
                 {
                     buffer.TakeOutMemory(arr);

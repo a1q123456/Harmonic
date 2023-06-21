@@ -20,19 +20,17 @@ public class TestAmf0Writer
         var random = new Random();
         var writer = new Amf0Writer();
         var reader = new Amf0Reader();
-        using (var sc = new SerializationContext())
+        using var sc = new SerializationContext();
+        for (int i = 0; i < 1000; i++)
         {
-            for (int i = 0; i < 1000; i++)
-            {
-                var num = random.NextDouble() * 10 - 5;
-                writer.WriteBytes(num, sc);
-                var buffer = new byte[sc.MessageLength];
-                sc.GetMessage(buffer);
+            var num = random.NextDouble() * 10 - 5;
+            writer.WriteBytes(num, sc);
+            var buffer = new byte[sc.MessageLength];
+            sc.GetMessage(buffer);
 
-                reader.TryGetNumber(buffer, out var readValue, out var consumed);
-                Assert.AreEqual(num, readValue);
-                Assert.AreEqual(buffer.Length, consumed);
-            }
+            reader.TryGetNumber(buffer, out var readValue, out var consumed);
+            Assert.AreEqual(num, readValue);
+            Assert.AreEqual(buffer.Length, consumed);
         }
     }
 
@@ -41,19 +39,17 @@ public class TestAmf0Writer
     {
         var writer = new Amf0Writer();
         var reader = new Amf0Reader();
-        using (var sc = new SerializationContext())
+        using var sc = new SerializationContext();
+        for (int i = 0; i < 1000; i++)
         {
-            for (int i = 0; i < 1000; i++)
-            {
-                var val = Guid.NewGuid().ToString();
-                writer.WriteBytes(val, sc);
-                var buffer = new byte[sc.MessageLength];
-                sc.GetMessage(buffer);
+            var val = Guid.NewGuid().ToString();
+            writer.WriteBytes(val, sc);
+            var buffer = new byte[sc.MessageLength];
+            sc.GetMessage(buffer);
 
-                reader.TryGetString(buffer, out var readValue, out var consumed);
-                Assert.AreEqual(val, readValue);
-                Assert.AreEqual(buffer.Length, consumed);
-            }
+            reader.TryGetString(buffer, out var readValue, out var consumed);
+            Assert.AreEqual(val, readValue);
+            Assert.AreEqual(buffer.Length, consumed);
         }
     }
 
@@ -63,21 +59,18 @@ public class TestAmf0Writer
         var writer = new Amf0Writer();
         var reader = new Amf0Reader();
 
-        using (var sc = new SerializationContext())
+        using var sc = new SerializationContext();
+        for (int i = 0; i < 1000; i++)
         {
-            for (int i = 0; i < 1000; i++)
-            {
-                var val = string.Concat(Enumerable.Repeat(Guid.NewGuid().ToString(), 2000));
-                writer.WriteBytes(val, sc);
-                var buffer = new byte[sc.MessageLength];
-                sc.GetMessage(buffer);
+            var val = string.Concat(Enumerable.Repeat(Guid.NewGuid().ToString(), 2000));
+            writer.WriteBytes(val, sc);
+            var buffer = new byte[sc.MessageLength];
+            sc.GetMessage(buffer);
 
-                reader.TryGetLongString(buffer, out var readValue, out var consumed);
-                Assert.AreEqual(val, readValue);
-                Assert.AreEqual(buffer.Length, consumed);
-            }
+            reader.TryGetLongString(buffer, out var readValue, out var consumed);
+            Assert.AreEqual(val, readValue);
+            Assert.AreEqual(buffer.Length, consumed);
         }
-
     }
 
     [TestMethod]
@@ -109,25 +102,22 @@ public class TestAmf0Writer
         var writer = new Amf0Writer();
         var reader = new Amf0Reader();
 
-        using (var sc = new SerializationContext())
-        {
-            writer.WriteBytes(true, sc);
-            var buffer = new byte[sc.MessageLength];
-            sc.GetMessage(buffer);
+        using var sc = new SerializationContext();
+        writer.WriteBytes(true, sc);
+        var buffer = new byte[sc.MessageLength];
+        sc.GetMessage(buffer);
 
-            Assert.IsTrue(reader.TryGetBoolean(buffer, out var val, out var consumed));
-            Assert.IsTrue(val);
-            Assert.AreEqual(consumed, buffer.Length);
+        Assert.IsTrue(reader.TryGetBoolean(buffer, out var val, out var consumed));
+        Assert.IsTrue(val);
+        Assert.AreEqual(consumed, buffer.Length);
 
-            writer.WriteBytes(false, sc);
-            buffer = new byte[sc.MessageLength];
-            sc.GetMessage(buffer);
+        writer.WriteBytes(false, sc);
+        buffer = new byte[sc.MessageLength];
+        sc.GetMessage(buffer);
 
-            Assert.IsTrue(reader.TryGetBoolean(buffer, out val, out consumed));
-            Assert.IsFalse(val);
-            Assert.AreEqual(consumed, buffer.Length);
-        }
-
+        Assert.IsTrue(reader.TryGetBoolean(buffer, out val, out consumed));
+        Assert.IsFalse(val);
+        Assert.AreEqual(consumed, buffer.Length);
     }
 
     [TestMethod]
@@ -173,22 +163,20 @@ public class TestAmf0Writer
             ["3"] = "a",
             ["4"] = "a"
         };
-        using (var sc = new SerializationContext())
-        {
-            writer.WriteBytes(array, sc);
-            var buffer = new byte[sc.MessageLength];
-            sc.GetMessage(buffer);
-            // EcmaMarker:byte + ElementCount: uint + 
-            // StringLength: ushort + StringContent: byte * 1 + NumberMarker: byte + Number: double + 
-            // StringLength: ushort + StringContent: byte * 1 + NumberMarker: byte + Number: double 
-            // StringLength: ushort + StringContent: byte * 1 + StringMarker: byte + StringLength: ushort + StringContent: byte * 1 + 
-            // StringLength: ushort + StringContent: byte * 1 + ReferenceMarker: byte + ReferenceIndex: ushort +
-            // StringLength: ushort + StringConent: byte * 0 + ObjectEndMarker: byte
-            Assert.AreEqual(buffer.Length, 45);
-            Assert.IsTrue(reader.TryGetEcmaArray(buffer, out var readData, out var consumed));
+        using var sc = new SerializationContext();
+        writer.WriteBytes(array, sc);
+        var buffer = new byte[sc.MessageLength];
+        sc.GetMessage(buffer);
+        // EcmaMarker:byte + ElementCount: uint + 
+        // StringLength: ushort + StringContent: byte * 1 + NumberMarker: byte + Number: double + 
+        // StringLength: ushort + StringContent: byte * 1 + NumberMarker: byte + Number: double 
+        // StringLength: ushort + StringContent: byte * 1 + StringMarker: byte + StringLength: ushort + StringContent: byte * 1 + 
+        // StringLength: ushort + StringContent: byte * 1 + ReferenceMarker: byte + ReferenceIndex: ushort +
+        // StringLength: ushort + StringConent: byte * 0 + ObjectEndMarker: byte
+        Assert.AreEqual(buffer.Length, 45);
+        Assert.IsTrue(reader.TryGetEcmaArray(buffer, out var readData, out var consumed));
 
-            Assert.IsTrue(readData.SequenceEqual(array));
-        }
+        Assert.IsTrue(readData.SequenceEqual(array));
     }
 
     [TestMethod]
@@ -197,17 +185,14 @@ public class TestAmf0Writer
         var writer = new Amf0Writer();
         var reader = new Amf0Reader();
 
-        using (var sc = new SerializationContext())
-        {
-            writer.WriteNullBytes(sc);
-            var buffer = new byte[sc.MessageLength];
-            sc.GetMessage(buffer);
+        using var sc = new SerializationContext();
+        writer.WriteNullBytes(sc);
+        var buffer = new byte[sc.MessageLength];
+        sc.GetMessage(buffer);
 
-            Assert.IsTrue(reader.TryGetNull(buffer, out var nullObj, out var consunmed));
-            Assert.IsNull(nullObj);
-            Assert.AreEqual(consunmed, buffer.Length);
-        }
-
+        Assert.IsTrue(reader.TryGetNull(buffer, out var nullObj, out var consunmed));
+        Assert.IsNull(nullObj);
+        Assert.AreEqual(consunmed, buffer.Length);
     }
 
     [TestMethod]
@@ -216,17 +201,14 @@ public class TestAmf0Writer
         var writer = new Amf0Writer();
         var reader = new Amf0Reader();
 
-        using (var sc = new SerializationContext())
-        {
-            writer.WriteBytes(new Undefined(), sc);
-            var buffer = new byte[sc.MessageLength];
-            sc.GetMessage(buffer);
+        using var sc = new SerializationContext();
+        writer.WriteBytes(new Undefined(), sc);
+        var buffer = new byte[sc.MessageLength];
+        sc.GetMessage(buffer);
 
-            Assert.IsTrue(reader.TryGetUndefined(buffer, out var ud, out var consunmed));
-            Assert.IsNotNull(ud);
-            Assert.AreEqual(consunmed, buffer.Length);
-        }
-
+        Assert.IsTrue(reader.TryGetUndefined(buffer, out var ud, out var consunmed));
+        Assert.IsNotNull(ud);
+        Assert.AreEqual(consunmed, buffer.Length);
     }
 
     [TestMethod]
@@ -235,21 +217,18 @@ public class TestAmf0Writer
         var writer = new Amf0Writer();
         var reader = new Amf0Reader();
 
-        using (var sc = new SerializationContext())
-        {
-            var xml = new XmlDocument();
-            var elem = xml.CreateElement("price");
-            xml.AppendChild(elem);
-            writer.WriteBytes(xml, sc);
-            var buffer = new byte[sc.MessageLength];
-            sc.GetMessage(buffer);
+        using var sc = new SerializationContext();
+        var xml = new XmlDocument();
+        var elem = xml.CreateElement("price");
+        xml.AppendChild(elem);
+        writer.WriteBytes(xml, sc);
+        var buffer = new byte[sc.MessageLength];
+        sc.GetMessage(buffer);
 
-            Assert.IsTrue(reader.TryGetXmlDocument(buffer, out var ud, out var consunmed));
-            Assert.IsNotNull(ud);
-            Assert.AreNotEqual(ud.GetElementsByTagName("price").Count, 0);
-            Assert.AreEqual(consunmed, buffer.Length);
-        }
-
+        Assert.IsTrue(reader.TryGetXmlDocument(buffer, out var ud, out var consunmed));
+        Assert.IsNotNull(ud);
+        Assert.AreNotEqual(ud.GetElementsByTagName("price").Count, 0);
+        Assert.AreEqual(consunmed, buffer.Length);
     }
 
     [TestMethod]
@@ -272,18 +251,15 @@ public class TestAmf0Writer
             {"test6" , refVal }
         };
 
-        using (var sc = new SerializationContext())
-        {
-            writer.WriteBytes(obj, sc);
-            var buffer = new byte[sc.MessageLength];
-            sc.GetMessage(buffer);
+        using var sc = new SerializationContext();
+        writer.WriteBytes(obj, sc);
+        var buffer = new byte[sc.MessageLength];
+        sc.GetMessage(buffer);
 
-            // test reference table is working
-            Assert.AreEqual(buffer.Length, 97);
-            Assert.IsTrue(reader.TryGetObject(buffer, out var readObj, out var consumed));
-            Assert.AreEqual(consumed, buffer.Length);
-        }
-
+        // test reference table is working
+        Assert.AreEqual(buffer.Length, 97);
+        Assert.IsTrue(reader.TryGetObject(buffer, out var readObj, out var consumed));
+        Assert.AreEqual(consumed, buffer.Length);
     }
 
     [TypedObject(Name = "Another.Name")]
@@ -334,16 +310,13 @@ public class TestAmf0Writer
             test5 = "test",
             test6 = refVal
         };
-        using (var sc = new SerializationContext())
-        {
-            writer.WriteTypedBytes(obj, sc);
-            var buffer = new byte[sc.MessageLength];
-            sc.GetMessage(buffer);
+        using var sc = new SerializationContext();
+        writer.WriteTypedBytes(obj, sc);
+        var buffer = new byte[sc.MessageLength];
+        sc.GetMessage(buffer);
 
-            Assert.IsTrue(reader.TryGetTypedObject(buffer, out var readObj, out var consumed));
-            Assert.AreEqual(consumed, buffer.Length);
-        }
-
+        Assert.IsTrue(reader.TryGetTypedObject(buffer, out var readObj, out var consumed));
+        Assert.AreEqual(consumed, buffer.Length);
     }
 
 }

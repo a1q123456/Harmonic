@@ -123,19 +123,19 @@ public class Amf0Reader
             return false;
         }
 
-        buffer = buffer.Slice(nameConsumed);
+        buffer = buffer[nameConsumed..];
         if (buffer.Length < 1)
         {
             return false;
         }
         var mustUnderstand = buffer[0];
-        buffer = buffer.Slice(1);
+        buffer = buffer[1..];
         if (buffer.Length < sizeof(uint))
         {
             return false;
         }
 
-        buffer = buffer.Slice(sizeof(uint));
+        buffer = buffer[sizeof(uint)..];
         if (!TryGetValue(buffer, out _, out var headerValue, out var valueConsumed))
         {
             return false;
@@ -155,13 +155,13 @@ public class Amf0Reader
             return false;
         }
 
-        buffer = buffer.Slice(targetUriConsumed);
+        buffer = buffer[targetUriConsumed..];
         if (!TryGetStringImpl(buffer, Amf0CommonValues.STRING_HEADER_LENGTH, out var responseUri, out var responseUriConsumed))
         {
             return false;
         }
 
-        buffer = buffer.Slice(responseUriConsumed);
+        buffer = buffer[responseUriConsumed..];
         if (buffer.Length < sizeof(uint))
         {
             return false;
@@ -175,7 +175,7 @@ public class Amf0Reader
         {
             return true;
         }
-        buffer = buffer.Slice(sizeof(uint));
+        buffer = buffer[sizeof(uint)..];
         if (!TryGetValue(buffer, out _, out var content, out var contentConsumed))
         {
             return false;
@@ -201,10 +201,10 @@ public class Amf0Reader
             return false;
         }
         var version = NetworkBitConverter.ToUInt16(buffer);
-        buffer = buffer.Slice(sizeof(ushort));
+        buffer = buffer[sizeof(ushort)..];
         consumed += sizeof(ushort);
         var headerCount = NetworkBitConverter.ToUInt16(buffer);
-        buffer = buffer.Slice(sizeof(ushort));
+        buffer = buffer[sizeof(ushort)..];
         consumed += sizeof(ushort);
         headers = new List<KeyValuePair<string, object>>();
         messages = new List<Message>();
@@ -215,12 +215,12 @@ public class Amf0Reader
                 return false;
             }
             headers.Add(header);
-            buffer = buffer.Slice(headerConsumed);
+            buffer = buffer[headerConsumed..];
             consumed += headerConsumed;
         }
 
         var messageCount = NetworkBitConverter.ToUInt16(buffer);
-        buffer = buffer.Slice(sizeof(ushort));
+        buffer = buffer[sizeof(ushort)..];
         consumed += sizeof(ushort);
         for (int i = 0; i < messageCount; i++)
         {
@@ -271,7 +271,7 @@ public class Amf0Reader
         {
             return false;
         }
-        value = NetworkBitConverter.ToDouble(buffer.Slice(Amf0CommonValues.MARKER_LENGTH));
+        value = NetworkBitConverter.ToDouble(buffer[Amf0CommonValues.MARKER_LENGTH..]);
         bytesConsumed = length;
         return true;
     }
@@ -310,7 +310,7 @@ public class Amf0Reader
             return false;
         }
 
-        if (!TryGetStringImpl(buffer.Slice(Amf0CommonValues.MARKER_LENGTH), Amf0CommonValues.STRING_HEADER_LENGTH, out value, out bytesConsumed))
+        if (!TryGetStringImpl(buffer[Amf0CommonValues.MARKER_LENGTH..], Amf0CommonValues.STRING_HEADER_LENGTH, out value, out bytesConsumed))
         {
             return false;
         }
@@ -334,14 +334,14 @@ public class Amf0Reader
                 return false;
             }
             consumed += keyLength;
-            objectBuffer = objectBuffer.Slice(keyLength);
+            objectBuffer = objectBuffer[keyLength..];
 
             if (!TryGetValue(objectBuffer, out var dataType, out var data, out var valueLength))
             {
                 return false;
             }
             consumed += valueLength;
-            objectBuffer = objectBuffer.Slice(valueLength);
+            objectBuffer = objectBuffer[valueLength..];
 
             if (!key.Any() && dataType == Amf0Type.ObjectEnd)
             {
@@ -379,7 +379,7 @@ public class Amf0Reader
             return false;
         }
 
-        var objectBuffer = buffer.Slice(Amf0CommonValues.MARKER_LENGTH);
+        var objectBuffer = buffer[Amf0CommonValues.MARKER_LENGTH..];
 
         if (!TryGetObjectImpl(objectBuffer, out var obj, out var consumed))
         {
@@ -469,7 +469,7 @@ public class Amf0Reader
         {
             return false;
         }
-        buffer = buffer.Slice(keyLength);
+        buffer = buffer[keyLength..];
 
         if (!TryGetValue(buffer, out var elementType, out var element, out var valueLength))
         {
@@ -503,7 +503,7 @@ public class Amf0Reader
 
         var elementCount = NetworkBitConverter.ToUInt32(buffer.Slice(Amf0CommonValues.MARKER_LENGTH, sizeof(uint)));
 
-        var arrayBodyBuffer = buffer.Slice(Amf0CommonValues.MARKER_LENGTH + sizeof(uint));
+        var arrayBodyBuffer = buffer[(Amf0CommonValues.MARKER_LENGTH + sizeof(uint))..];
         consumed = Amf0CommonValues.MARKER_LENGTH + sizeof(uint);
         if (StrictMode)
         {
@@ -513,7 +513,7 @@ public class Amf0Reader
                 {
                     return false;
                 }
-                arrayBodyBuffer = arrayBodyBuffer.Slice(kvConsumed);
+                arrayBodyBuffer = arrayBodyBuffer[kvConsumed..];
                 consumed += kvConsumed;
                 obj.Add(kv.Key, kv.Value);
             }
@@ -526,7 +526,7 @@ public class Amf0Reader
                 return false;
             }
             consumed += emptyStrConsumed;
-            arrayBodyBuffer = arrayBodyBuffer.Slice(emptyStrConsumed);
+            arrayBodyBuffer = arrayBodyBuffer[emptyStrConsumed..];
             if (!TryDescribeData(arrayBodyBuffer, out var objEndType, out var objEndConsumed))
             {
                 return false;
@@ -545,7 +545,7 @@ public class Amf0Reader
                 {
                     return false;
                 }
-                arrayBodyBuffer = arrayBodyBuffer.Slice(kvConsumed);
+                arrayBodyBuffer = arrayBodyBuffer[kvConsumed..];
                 consumed += kvConsumed;
                 if (isEnd)
                 {
@@ -582,7 +582,7 @@ public class Amf0Reader
         var elementCount = NetworkBitConverter.ToUInt32(buffer.Slice(Amf0CommonValues.MARKER_LENGTH, sizeof(uint)));
 
         int consumed = Amf0CommonValues.MARKER_LENGTH + sizeof(uint);
-        var arrayBodyBuffer = buffer.Slice(consumed);
+        var arrayBodyBuffer = buffer[consumed..];
         var elementBodyBuffer = arrayBodyBuffer;
         System.Diagnostics.Debug.WriteLine(elementCount);
         for (uint i = 0; i < elementCount; i++)
@@ -597,7 +597,7 @@ public class Amf0Reader
             {
                 return false;
             }
-            elementBodyBuffer = elementBodyBuffer.Slice(bufferConsumed);
+            elementBodyBuffer = elementBodyBuffer[bufferConsumed..];
             consumed += bufferConsumed;
         }
         array = obj;
@@ -642,7 +642,7 @@ public class Amf0Reader
             return false;
         }
 
-        if (!TryGetStringImpl(buffer.Slice(Amf0CommonValues.MARKER_LENGTH), Amf0CommonValues.LONG_STRING_HEADER_LENGTH, out value, out consumedLength))
+        if (!TryGetStringImpl(buffer[Amf0CommonValues.MARKER_LENGTH..], Amf0CommonValues.LONG_STRING_HEADER_LENGTH, out value, out consumedLength))
         {
             return false;
         }
@@ -706,7 +706,7 @@ public class Amf0Reader
             return false;
         }
 
-        if (!TryGetStringImpl(buffer.Slice(Amf0CommonValues.MARKER_LENGTH), Amf0CommonValues.LONG_STRING_HEADER_LENGTH, out var str, out consumedLength))
+        if (!TryGetStringImpl(buffer[Amf0CommonValues.MARKER_LENGTH..], Amf0CommonValues.LONG_STRING_HEADER_LENGTH, out var str, out consumedLength))
         {
             return false;
         }
@@ -735,14 +735,14 @@ public class Amf0Reader
 
         var consumed = Amf0CommonValues.MARKER_LENGTH;
 
-        if (!TryGetStringImpl(buffer.Slice(Amf0CommonValues.MARKER_LENGTH), Amf0CommonValues.STRING_HEADER_LENGTH, out var className, out var stringLength))
+        if (!TryGetStringImpl(buffer[Amf0CommonValues.MARKER_LENGTH..], Amf0CommonValues.STRING_HEADER_LENGTH, out var className, out var stringLength))
         {
             return false;
         }
 
         consumed += stringLength;
 
-        var objectBuffer = buffer.Slice(consumed);
+        var objectBuffer = buffer[consumed..];
 
         if (!TryGetObjectImpl(objectBuffer, out var dict, out var objectConsumed))
         {
@@ -792,7 +792,7 @@ public class Amf0Reader
             return false;
         }
 
-        buffer = buffer.Slice(Amf0CommonValues.MARKER_LENGTH);
+        buffer = buffer[Amf0CommonValues.MARKER_LENGTH..];
 
         if (!_amf3Reader.TryGetValue(buffer, out value, out consumed))
         {

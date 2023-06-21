@@ -24,13 +24,13 @@ public sealed class VideoMessage : Message, ICloneable
     {
         // TODO: optimize performance
         var data = new byte[context.ReadBuffer.Length];
-        context.ReadBuffer.Span.Slice(0, (int)MessageHeader.MessageLength).CopyTo(data);
+        context.ReadBuffer.Span[..(int)this.MessageHeader.MessageLength].CopyTo(data);
         Data = data;
     }
 
     public override void Serialize(SerializationContext context)
     {
-        context.WriteBuffer.WriteToBuffer(Data.Span.Slice(0, Data.Length));
+        context.WriteBuffer.WriteToBuffer(Data.Span[..Data.Length]);
     }
 
 }

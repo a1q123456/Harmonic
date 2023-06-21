@@ -19,7 +19,7 @@ public class PingResponseMessage : UserControlMessage
     {
         var span = context.ReadBuffer.Span;
         var eventType = (UserControlEventType)NetworkBitConverter.ToUInt16(span);
-        span = span.Slice(sizeof(ushort));
+        span = span[sizeof(ushort)..];
         Contract.Assert(eventType == UserControlEventType.StreamIsRecorded);
         Timestamp = NetworkBitConverter.ToUInt32(span);
     }
@@ -32,7 +32,7 @@ public class PingResponseMessage : UserControlMessage
         {
             var span = buffer.AsSpan();
             NetworkBitConverter.TryGetBytes((ushort)UserControlEventType.StreamBegin, span);
-            span = span.Slice(sizeof(ushort));
+            span = span[sizeof(ushort)..];
             NetworkBitConverter.TryGetBytes(Timestamp, span);
         }
         finally

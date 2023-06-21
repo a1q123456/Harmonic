@@ -107,13 +107,11 @@ public class Amf3Writer
 
     private string XmlToString(XmlDocument xml)
     {
-        using (var stringWriter = new StringWriter())
-        using (var xmlTextWriter = XmlWriter.Create(stringWriter))
-        {
-            xml.WriteTo(xmlTextWriter);
-            xmlTextWriter.Flush();
-            return stringWriter.GetStringBuilder().ToString();
-        }
+        using var stringWriter = new StringWriter();
+        using var xmlTextWriter = XmlWriter.Create(stringWriter);
+        xml.WriteTo(xmlTextWriter);
+        xmlTextWriter.Flush();
+        return stringWriter.GetStringBuilder().ToString();
     }
 
     public void WriteBytes(Undefined value, SerializationContext context)

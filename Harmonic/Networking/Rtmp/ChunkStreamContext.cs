@@ -558,7 +558,7 @@ class ChunkStreamContext : IDisposable
                         {
                             var message = factory(header.MessageHeader, context, out var factoryConsumed);
                             message.MessageHeader = header.MessageHeader;
-                            context.ReadBuffer = context.ReadBuffer.Slice(factoryConsumed);
+                            context.ReadBuffer = context.ReadBuffer[factoryConsumed..];
                             message.Deserialize(context);
                             context.Amf0Reader.ResetReference();
                             context.Amf3Reader.ResetReference();

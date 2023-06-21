@@ -47,29 +47,31 @@ public class RecordStream : NetStream
                 try
                 {
                     var filePath = _recordFileData.Name;
-                    using (var recordFile = new FileStream(filePath.Substring(0, filePath.Length - 5) + ".flv", FileMode.OpenOrCreate))
+                    await using var recordFile = new FileStream(filePath[..^5] + ".flv", FileMode.OpenOrCreate);
+                    recordFile.SetLength(0);
+                    recordFile.Seek(0, SeekOrigin.Begin);
+                    await recordFile.WriteAsync(this.FlvMuxer.MultiplexFlvHeader(true, true));
+                    var metaData = _metaData.Data[1] as Dictionary<string, object>;
+                    if (metaData != null)
                     {
-                        recordFile.SetLength(0);
-                        recordFile.Seek(0, SeekOrigin.Begin);
-                        await recordFile.WriteAsync(FlvMuxer.MultiplexFlvHeader(true, true));
-                        var metaData = _metaData.Data[1] as Dictionary<string, object>;
                         metaData["duration"] = ((double)_currentTimestamp) / 1000;
                         metaData["keyframes"] = _keyframes;
-                        _metaData.MessageHeader.MessageLength = 0;
-                        var dataTagLen = FlvMuxer.MultiplexFlv(_metaData).Length;
-
-                        var offset = recordFile.Position + dataTagLen;
-                        for (int i = 0; i < _keyframeFilePositions.Count; i++)
-                        {
-                            _keyframeFilePositions[i] = (double)_keyframeFilePositions[i] + offset;
-                        }
-
-                        await recordFile.WriteAsync(FlvMuxer.MultiplexFlv(_metaData));
-                        _recordFileData.Seek(0, SeekOrigin.Begin);
-                        await _recordFileData.CopyToAsync(recordFile);
-                        _recordFileData.Dispose();
-                        File.Delete(filePath);
                     }
+
+                    _metaData.MessageHeader.MessageLength = 0;
+                    var dataTagLen = this.FlvMuxer.MultiplexFlv(_metaData).Length;
+
+                    var offset = recordFile.Position + dataTagLen;
+                    for (int i = 0; i < _keyframeFilePositions.Count; i++)
+                    {
+                        _keyframeFilePositions[i] = (double)_keyframeFilePositions[i] + offset;
+                    }
+
+                    await recordFile.WriteAsync(this.FlvMuxer.MultiplexFlv(_metaData));
+                    _recordFileData.Seek(0, SeekOrigin.Begin);
+                    await _recordFileData.CopyToAsync(recordFile);
+                    _recordFileData.Dispose();
+                    File.Delete(filePath);
                 }
                 catch (Exception e)
                 {

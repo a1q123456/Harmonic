@@ -27,7 +27,7 @@ public class DataMessage : Message
                     throw new ProtocolViolationException();
                 }
                 Data.Add(data);
-                span = span.Slice(consumed);
+                span = span[consumed..];
             }
 
         }
@@ -40,7 +40,7 @@ public class DataMessage : Message
                     throw new ProtocolViolationException();
                 }
                 Data.Add(data);
-                span = span.Slice(consumed);
+                span = span[consumed..];
             }
         }
 

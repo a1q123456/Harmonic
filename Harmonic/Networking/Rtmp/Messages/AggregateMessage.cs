@@ -29,17 +29,17 @@ internal class AggregateMessage : Message
         consumed = 0;
         var header = new MessageHeader();
         header.MessageType = (MessageType)buffer[0];
-        buffer = buffer.Slice(sizeof(byte));
+        buffer = buffer[sizeof(byte)..];
         consumed += sizeof(byte);
         header.MessageLength = NetworkBitConverter.ToUInt24(buffer);
-        buffer = buffer.Slice(3);
+        buffer = buffer[3..];
         consumed += 3;
         header.Timestamp = NetworkBitConverter.ToUInt32(buffer);
-        buffer = buffer.Slice(sizeof(uint));
+        buffer = buffer[sizeof(uint)..];
         consumed += sizeof(uint);
         header.MessageStreamId = header.MessageStreamId;
         // Override message stream id
-        buffer = buffer.Slice(3);
+        buffer = buffer[3..];
         consumed += 3;
         var offset = consumed;
         consumed += (int)header.MessageLength;
@@ -60,7 +60,7 @@ internal class AggregateMessage : Message
         while (spanBuffer.Length != 0)
         {
             Messages.Add(DeserializeMessage(spanBuffer, out var consumed));
-            spanBuffer = spanBuffer.Slice(consumed + /* back pointer */ 4);
+            spanBuffer = spanBuffer[(consumed + /* back pointer */ 4)..];
         }
     }
 
@@ -75,16 +75,16 @@ internal class AggregateMessage : Message
             foreach (var message in Messages)
             {
                 span[0] = (byte)message.Header.MessageType;
-                span = span.Slice(sizeof(byte));
+                span = span[sizeof(byte)..];
                 NetworkBitConverter.TryGetUInt24Bytes((uint)message.Header.MessageLength, span);
-                span = span.Slice(3);
+                span = span[3..];
                 NetworkBitConverter.TryGetBytes(message.Header.Timestamp, span);
-                span = span.Slice(4);
+                span = span[4..];
                 NetworkBitConverter.TryGetUInt24Bytes((uint)MessageHeader.MessageStreamId, span);
-                span = span.Slice(3);
+                span = span[3..];
                 MessageBuffer.AsSpan(consumed, (int)message.Header.MessageLength).CopyTo(span);
                 consumed += (int)message.Header.MessageLength;
-                span = span.Slice((int)message.Header.MessageLength);
+                span = span[(int)message.Header.MessageLength..];
             }
             context.WriteBuffer.WriteToBuffer(span);
         }

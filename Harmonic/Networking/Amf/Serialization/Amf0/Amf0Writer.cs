@@ -107,7 +107,7 @@ public class Amf0Writer
                 Contract.Assert(contractRet);
             }
 
-            Encoding.UTF8.GetBytes(str, buffer.Slice(headerLength));
+            Encoding.UTF8.GetBytes(str, buffer[headerLength..]);
 
             context.Buffer.WriteToBuffer(buffer);
         }
@@ -142,7 +142,7 @@ public class Amf0Writer
         {
             var buffer = bufferBackend.AsSpan(0, bytesNeed);
             buffer[0] = (byte)Amf0Type.Number;
-            var contractRet = NetworkBitConverter.TryGetBytes(val, buffer.Slice(Amf0CommonValues.MARKER_LENGTH));
+            var contractRet = NetworkBitConverter.TryGetBytes(val, buffer[Amf0CommonValues.MARKER_LENGTH..]);
             Contract.Assert(contractRet);
             context.Buffer.WriteToBuffer(buffer);
         }
@@ -183,7 +183,7 @@ public class Amf0Writer
         {
             var buffer = backend.AsSpan(0, bytesNeed);
             buffer[0] = (byte)Amf0Type.Reference;
-            var contractRet = NetworkBitConverter.TryGetBytes(index, buffer.Slice(Amf0CommonValues.MARKER_LENGTH));
+            var contractRet = NetworkBitConverter.TryGetBytes(index, buffer[Amf0CommonValues.MARKER_LENGTH..]);
             Contract.Assert(contractRet);
             context.Buffer.WriteToBuffer(buffer);
         }
@@ -208,11 +208,11 @@ public class Amf0Writer
         try
         {
             var buffer = backend.AsSpan(0, bytesNeed);
-            buffer.Slice(0, bytesNeed).Clear();
+            buffer[..bytesNeed].Clear();
             buffer[0] = (byte)Amf0Type.Date;
             var dof = new DateTimeOffset(dateTime);
             var timestamp = (double)dof.ToUnixTimeMilliseconds();
-            var contractRet = NetworkBitConverter.TryGetBytes(timestamp, buffer.Slice(Amf0CommonValues.MARKER_LENGTH));
+            var contractRet = NetworkBitConverter.TryGetBytes(timestamp, buffer[Amf0CommonValues.MARKER_LENGTH..]);
             Contract.Assert(contractRet);
             context.Buffer.WriteToBuffer(buffer);
         }

@@ -349,7 +349,7 @@ public class ByteBuffer : IDisposable
                     prevDiscarded = false;
                 }
 
-                buffer = buffer.Slice(needToCopy);
+                buffer = buffer[needToCopy..];
             }
             //Console.WriteLine(Length);
             Debug.Assert(buffer.Length == 0 || _maxiumBufferSize < 0);

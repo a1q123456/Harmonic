@@ -115,9 +115,9 @@ public class FlvDemuxer
         if (soundFormat == SoundFormat.Aac)
         {
             ret.AudioData.AacPacketType = (AacPacketType)message.Data.Span[1];
-            ret.AudioData.Data = message.Data.Slice(2);
+            ret.AudioData.Data = message.Data[2..];
         }
-        ret.AudioData.Data = message.Data.Slice(1);
+        ret.AudioData.Data = message.Data[1..];
         return ret;
     }
 
@@ -127,7 +127,7 @@ public class FlvDemuxer
         var head = message.Data.Span[0];
         ret.FrameType = (FrameType)(head >> 4);
         ret.CodecId = (CodecId)(head & 0x0F);
-        ret.VideoData = message.Data.Slice(1);
+        ret.VideoData = message.Data[1..];
         return ret;
     }
 
@@ -155,7 +155,7 @@ public class FlvDemuxer
             };
 
             var message = factory(header, context, out var consumed);
-            context.ReadBuffer = context.ReadBuffer.Slice(consumed);
+            context.ReadBuffer = context.ReadBuffer[consumed..];
             message.MessageHeader = header;
             message.Deserialize(context);
             _amf0Reader.ResetReference();

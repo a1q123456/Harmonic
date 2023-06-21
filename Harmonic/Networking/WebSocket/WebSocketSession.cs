@@ -52,7 +52,7 @@ public class WebSocketSession
             var idx = path.IndexOf('?');
             if (idx != -1)
             {
-                query = path.Substring(idx);
+                query = path[idx..];
             }
             if (!_options._controllers.TryGetValue(controllerName.ToLower(), out var controllerType))
             {
