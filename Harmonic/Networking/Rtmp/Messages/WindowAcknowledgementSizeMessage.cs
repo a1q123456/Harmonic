@@ -11,10 +11,6 @@ public class WindowAcknowledgementSizeMessage : ControlMessage
 {
     public uint WindowSize { get; set; }
 
-    public WindowAcknowledgementSizeMessage() : base()
-    {
-    }
-
     public override void Deserialize(SerializationContext context)
     {
         WindowSize = NetworkBitConverter.ToUInt32(context.ReadBuffer.Span);

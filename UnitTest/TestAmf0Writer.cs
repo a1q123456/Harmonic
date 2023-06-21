@@ -1,13 +1,13 @@
-﻿using Harmonic.Networking.Amf.Attributes;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Xml;
+using Harmonic.Networking.Amf.Attributes;
 using Harmonic.Networking.Amf.Common;
 using Harmonic.Networking.Amf.Data;
 using Harmonic.Networking.Amf.Serialization.Amf0;
 using Harmonic.Networking.Amf.Serialization.Attributes;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Xml;
 
 namespace UnitTest;
 
@@ -126,9 +126,9 @@ public class TestAmf0Writer
         var writer = new Amf0Writer();
         var reader = new Amf0Reader();
 
-        var array = new List<object>()
+        var array = new List<object>
         {
-            1, 3.0, "string", new DateTime(2019, 2, 11), false, new List<object>() { null, 3, "string2", "string2" }
+            1, 3.0, "string", new DateTime(2019, 2, 11), false, new List<object> { null, 3, "string2", "string2" }
         };
 
         using var sc = new SerializationContext();
@@ -156,7 +156,7 @@ public class TestAmf0Writer
         var writer = new Amf0Writer();
         var reader = new Amf0Reader();
 
-        var array = new Dictionary<string, object>()
+        var array = new Dictionary<string, object>
         {
             ["1"] = 1.0,
             ["2"] = 2.0,
@@ -238,7 +238,7 @@ public class TestAmf0Writer
         var reader = new Amf0Reader();
 
         object nullVal = null;
-        var refVal = new List<object>() { 1, 2, "test" };
+        var refVal = new List<object> { 1, 2, "test" };
 
         var obj = new AmfObject
         {
@@ -298,9 +298,9 @@ public class TestAmf0Writer
         reader.RegisterType<TypedClass>();
 
         object nullVal = null;
-        var refVal = new List<object>() { 1, 2, "test" };
+        var refVal = new List<object> { 1, 2, "test" };
 
-        var obj = new TypedClass()
+        var obj = new TypedClass
         {
             c = 1.0,
             test = false,

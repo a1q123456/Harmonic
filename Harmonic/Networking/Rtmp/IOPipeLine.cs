@@ -1,13 +1,13 @@
 ﻿using System;
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO.Pipelines;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-using System.IO.Pipelines;
-using System.Collections.Concurrent;
 using Harmonic.Hosting;
-using System.Diagnostics;
 
 namespace Harmonic.Networking.Rtmp;
 
@@ -35,9 +35,9 @@ class IOPipeLine : IDisposable
     private readonly ConcurrentQueue<WriteState> _writerQueue = new();
 
     internal ProcessState NextProcessState { get; set; } = ProcessState.HandshakeC0C1;
-    internal ChunkStreamContext ChunkStreamContext { get; set; } = null;
-    private HandshakeContext _handshakeContext = null;
-    public RtmpServerOptions Options { get; set; } = null;
+    internal ChunkStreamContext ChunkStreamContext { get; set; }
+    private HandshakeContext _handshakeContext;
+    public RtmpServerOptions Options { get; set; }
 
 
     public IOPipeLine(Socket socket, RtmpServerOptions options, int resumeWriterThreshole = 65535)
@@ -113,7 +113,7 @@ class IOPipeLine : IDisposable
         var buffer = _arrayPool.Rent(data.Length);
         data.CopyTo(buffer);
 
-        _writerQueue.Enqueue(new WriteState()
+        _writerQueue.Enqueue(new WriteState
         {
             Buffer = buffer,
             TaskSource = tcs,
@@ -217,7 +217,7 @@ class IOPipeLine : IDisposable
 
 
     #region IDisposable Support
-    private bool disposedValue = false;
+    private bool disposedValue;
 
     protected virtual void Dispose(bool disposing)
     {

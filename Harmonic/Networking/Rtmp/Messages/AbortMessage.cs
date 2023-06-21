@@ -9,10 +9,6 @@ public class AbortMessage : ControlMessage
 {
     public uint AbortedChunkStreamId { get; set; }
 
-    public AbortMessage() : base()
-    {
-    }
-
     public override void Deserialize(SerializationContext context)
     {
         AbortedChunkStreamId = NetworkBitConverter.ToUInt32(context.ReadBuffer.Span);

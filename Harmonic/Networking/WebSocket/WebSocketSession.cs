@@ -1,21 +1,21 @@
-﻿using Autofac;
+﻿using System;
+using System.Threading.Tasks;
+using System.Web;
+using Autofac;
 using Fleck;
 using Harmonic.Controllers;
 using Harmonic.Hosting;
-using System;
-using Harmonic.Networking.Rtmp.Data;
 using Harmonic.Networking.Flv;
-using System.Threading.Tasks;
-using System.Web;
+using Harmonic.Networking.Rtmp.Data;
 
 namespace Harmonic.Networking.WebSocket;
 
 public class WebSocketSession
 {
-    private readonly IWebSocketConnection _webSocketConnection = null;
-    private readonly WebSocketOptions? _options = null;
-    private WebSocketController _controller = null;
-    private readonly FlvMuxer _flvMuxer = null;
+    private readonly IWebSocketConnection _webSocketConnection;
+    private readonly WebSocketOptions? _options;
+    private WebSocketController _controller;
+    private readonly FlvMuxer _flvMuxer;
     public RtmpServerOptions Options => _options._serverOptions;
 
     public WebSocketSession(IWebSocketConnection connection, WebSocketOptions? options)

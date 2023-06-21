@@ -1,7 +1,7 @@
-﻿using Harmonic.Networking.Amf.Data;
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Harmonic.Networking.Amf.Data;
 
 namespace Harmonic.Networking.Amf.Common;
 

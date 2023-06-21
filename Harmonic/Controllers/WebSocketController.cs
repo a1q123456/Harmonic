@@ -1,7 +1,7 @@
-﻿using Harmonic.Networking.Flv;
-using Harmonic.Networking.WebSocket;
-using System.Collections.Specialized;
+﻿using System.Collections.Specialized;
 using System.Threading.Tasks;
+using Harmonic.Networking.Flv;
+using Harmonic.Networking.WebSocket;
 
 namespace Harmonic.Controllers;
 
@@ -10,8 +10,8 @@ public abstract class WebSocketController
     public string StreamName { get; internal set; }
     public NameValueCollection Query { get; internal set; }
     public WebSocketSession Session { get; internal set; }
-    private FlvMuxer _flvMuxer = null;
-    private FlvDemuxer _flvDemuxer = null;
+    private FlvMuxer _flvMuxer;
+    private FlvDemuxer _flvDemuxer;
 
     public FlvMuxer FlvMuxer
     {

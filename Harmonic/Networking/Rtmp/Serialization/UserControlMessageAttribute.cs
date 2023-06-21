@@ -1,5 +1,5 @@
-﻿using Harmonic.Networking.Rtmp.Messages.UserControlMessages;
-using System;
+﻿using System;
+using Harmonic.Networking.Rtmp.Messages.UserControlMessages;
 
 namespace Harmonic.Networking.Rtmp.Serialization;
 

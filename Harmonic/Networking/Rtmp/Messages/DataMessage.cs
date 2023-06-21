@@ -1,7 +1,7 @@
-﻿using Harmonic.Networking.Rtmp.Data;
-using Harmonic.Networking.Rtmp.Serialization;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Net;
+using Harmonic.Networking.Rtmp.Data;
+using Harmonic.Networking.Rtmp.Serialization;
 
 namespace Harmonic.Networking.Rtmp.Messages;
 
@@ -9,7 +9,7 @@ namespace Harmonic.Networking.Rtmp.Messages;
 public class DataMessage : Message
 {
     public List<object> Data { get; set; }
-    public DataMessage(AmfEncodingVersion encoding) : base()
+    public DataMessage(AmfEncodingVersion encoding)
     {
         MessageHeader.MessageType = encoding == AmfEncodingVersion.Amf0 ? MessageType.Amf0Data : MessageType.Amf3Data;
     }

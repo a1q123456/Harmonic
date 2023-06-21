@@ -1,9 +1,9 @@
-﻿using Harmonic.Networking.Rtmp.Data;
-using Harmonic.Networking.Rtmp.Serialization;
-using Harmonic.Networking.Utils;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Harmonic.Networking.Rtmp.Data;
+using Harmonic.Networking.Rtmp.Serialization;
+using Harmonic.Networking.Utils;
 
 namespace Harmonic.Networking.Rtmp.Messages;
 
@@ -19,10 +19,6 @@ internal class AggregateMessage : Message
 {
     public List<MessageData> Messages { get; set; } = new();
     public byte[] MessageBuffer { get; set; } = null;
-
-    public AggregateMessage() : base()
-    {
-    }
 
     private MessageData DeserializeMessage(Span<byte> buffer, out int consumed)
     {
@@ -46,7 +42,7 @@ internal class AggregateMessage : Message
 
         header.Timestamp += MessageHeader.Timestamp;
 
-        return new MessageData()
+        return new MessageData
         {
             Header = header,
             DataOffset = offset,
@@ -76,7 +72,7 @@ internal class AggregateMessage : Message
             {
                 span[0] = (byte)message.Header.MessageType;
                 span = span[sizeof(byte)..];
-                NetworkBitConverter.TryGetUInt24Bytes((uint)message.Header.MessageLength, span);
+                NetworkBitConverter.TryGetUInt24Bytes(message.Header.MessageLength, span);
                 span = span[3..];
                 NetworkBitConverter.TryGetBytes(message.Header.Timestamp, span);
                 span = span[4..];

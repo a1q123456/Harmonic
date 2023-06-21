@@ -10,10 +10,6 @@ public class AcknowledgementMessage : ControlMessage
 {
     public uint BytesReceived { get; set; }
 
-    public AcknowledgementMessage() : base()
-    {
-    }
-
     public override void Deserialize(SerializationContext context)
     {
         BytesReceived = NetworkBitConverter.ToUInt32(context.ReadBuffer.Span);

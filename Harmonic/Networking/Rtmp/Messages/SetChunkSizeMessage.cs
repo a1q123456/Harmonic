@@ -10,11 +10,6 @@ public class SetChunkSizeMessage : ControlMessage
 {
     public uint ChunkSize { get; set; }
 
-    public SetChunkSizeMessage() : base()
-    {
-            
-    }
-
     public override void Deserialize(SerializationContext context)
     {
         var chunkSize = NetworkBitConverter.ToInt32(context.ReadBuffer.Span);

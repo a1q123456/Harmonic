@@ -7,7 +7,7 @@ public class Amf3Dictionary<TKey, TValue> : Dictionary<TKey, TValue>
 {
     public bool WeakKeys { get; set; } = false;
 
-    public Amf3Dictionary() : base() { }
+    public Amf3Dictionary() { }
 
     public Amf3Dictionary(IDictionary<TKey, TValue> dictionary) : base(dictionary) { }
 

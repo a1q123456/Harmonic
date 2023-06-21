@@ -1,4 +1,7 @@
-﻿using Harmonic.Networking.Amf.Common;
+﻿using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Harmonic.Networking.Amf.Common;
 using Harmonic.Networking.Rtmp;
 using Harmonic.Networking.Rtmp.Data;
 using Harmonic.Networking.Rtmp.Messages;
@@ -7,9 +10,6 @@ using Harmonic.Networking.Rtmp.Messages.UserControlMessages;
 using Harmonic.Networking.Rtmp.Streaming;
 using Harmonic.Rpc;
 using Harmonic.Service;
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace Harmonic.Controllers.Living;
 
@@ -17,14 +17,14 @@ public class LivingStream : NetStream
 {
     private readonly List<Action> _cleanupActions = new();
     private PublishingType _publishingType;
-    private readonly PublisherSessionService _publisherSessionService = null;
-    public DataMessage FlvMetadata = null;
-    public AudioMessage AACConfigureRecord = null;
-    public VideoMessage AVCConfigureRecord = null;
+    private readonly PublisherSessionService _publisherSessionService;
+    public DataMessage FlvMetadata;
+    public AudioMessage AACConfigureRecord;
+    public VideoMessage AVCConfigureRecord;
     public event Action<VideoMessage> OnVideoMessage;
     public event Action<AudioMessage> OnAudioMessage;
-    private RtmpChunkStream _videoChunkStream = null;
-    private RtmpChunkStream _audioChunkStream = null;
+    private RtmpChunkStream _videoChunkStream;
+    private RtmpChunkStream _audioChunkStream;
 
     public LivingStream(PublisherSessionService publisherSessionService)
     {
@@ -142,7 +142,7 @@ public class LivingStream : NetStream
 
         _publisherSessionService.RegisterPublisher(publishingName, this);
 
-        RtmpSession.SendControlMessageAsync(new StreamBeginMessage() { StreamID = MessageStream.MessageStreamId });
+        RtmpSession.SendControlMessageAsync(new StreamBeginMessage { StreamID = MessageStream.MessageStreamId });
         var onStatus = RtmpSession.CreateCommandMessage<OnStatusCommandMessage>();
         MessageStream.RegisterMessageHandler<DataMessage>(HandleDataMessage);
         MessageStream.RegisterMessageHandler<AudioMessage>(HandleAudioMessage);
@@ -183,7 +183,7 @@ public class LivingStream : NetStream
 
     #region Disposable Support
 
-    private bool disposedValue = false;
+    private bool disposedValue;
 
     protected override void Dispose(bool disposing)
     {

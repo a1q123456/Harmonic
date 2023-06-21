@@ -1,10 +1,10 @@
-﻿using Harmonic.Networking.Rtmp.Data;
-using Harmonic.Networking.Rtmp.Serialization;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
+using Harmonic.Networking.Rtmp.Data;
+using Harmonic.Networking.Rtmp.Serialization;
 
 namespace Harmonic.Networking.Rtmp;
 
@@ -71,7 +71,7 @@ public class RtmpMessageStream : IDisposable
     }
 
     #region IDisposable Support
-    private bool disposedValue = false;
+    private bool disposedValue;
 
     protected virtual void Dispose(bool disposing)
     {

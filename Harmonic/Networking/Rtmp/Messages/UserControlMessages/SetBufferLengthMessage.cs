@@ -1,7 +1,7 @@
-﻿using Harmonic.Networking.Rtmp.Serialization;
-using Harmonic.Networking.Utils;
-using System;
+﻿using System;
 using System.Diagnostics.Contracts;
+using Harmonic.Networking.Rtmp.Serialization;
+using Harmonic.Networking.Utils;
 
 namespace Harmonic.Networking.Rtmp.Messages.UserControlMessages;
 
@@ -10,11 +10,6 @@ public class SetBufferLengthMessage : UserControlMessage
 {
     public uint StreamID { get; set; }
     public uint BufferMilliseconds { get; set; }
-
-    public SetBufferLengthMessage()
-    {
-
-    }
 
     public override void Deserialize(SerializationContext context)
     {

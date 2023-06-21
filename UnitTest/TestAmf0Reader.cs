@@ -1,10 +1,10 @@
-﻿using Harmonic.Networking.Amf.Serialization.Amf0;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
+﻿using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Harmonic.Networking.Amf.Serialization.Amf0;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace UnitTest;
 
@@ -191,7 +191,7 @@ public class TestAmf0Reader
         f.Read(data);
 
         Assert.IsTrue(reader.TryGetEcmaArray(data, out var dataRead, out var consumed));
-        Assert.IsTrue(dataRead.SequenceEqual(new Dictionary<string, object>() { ["a"] = 1.0d, ["b"] = "a", ["c"] = "a" }));
+        Assert.IsTrue(dataRead.SequenceEqual(new Dictionary<string, object> { ["a"] = 1.0d, ["b"] = "a", ["c"] = "a" }));
         Assert.AreEqual(consumed, data.Length);
     }
 
@@ -209,7 +209,7 @@ public class TestAmf0Reader
         f.Read(data);
 
         Assert.IsTrue(reader.TryGetObject(data, out var dataRead, out var consumed));
-        Assert.IsTrue(dataRead.Fields.SequenceEqual(new Dictionary<string, object>() { ["a"] = "b", ["c"] = 1.0 }));
+        Assert.IsTrue(dataRead.Fields.SequenceEqual(new Dictionary<string, object> { ["a"] = "b", ["c"] = 1.0 }));
         Assert.AreEqual(consumed, data.Length);
     }
         

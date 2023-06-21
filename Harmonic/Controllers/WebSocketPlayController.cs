@@ -1,24 +1,24 @@
-﻿using Harmonic.Networking;
-using Harmonic.Networking.Rtmp.Messages;
-using Harmonic.Service;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Harmonic.Networking;
+using Harmonic.Networking.Rtmp.Messages;
+using Harmonic.Service;
 
 namespace Harmonic.Controllers;
 
 public class WebSocketPlayController : WebSocketController, IDisposable
 {
-    private readonly RecordService _recordService = null;
-    private readonly PublisherSessionService _publisherSessionService = null;
+    private readonly RecordService _recordService;
+    private readonly PublisherSessionService _publisherSessionService;
     private readonly List<Action> _cleanupActions = new();
-    private FileStream _recordFile = null;
+    private FileStream _recordFile;
     private readonly SemaphoreSlim _playLock = new(1);
-    private int _playing = 0;
-    private long _playRangeTo = 0;
+    private int _playing;
+    private long _playRangeTo;
 
     public WebSocketPlayController(PublisherSessionService publisherSessionService, RecordService recordService)
     {
@@ -120,7 +120,7 @@ public class WebSocketPlayController : WebSocketController, IDisposable
     }
 
     #region IDisposable Support
-    private bool disposedValue = false;
+    private bool disposedValue;
 
     protected virtual void Dispose(bool disposing)
     {

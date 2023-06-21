@@ -1,11 +1,4 @@
-﻿using Harmonic.Buffers;
-using Harmonic.Networking.Amf.Serialization.Amf0;
-using Harmonic.Networking.Amf.Serialization.Amf3;
-using Harmonic.Networking.Rtmp.Data;
-using Harmonic.Networking.Rtmp.Messages;
-using Harmonic.Networking.Rtmp.Serialization;
-using Harmonic.Networking.Utils;
-using System;
+﻿using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -13,22 +6,30 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Harmonic.Buffers;
+using Harmonic.Networking.Amf.Serialization.Amf0;
+using Harmonic.Networking.Amf.Serialization.Amf3;
+using Harmonic.Networking.Rtmp.Data;
+using Harmonic.Networking.Rtmp.Messages;
+using Harmonic.Networking.Rtmp.Serialization;
+using Harmonic.Networking.Utils;
+using SerializationContext = Harmonic.Networking.Rtmp.Serialization.SerializationContext;
 
 namespace Harmonic.Networking.Rtmp;
 
 class ChunkStreamContext : IDisposable
 {
     private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
-    internal ChunkHeader _processingChunk = null;
+    internal ChunkHeader _processingChunk;
     internal int ReadMinimumBufferSize { get => (ReadChunkSize + TYPE0_SIZE) * 4; }
     internal Dictionary<uint, MessageHeader> _previousWriteMessageHeader = new();
     internal Dictionary<uint, MessageHeader> _previousReadMessageHeader = new();
     internal Dictionary<uint, MessageReadingState> _incompleteMessageState = new();
-    internal uint? ReadWindowAcknowledgementSize { get; set; } = null;
-    internal uint? WriteWindowAcknowledgementSize { get; set; } = null;
+    internal uint? ReadWindowAcknowledgementSize { get; set; }
+    internal uint? WriteWindowAcknowledgementSize { get; set; }
     internal int ReadChunkSize { get; set; } = 128;
     internal long ReadUnAcknowledgedSize = 0;
-    internal long WriteUnAcknowledgedSize = 0;
+    internal long WriteUnAcknowledgedSize;
 
     internal uint _writeChunkSize = 128;
     internal readonly int EXTENDED_TIMESTAMP_LENGTH = 4;
@@ -36,7 +37,7 @@ class ChunkStreamContext : IDisposable
     internal readonly int TYPE1_SIZE = 7;
     internal readonly int TYPE2_SIZE = 3;
 
-    internal RtmpSession _rtmpSession = null;
+    internal RtmpSession _rtmpSession;
 
     internal Amf0Reader _amf0Reader = new();
     internal Amf0Writer _amf0Writer = new();
@@ -44,7 +45,7 @@ class ChunkStreamContext : IDisposable
     internal Amf3Writer _amf3Writer = new();
 
 
-    private readonly IOPipeLine _ioPipeline = null;
+    private readonly IOPipeLine _ioPipeline;
     private readonly SemaphoreSlim _sync = new(1);
     internal LimitType? PreviousLimitType { get; set; } = null;
 
@@ -74,7 +75,7 @@ class ChunkStreamContext : IDisposable
         uint length = 0;
         using (var writeBuffer = new ByteBuffer())
         {
-            var context = new Serialization.SerializationContext()
+            var context = new SerializationContext
             {
                 Amf0Reader = _amf0Reader,
                 Amf0Writer = _amf0Writer,
@@ -288,14 +289,13 @@ class ChunkStreamContext : IDisposable
         {
             return ChunkHeaderType.Type2;
         }
-        else if (messageHeader.MessageStreamId == prevHeader.MessageStreamId)
+
+        if (messageHeader.MessageStreamId == prevHeader.MessageStreamId)
         {
             return ChunkHeaderType.Type1;
         }
-        else
-        {
-            return ChunkHeaderType.Type0;
-        }
+
+        return ChunkHeaderType.Type0;
     }
     private void FillHeader(ChunkHeader header)
     {
@@ -333,7 +333,7 @@ class ChunkStreamContext : IDisposable
         {
             return false;
         }
-        var header = new ChunkHeader()
+        var header = new ChunkHeader
         {
             ChunkBasicHeader = new ChunkBasicHeader(),
             MessageHeader = new MessageHeader()
@@ -470,7 +470,7 @@ class ChunkStreamContext : IDisposable
         var header = _processingChunk;
         if (!_incompleteMessageState.TryGetValue(header.ChunkBasicHeader.ChunkStreamId, out var state))
         {
-            state = new MessageReadingState()
+            state = new MessageReadingState
             {
                 CurrentIndex = 0,
                 MessageLength = header.MessageHeader.MessageLength,
@@ -506,7 +506,7 @@ class ChunkStreamContext : IDisposable
             _incompleteMessageState.Remove(header.ChunkBasicHeader.ChunkStreamId);
             try
             {
-                var context = new Serialization.SerializationContext()
+                var context = new SerializationContext
                 {
                     Amf0Reader = _amf0Reader,
                     Amf0Writer = _amf0Writer,
@@ -516,7 +516,7 @@ class ChunkStreamContext : IDisposable
                 };
                 if (header.MessageHeader.MessageType == MessageType.AggregateMessage)
                 {
-                    var agg = new AggregateMessage()
+                    var agg = new AggregateMessage
                     {
                         MessageHeader = header.MessageHeader
                     };
@@ -527,7 +527,7 @@ class ChunkStreamContext : IDisposable
                         {
                             continue;
                         }
-                        var msgContext = new Serialization.SerializationContext()
+                        var msgContext = new SerializationContext
                         {
                             Amf0Reader = context.Amf0Reader,
                             Amf3Reader = context.Amf3Reader,

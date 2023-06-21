@@ -1,9 +1,9 @@
-﻿using Harmonic.Networking.Rtmp;
-using System;
+﻿using System;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Fleck;
+using Harmonic.Networking.Rtmp;
 using Harmonic.Networking.WebSocket;
 
 namespace Harmonic.Hosting;
@@ -16,7 +16,7 @@ public class RtmpServer
     private WebSocketServer? _webSocketServer;
     private readonly WebSocketOptions? _webSocketOptions;
 
-    public bool Started { get; private set; } = false;
+    public bool Started { get; private set; }
 
     internal RtmpServer(RtmpServerOptions options, WebSocketOptions? webSocketOptions)
     {
@@ -68,10 +68,10 @@ public class RtmpServer
                     try
                     {
                         _allDone.Reset();
-                        _listener.BeginAccept(new AsyncCallback(ar =>
+                        _listener.BeginAccept(ar =>
                         {
                             AcceptCallback(ar, ct);
-                        }), _listener);
+                        }, _listener);
                         while (!_allDone.WaitOne(1))
                         {
                             ct.ThrowIfCancellationRequested();

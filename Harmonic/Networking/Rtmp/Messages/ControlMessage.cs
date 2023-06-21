@@ -4,6 +4,5 @@ namespace Harmonic.Networking.Rtmp.Messages;
 
 public abstract class ControlMessage : Message
 {
-    internal ControlMessage() : base()
-    { }
+    internal ControlMessage() { }
 }

@@ -1,23 +1,23 @@
-﻿using Autofac;
-using Harmonic.Controllers;
-using Harmonic.Networking.Amf.Common;
-using Harmonic.Networking.Rtmp.Messages.Commands;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Autofac;
+using Harmonic.Controllers;
+using Harmonic.Networking.Amf.Common;
+using Harmonic.Networking.Rtmp.Messages.Commands;
 
 namespace Harmonic.Networking.Rtmp;
 
 public class NetConnection : IDisposable
 {
-    private readonly RtmpSession _rtmpSession = null;
-    private readonly RtmpChunkStream _rtmpChunkStream = null;
+    private readonly RtmpSession _rtmpSession;
+    private readonly RtmpChunkStream _rtmpChunkStream;
     private readonly Dictionary<uint, RtmpController> _netStreams = new();
-    private readonly RtmpControlMessageStream _controlMessageStream = null;
+    private readonly RtmpControlMessageStream _controlMessageStream;
     public IReadOnlyDictionary<uint, RtmpController> NetStreams { get => _netStreams; }
     private RtmpController _controller;
-    private bool _connected = false;
+    private bool _connected;
     private readonly object _streamsLock = new();
 
     private RtmpController Controller
@@ -73,7 +73,7 @@ public class NetConnection : IDisposable
     public void Connect(CommandMessage command)
     {
         var commandObj = command.CommandObject;
-        _rtmpSession.ConnectionInformation = new Networking.ConnectionInformation();
+        _rtmpSession.ConnectionInformation = new ConnectionInformation();
         var props = _rtmpSession.ConnectionInformation.GetType().GetProperties();
         foreach (var prop in props)
         {
@@ -151,7 +151,7 @@ public class NetConnection : IDisposable
 
 
     #region IDisposable Support
-    private bool disposedValue = false;
+    private bool disposedValue;
 
     protected virtual void Dispose(bool disposing)
     {

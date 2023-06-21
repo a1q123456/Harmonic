@@ -1,5 +1,5 @@
-﻿using Harmonic.Buffers;
-using System;
+﻿using System;
+using Harmonic.Buffers;
 
 namespace Harmonic.Networking.Amf.Data;
 

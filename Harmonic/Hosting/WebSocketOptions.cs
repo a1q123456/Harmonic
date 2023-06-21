@@ -1,9 +1,9 @@
-﻿using Autofac;
-using Harmonic.Controllers;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Text.RegularExpressions;
+using Autofac;
+using Harmonic.Controllers;
 
 namespace Harmonic.Hosting;
 

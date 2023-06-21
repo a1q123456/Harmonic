@@ -1,10 +1,10 @@
-using Harmonic.Buffers;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using System.Buffers;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Harmonic.Buffers;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace UnitTest;
 
@@ -141,7 +141,7 @@ public class TestUnlimitedBuffer
     }
 
     [TestMethod]
-    public void TestParalleWriteAndRead()
+    public void TestParallelWriteAndRead()
     {
         var buffer = new ByteBuffer(512, 35767);
         var th1 = new Thread(() =>

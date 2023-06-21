@@ -1,12 +1,12 @@
-﻿using Harmonic.Controllers;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using Harmonic.Controllers;
 using Harmonic.Networking.Amf.Common;
 using Harmonic.Networking.Rtmp;
 using Harmonic.Networking.Rtmp.Messages.Commands;
 using Harmonic.Networking.Rtmp.Serialization;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
 
 namespace Harmonic.Rpc;
 
@@ -168,7 +168,7 @@ internal class RpcService
                     if (fromCommandObject != null)
                     {
                         var name = fromCommandObject.Key ?? para.Name;
-                        rpcMethod.Parameters.Add(new RpcParameter()
+                        rpcMethod.Parameters.Add(new RpcParameter
                         {
                             CommandObjectKey = name,
                             IsFromCommandObject = true,
@@ -178,7 +178,7 @@ internal class RpcService
                     }
                     else if (fromOptionalArg != null)
                     {
-                        rpcMethod.Parameters.Add(new RpcParameter()
+                        rpcMethod.Parameters.Add(new RpcParameter
                         {
                             OptionalArgumentIndex = optArgIndex,
                             IsFromOptionalArgument = true,
@@ -189,7 +189,7 @@ internal class RpcService
                     }
                     else if (commandObject != null && para.ParameterType.IsAssignableFrom(typeof(AmfObject)))
                     {
-                        rpcMethod.Parameters.Add(new RpcParameter()
+                        rpcMethod.Parameters.Add(new RpcParameter
                         {
                             IsCommandObject = true,
                             IsOptional = para.IsOptional

@@ -13,8 +13,7 @@ public class Todo
 
 static class TodoGenerator
 {
-    private static readonly (string[] Prefixes, string[] Suffixes)[] _parts = new[]
-    {
+    private static readonly (string[] Prefixes, string[] Suffixes)[] _parts = {
         (new[] { "Walk the", "Feed the" }, new[] { "dog", "cat", "goat" }),
         (new[] { "Do the", "Put away the" }, new[] { "groceries", "dishes", "laundry" }),
         (new[] { "Clean the" }, new[] { "bathroom", "pool", "blinds", "car" })

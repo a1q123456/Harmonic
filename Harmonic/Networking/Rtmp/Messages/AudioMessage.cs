@@ -1,6 +1,6 @@
-﻿using Harmonic.Networking.Rtmp.Data;
+﻿using System;
+using Harmonic.Networking.Rtmp.Data;
 using Harmonic.Networking.Rtmp.Serialization;
-using System;
 
 namespace Harmonic.Networking.Rtmp.Messages;
 

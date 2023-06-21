@@ -1,4 +1,9 @@
-﻿using Autofac;
+﻿using System;
+using System.Collections.Generic;
+using System.Net;
+using System.Reflection;
+using System.Security.Cryptography.X509Certificates;
+using Autofac;
 using Harmonic.Controllers;
 using Harmonic.Networking.Rtmp;
 using Harmonic.Networking.Rtmp.Data;
@@ -8,11 +13,6 @@ using Harmonic.Networking.Rtmp.Messages.UserControlMessages;
 using Harmonic.Networking.Rtmp.Serialization;
 using Harmonic.Rpc;
 using Harmonic.Service;
-using System;
-using System.Collections.Generic;
-using System.Net;
-using System.Reflection;
-using System.Security.Cryptography.X509Certificates;
 
 namespace Harmonic.Hosting;
 
@@ -20,11 +20,11 @@ public class RtmpServerOptions
 {
     internal Dictionary<MessageType, MessageFactory> _messageFactories = new();
     public IReadOnlyDictionary<MessageType, MessageFactory> MessageFactories => _messageFactories;
-    public delegate Message MessageFactory(MessageHeader header, Networking.Rtmp.Serialization.SerializationContext context, out int consumed);
+    public delegate Message MessageFactory(MessageHeader header, SerializationContext context, out int consumed);
     private readonly Dictionary<string, Type> _registeredControllers = new();
-    internal ContainerBuilder _builder = null;
-    private readonly RpcService _rpcService = null;
-    internal IStartup _startup = null;
+    internal ContainerBuilder _builder;
+    private readonly RpcService _rpcService;
+    internal IStartup _startup;
     internal IStartup Startup
     {
         get

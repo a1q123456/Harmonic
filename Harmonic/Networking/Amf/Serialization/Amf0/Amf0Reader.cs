@@ -1,20 +1,22 @@
-﻿using Harmonic.Networking.Amf.Attributes;
-using Harmonic.Networking.Amf.Common;
-using Harmonic.Networking.Amf.Data;
-using Harmonic.Networking.Amf.Serialization.Attributes;
-using Harmonic.Networking.Utils;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Xml;
+using Harmonic.Networking.Amf.Attributes;
+using Harmonic.Networking.Amf.Common;
+using Harmonic.Networking.Amf.Data;
+using Harmonic.Networking.Amf.Serialization.Amf3;
+using Harmonic.Networking.Amf.Serialization.Attributes;
+using Harmonic.Networking.Utils;
 
 namespace Harmonic.Networking.Amf.Serialization.Amf0;
 
 public class Amf0Reader
 {
-    public readonly IReadOnlyDictionary<Amf0Type, long> _typeLengthMap = new Dictionary<Amf0Type, long>()
+    public readonly IReadOnlyDictionary<Amf0Type, long> _typeLengthMap = new Dictionary<Amf0Type, long>
     {
         { Amf0Type.Number, 8 },
         { Amf0Type.Boolean, sizeof(byte) },
@@ -42,7 +44,7 @@ public class Amf0Reader
     private readonly IReadOnlyDictionary<Amf0Type, ReadDataHandler> _readDataHandlers;
     private readonly Dictionary<string, TypeRegisterState> _registeredTypeStates = new();
     private readonly List<object> _referenceTable = new();
-    private readonly Amf3.Amf3Reader _amf3Reader = new();
+    private readonly Amf3Reader _amf3Reader = new();
     public bool StrictMode { get; set; } = true;
 
     public Amf0Reader()
@@ -89,7 +91,7 @@ public class Amf0Reader
             mapedName = attr.Name;
         }
         var typeName = mapedName == null ? type.Name : mapedName;
-        var state = new TypeRegisterState()
+        var state = new TypeRegisterState
         {
             Members = members,
             Type = type
@@ -118,7 +120,7 @@ public class Amf0Reader
     {
         header = default;
         consumed = 0;
-        if (!TryGetStringImpl(buffer, Amf0.Amf0CommonValues.STRING_HEADER_LENGTH, out var headerName, out var nameConsumed))
+        if (!TryGetStringImpl(buffer, Amf0CommonValues.STRING_HEADER_LENGTH, out var headerName, out var nameConsumed))
         {
             return false;
         }
@@ -181,7 +183,7 @@ public class Amf0Reader
             return false;
         }
         consumed = targetUriConsumed + responseUriConsumed + sizeof(uint) + contentConsumed;
-        message = new Message()
+        message = new Message
         {
             TargetUri = targetUri,
             ResponseUri = responseUri,
@@ -578,7 +580,7 @@ public class Amf0Reader
         int consumed = Amf0CommonValues.MARKER_LENGTH + sizeof(uint);
         var arrayBodyBuffer = buffer[consumed..];
         var elementBodyBuffer = arrayBodyBuffer;
-        System.Diagnostics.Debug.WriteLine(elementCount);
+        Debug.WriteLine(elementCount);
         for (uint i = 0; i < elementCount; i++)
         {
             if (!TryGetValue(elementBodyBuffer, out _, out var element, out var bufferConsumed))
@@ -653,7 +655,7 @@ public class Amf0Reader
         var stringLength = 0;
         if (lengthOfLengthField == Amf0CommonValues.STRING_HEADER_LENGTH)
         {
-            stringLength = (int)NetworkBitConverter.ToUInt16(buffer);
+            stringLength = NetworkBitConverter.ToUInt16(buffer);
         }
         else
         {
@@ -756,7 +758,8 @@ public class Amf0Reader
         {
             return false;
         }
-        else if (dict.Keys.Except(state.Members.Keys).Any())
+
+        if (dict.Keys.Except(state.Members.Keys).Any())
         {
             return false;
         }

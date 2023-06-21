@@ -1,4 +1,10 @@
-﻿using Harmonic.Networking.Amf.Common;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using Harmonic.Networking.Amf.Common;
+using Harmonic.Networking.Flv.Data;
 using Harmonic.Networking.Rtmp;
 using Harmonic.Networking.Rtmp.Data;
 using Harmonic.Networking.Rtmp.Messages;
@@ -7,33 +13,27 @@ using Harmonic.Networking.Rtmp.Messages.UserControlMessages;
 using Harmonic.Networking.Rtmp.Streaming;
 using Harmonic.Rpc;
 using Harmonic.Service;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
-using Harmonic.Networking.Flv.Data;
 
 namespace Harmonic.Controllers.Record;
 
 public class RecordStream : NetStream
 {
     private PublishingType _publishingType;
-    private FileStream _recordFile = null;
-    private FileStream _recordFileData = null;
-    private readonly RecordService _recordService = null;
-    private DataMessage _metaData = null;
-    private uint _currentTimestamp = 0;
+    private FileStream _recordFile;
+    private FileStream _recordFileData;
+    private readonly RecordService _recordService;
+    private DataMessage _metaData;
+    private uint _currentTimestamp;
     private readonly SemaphoreSlim _playLock = new(1);
-    private int _playing = 0;
-    private AmfObject _keyframes = null;
+    private int _playing;
+    private AmfObject _keyframes;
     private List<object> _keyframeTimes;
     private List<object> _keyframeFilePositions;
     private long _bufferMs = -1;
 
-    private RtmpChunkStream VideoChunkStream { get; set; } = null;
-    private RtmpChunkStream AudioChunkStream { get; set; } = null;
-    private bool _disposed = false;
+    private RtmpChunkStream VideoChunkStream { get; set; }
+    private RtmpChunkStream AudioChunkStream { get; set; }
+    private bool _disposed;
     private CancellationTokenSource _playCts;
 
     protected override async void Dispose(bool disposing)
@@ -102,8 +102,8 @@ public class RecordStream : NetStream
 
         _publishingType = PublishingHelpers.PublishingTypes[publishingType];
 
-        await RtmpSession.SendControlMessageAsync(new StreamIsRecordedMessage() { StreamID = MessageStream.MessageStreamId });
-        await RtmpSession.SendControlMessageAsync(new StreamBeginMessage() { StreamID = MessageStream.MessageStreamId });
+        await RtmpSession.SendControlMessageAsync(new StreamIsRecordedMessage { StreamID = MessageStream.MessageStreamId });
+        await RtmpSession.SendControlMessageAsync(new StreamBeginMessage { StreamID = MessageStream.MessageStreamId });
         var onStatus = RtmpSession.CreateCommandMessage<OnStatusCommandMessage>();
         MessageStream.RegisterMessageHandler<DataMessage>(HandleData);
         MessageStream.RegisterMessageHandler<AudioMessage>(HandleAudioMessage);
@@ -243,7 +243,7 @@ public class RecordStream : NetStream
         var startStatus = RtmpSession.CreateCommandMessage<OnStatusCommandMessage>();
         startStatus.InfoObject = startData;
         await MessageStream.SendMessageAsync(ChunkStream, startStatus);
-        var bandwidthLimit = new WindowAcknowledgementSizeMessage()
+        var bandwidthLimit = new WindowAcknowledgementSizeMessage
         {
             WindowSize = 500 * 1024
         };

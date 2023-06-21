@@ -12,9 +12,9 @@ namespace Harmonic.Buffers;
 public class ByteBuffer : IDisposable
 {
     private readonly List<byte[]> _buffers = new();
-    private int _bufferEnd = 0;
-    private int _bufferStart = 0;
-    private readonly int _maxiumBufferSize = 0;
+    private int _bufferEnd;
+    private int _bufferStart;
+    private readonly int _maxiumBufferSize;
     private event Action _memoryUnderLimit;
     private event Action _dataWritten;
     private readonly object _sync = new();
@@ -132,10 +132,6 @@ public class ByteBuffer : IDisposable
         private object state;
         private Action<object> continuation;
 
-        public _source()
-        {
-        }
-
         public void Cancel()
         {
             status = ValueTaskSourceStatus.Canceled;
@@ -143,14 +139,14 @@ public class ByteBuffer : IDisposable
         public void Success()
         {
             status = ValueTaskSourceStatus.Succeeded;
-            var previousContinuation = Interlocked.CompareExchange(ref this.continuation, CallbackCompleted, null);
+            var previousContinuation = Interlocked.CompareExchange(ref continuation, CallbackCompleted, null);
             if (previousContinuation != null)
             {
                 // Async work completed, continue with... continuation
                 ExecutionContext ec = executionContext;
                 if (ec == null)
                 {
-                    InvokeContinuation(previousContinuation, this.state, forceAsync: false);
+                    InvokeContinuation(previousContinuation, state, forceAsync: false);
                 }
                 else
                 {
@@ -162,15 +158,13 @@ public class ByteBuffer : IDisposable
                     {
                         var t = (Tuple<_source, Action<object>, object>)runState;
                         t.Item1.InvokeContinuation(t.Item2, t.Item3, forceAsync: false);
-                    }, Tuple.Create(this, previousContinuation, this.state));
+                    }, Tuple.Create(this, previousContinuation, state));
                 }
             }
         }
 
         public void GetResult(short token)
-        {
-            return;
-        }
+        { }
 
         public ValueTaskSourceStatus GetStatus(short token)
         {
@@ -181,7 +175,7 @@ public class ByteBuffer : IDisposable
         {
             if ((flags & ValueTaskSourceOnCompletedFlags.FlowExecutionContext) != 0)
             {
-                this.executionContext = ExecutionContext.Capture();
+                executionContext = ExecutionContext.Capture();
             }
 
             if ((flags & ValueTaskSourceOnCompletedFlags.UseSchedulingContext) != 0)
@@ -189,14 +183,14 @@ public class ByteBuffer : IDisposable
                 SynchronizationContext sc = SynchronizationContext.Current;
                 if (sc != null && sc.GetType() != typeof(SynchronizationContext))
                 {
-                    this.scheduler = sc;
+                    scheduler = sc;
                 }
                 else
                 {
                     TaskScheduler ts = TaskScheduler.Current;
                     if (ts != TaskScheduler.Default)
                     {
-                        this.scheduler = ts;
+                        scheduler = ts;
                     }
                 }
             }
@@ -412,7 +406,7 @@ public class ByteBuffer : IDisposable
     }
 
     #region IDisposable Support
-    private bool disposedValue = false;
+    private bool disposedValue;
 
     protected virtual void Dispose(bool disposing)
     {

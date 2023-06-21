@@ -18,10 +18,6 @@ public class SetPeerBandwidthMessage : ControlMessage
     public uint WindowSize { get; set; }
     public LimitType LimitType { get; set; }
 
-    public SetPeerBandwidthMessage() : base()
-    {
-    }
-
     public override void Deserialize(SerializationContext context)
     {
         WindowSize = NetworkBitConverter.ToUInt32(context.ReadBuffer.Span);

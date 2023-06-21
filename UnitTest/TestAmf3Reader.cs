@@ -1,4 +1,8 @@
-﻿using Harmonic.Buffers;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using Harmonic.Buffers;
 using Harmonic.Networking.Amf.Attributes;
 using Harmonic.Networking.Amf.Common;
 using Harmonic.Networking.Amf.Data;
@@ -6,10 +10,6 @@ using Harmonic.Networking.Amf.Serialization.Amf0;
 using Harmonic.Networking.Amf.Serialization.Amf3;
 using Harmonic.Networking.Amf.Serialization.Attributes;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 
 namespace UnitTest;
 
@@ -250,7 +250,7 @@ public class TestAmf3Reader
 
         Assert.IsTrue(reader.TryGetObject(data, out var dataRead, out var consumed));
         var obj = (AmfObject)dataRead;
-        Assert.IsTrue(obj.Fields.SequenceEqual(new Dictionary<string, object>() { ["t1"] = 1.0, ["t2"] = "aaa", ["t3"] = "aac" }));
+        Assert.IsTrue(obj.Fields.SequenceEqual(new Dictionary<string, object> { ["t1"] = 1.0, ["t2"] = "aaa", ["t3"] = "aac" }));
         Assert.AreEqual(obj.DynamicFields["td"], "aacf");
         var td2 = (Dictionary<object, object>)obj.DynamicFields["td2"];
 
@@ -432,9 +432,9 @@ public class TestAmf3Reader
         f.Read(data);
 
         Assert.IsTrue(reader.TryGetVectorDouble(data, out var dataRead, out var consumed));
-        Assert.AreEqual(dataRead[0], (double)1);
-        Assert.AreEqual(dataRead[1], (double)2);
-        Assert.AreEqual(dataRead[2], (double)3);
+        Assert.AreEqual(dataRead[0], 1);
+        Assert.AreEqual(dataRead[1], 2);
+        Assert.AreEqual(dataRead[2], 3);
 
         Assert.AreEqual(consumed, f.Length);
     }

@@ -1,9 +1,10 @@
-﻿using Harmonic.Buffers;
+﻿using System;
+using Harmonic.Buffers;
 using Harmonic.Networking.Amf.Serialization.Amf0;
 using Harmonic.Networking.Amf.Serialization.Amf3;
 using Harmonic.Networking.Rtmp.Data;
 using Harmonic.Networking.Utils;
-using System;
+using SerializationContext = Harmonic.Networking.Rtmp.Serialization.SerializationContext;
 
 namespace Harmonic.Networking.Flv;
 
@@ -39,7 +40,7 @@ public class FlvMuxer
         if (data.MessageHeader.MessageLength == 0)
         {
             var messageBuffer = new ByteBuffer();
-            var context = new Networking.Rtmp.Serialization.SerializationContext()
+            var context = new SerializationContext
             {
                 Amf0Writer = _amf0Writer,
                 Amf3Writer = _amf3Writer,
@@ -73,7 +74,7 @@ public class FlvMuxer
             dataBuffer.WriteToBuffer(buffer.AsSpan(0, 1));
             buffer.AsSpan().Clear();
             dataBuffer.WriteToBuffer(buffer.AsSpan(0, 3));
-            var context = new Networking.Rtmp.Serialization.SerializationContext()
+            var context = new SerializationContext
             {
                 Amf0Writer = _amf0Writer,
                 Amf3Writer = _amf3Writer,

@@ -1,6 +1,6 @@
-﻿using Harmonic.Buffers;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using Harmonic.Buffers;
 
 namespace Harmonic.Networking.Amf.Serialization.Amf0;
 

@@ -1,10 +1,10 @@
-﻿using Harmonic.Networking.Amf.Common;
-using Harmonic.Networking.Rtmp.Data;
-using Harmonic.Networking.Rtmp.Serialization;
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using Harmonic.Networking.Amf.Common;
+using Harmonic.Networking.Rtmp.Data;
+using Harmonic.Networking.Rtmp.Serialization;
 
 namespace Harmonic.Networking.Rtmp.Messages.Commands;
 
@@ -16,7 +16,7 @@ public abstract class CommandMessage : Message
     public double TranscationID { get; set; }
     public virtual AmfObject CommandObject { get; set; }
 
-    public CommandMessage(AmfEncodingVersion encoding) : base()
+    public CommandMessage(AmfEncodingVersion encoding)
     {
         AmfEncodingVersion = encoding;
         MessageHeader.MessageType = encoding == AmfEncodingVersion.Amf0 ? MessageType.Amf0Command : MessageType.Amf3Command;

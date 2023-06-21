@@ -1,28 +1,28 @@
-﻿using Autofac;
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
+using Autofac;
 using Harmonic.Controllers;
 using Harmonic.Networking.Rtmp.Data;
 using Harmonic.Networking.Rtmp.Messages;
 using Harmonic.Networking.Rtmp.Messages.Commands;
 using Harmonic.Rpc;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Reflection;
-using System.Threading.Tasks;
-using System.Threading;
 
 namespace Harmonic.Networking.Rtmp;
 
 public class RtmpSession : IDisposable
 {
-    internal IOPipeLine IOPipeline { get; set; } = null;
+    internal IOPipeLine IOPipeline { get; set; }
     private readonly Dictionary<uint, RtmpMessageStream> _messageStreams = new();
     private readonly Random _random = new();
     internal RtmpControlChunkStream ControlChunkStream { get; }
     public RtmpControlMessageStream ControlMessageStream { get; }
     public NetConnection NetConnection { get; }
-    private readonly RpcService _rpcService = null;
+    private readonly RpcService _rpcService;
     public ConnectionInformation ConnectionInformation { get; internal set; }
     private readonly object _allocCsidLocker = new();
     private readonly SortedList<uint, uint> _allocatedCsid = new();
@@ -184,7 +184,6 @@ public class RtmpSession : IDisposable
             retCommand.CommandObject = null;
             retCommand.ReturnValue = e.Message;
             _ = controller.MessageStream.SendMessageAsync(controller.ChunkStream, retCommand);
-            return;
         }
     }
 
@@ -247,7 +246,7 @@ public class RtmpSession : IDisposable
 
     internal void Acknowledgement(uint bytesReceived)
     {
-        _ = ControlMessageStream.SendMessageAsync(ControlChunkStream, new AcknowledgementMessage()
+        _ = ControlMessageStream.SendMessageAsync(ControlChunkStream, new AcknowledgementMessage
         {
             BytesReceived = bytesReceived
         });
@@ -265,7 +264,7 @@ public class RtmpSession : IDisposable
         }
         IOPipeline.ChunkStreamContext.PreviousLimitType = message.LimitType;
         IOPipeline.ChunkStreamContext.WriteWindowAcknowledgementSize = message.WindowSize;
-        SendControlMessageAsync(new WindowAcknowledgementSizeMessage()
+        SendControlMessageAsync(new WindowAcknowledgementSizeMessage
         {
             WindowSize = message.WindowSize
         });
@@ -291,7 +290,7 @@ public class RtmpSession : IDisposable
     }
 
     #region IDisposable Support
-    private bool disposedValue = false;
+    private bool disposedValue;
 
     protected virtual void Dispose(bool disposing)
     {

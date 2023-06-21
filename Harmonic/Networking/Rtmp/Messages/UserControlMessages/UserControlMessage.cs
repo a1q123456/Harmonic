@@ -18,9 +18,4 @@ public enum UserControlEventType : ushort
 public abstract class UserControlMessage : ControlMessage
 {
     public UserControlEventType UserControlEventType { get; set; }
-
-    public UserControlMessage() : base()
-    {
-    }
-        
 }

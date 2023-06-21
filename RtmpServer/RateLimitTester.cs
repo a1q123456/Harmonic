@@ -27,7 +27,7 @@ public class RateLimitTester : BackgroundService
 
 // Flood the HTTP client with requests.
         var floodOneThroughFortyNineTask = Parallel.ForEachAsync(
-            source: oneHundredUrls.Take(0..49), 
+            source: oneHundredUrls.Take(..49), 
             body: (url, cancellationToken) => GetAsync(client, url, cancellationToken), cancellationToken: stoppingToken);
 
         var floodFiftyThroughOneHundredTask = Parallel.ForEachAsync(

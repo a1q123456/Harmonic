@@ -1,17 +1,18 @@
-﻿using Harmonic.Networking.Amf.Common;
+﻿using System;
+using System.Buffers;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using Harmonic.Networking.Amf.Common;
 using Harmonic.Networking.Amf.Serialization.Amf0;
 using Harmonic.Networking.Amf.Serialization.Amf3;
 using Harmonic.Networking.Flv.Data;
 using Harmonic.Networking.Rtmp.Data;
 using Harmonic.Networking.Rtmp.Messages;
 using Harmonic.Networking.Utils;
-using System;
-using System.Buffers;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 using static Harmonic.Hosting.RtmpServerOptions;
+using SerializationContext = Harmonic.Networking.Rtmp.Serialization.SerializationContext;
 
 namespace Harmonic.Networking.Flv;
 
@@ -20,8 +21,8 @@ public class FlvDemuxer
     private readonly Amf0Reader _amf0Reader = new();
     private readonly Amf3Reader _amf3Reader = new();
     private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
-    private Stream _stream = null;
-    private readonly IReadOnlyDictionary<MessageType, MessageFactory> _factories = null;
+    private Stream _stream;
+    private readonly IReadOnlyDictionary<MessageType, MessageFactory> _factories;
 
     public FlvDemuxer(IReadOnlyDictionary<MessageType, MessageFactory> factories)
     {
@@ -76,7 +77,7 @@ public class FlvDemuxer
             timestampBuffer[0] = headerBuffer[11];
             var timestamp = NetworkBitConverter.ToInt32(timestampBuffer.AsSpan(0, 4));
             var streamId = NetworkBitConverter.ToUInt24(headerBuffer.AsSpan(12, 3));
-            var header = new MessageHeader()
+            var header = new MessageHeader
             {
                 MessageLength = length,
                 MessageStreamId = streamId,
@@ -147,7 +148,7 @@ public class FlvDemuxer
 
             await _stream.ReadBytesAsync(bodyBuffer.AsMemory(0, (int)header.MessageLength), ct);
 
-            var context = new Networking.Rtmp.Serialization.SerializationContext()
+            var context = new SerializationContext
             {
                 Amf0Reader = _amf0Reader,
                 Amf3Reader = _amf3Reader,

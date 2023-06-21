@@ -1,7 +1,7 @@
-﻿using Harmonic.Networking.Rtmp.Serialization;
-using Harmonic.Networking.Utils;
-using System;
+﻿using System;
 using System.Diagnostics.Contracts;
+using Harmonic.Networking.Rtmp.Serialization;
+using Harmonic.Networking.Utils;
 
 namespace Harmonic.Networking.Rtmp.Messages.UserControlMessages;
 
@@ -9,11 +9,6 @@ namespace Harmonic.Networking.Rtmp.Messages.UserControlMessages;
 public class PingRequestMessage : UserControlMessage
 {
     public uint Timestamp { get; set; }
-
-    public PingRequestMessage() : base()
-    {
-
-    }
 
     public override void Deserialize(SerializationContext context)
     {

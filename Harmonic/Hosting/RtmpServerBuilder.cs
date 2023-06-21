@@ -1,20 +1,20 @@
+using System;
+using System.Reflection;
+using System.Security.Cryptography.X509Certificates;
 using Harmonic.Controllers;
 using Harmonic.Controllers.Living;
 using Harmonic.Controllers.Record;
 using Harmonic.Networking.Rtmp;
-using System;
-using System.Reflection;
-using System.Security.Cryptography.X509Certificates;
 
 namespace Harmonic.Hosting;
 
 public class RtmpServerBuilder
 {
-    private IStartup _startup = null;
-    private X509Certificate2 _cert = null;
-    private bool _useWebSocket = false;
-    private bool _useSsl = false;
-    private WebSocketOptions? _websocketOptions = null;
+    private IStartup _startup;
+    private X509Certificate2 _cert;
+    private bool _useWebSocket;
+    private bool _useSsl;
+    private WebSocketOptions? _websocketOptions;
 
     private readonly RtmpServerOptions _options = null;
 

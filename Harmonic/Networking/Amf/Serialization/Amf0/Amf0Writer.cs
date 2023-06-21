@@ -1,14 +1,14 @@
-﻿using Harmonic.Networking.Amf.Attributes;
-using Harmonic.Networking.Amf.Common;
-using Harmonic.Networking.Amf.Serialization.Attributes;
-using Harmonic.Networking.Utils;
-using System;
+﻿using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics.Contracts;
 using System.IO;
 using System.Text;
 using System.Xml;
+using Harmonic.Networking.Amf.Attributes;
+using Harmonic.Networking.Amf.Common;
+using Harmonic.Networking.Amf.Serialization.Attributes;
+using Harmonic.Networking.Utils;
 
 namespace Harmonic.Networking.Amf.Serialization.Amf0;
 
@@ -16,7 +16,7 @@ public class Amf0Writer
 {
     private delegate void GetBytesHandler<T>(T value, SerializationContext context);
     private delegate void GetBytesHandler(object value, SerializationContext context);
-    private readonly IReadOnlyDictionary<Type, GetBytesHandler> _getBytesHandlers = null;
+    private readonly IReadOnlyDictionary<Type, GetBytesHandler> _getBytesHandlers;
     private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
 
     public Amf0Writer()
@@ -46,7 +46,7 @@ public class Amf0Writer
 
     private GetBytesHandler GetBytesWrapper<T>(GetBytesHandler<T> handler)
     {
-        return (object v, SerializationContext context) =>
+        return (v, context) =>
         {
             if (v is T tv)
             {

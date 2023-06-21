@@ -1,17 +1,17 @@
-﻿using Harmonic.Networking.Amf.Common;
-using System;
-using System.Linq;
+﻿using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.Diagnostics.Contracts;
+using System.IO;
+using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Xml;
-using System.IO;
-using Harmonic.Networking.Utils;
-using Harmonic.Networking.Amf.Data;
-using System.Diagnostics.Contracts;
-using System.Reflection;
 using Harmonic.Networking.Amf.Attributes;
+using Harmonic.Networking.Amf.Common;
+using Harmonic.Networking.Amf.Data;
 using Harmonic.Networking.Amf.Serialization.Attributes;
+using Harmonic.Networking.Utils;
 
 namespace Harmonic.Networking.Amf.Serialization.Amf3;
 
@@ -25,8 +25,8 @@ public class Amf3Writer
     private readonly Dictionary<Type, WriteHandler> _writeHandlers = new();
 
     public static readonly uint U29MAX = 0x1FFFFFFF;
-    private readonly MethodInfo _writeVectorTMethod = null;
-    private readonly MethodInfo _writeDictionaryTMethod = null;
+    private readonly MethodInfo _writeVectorTMethod;
+    private readonly MethodInfo _writeDictionaryTMethod;
 
     public Amf3Writer()
     {
@@ -73,7 +73,7 @@ public class Amf3Writer
         Contract.Assert(defination == typeof(Vector<>));
         var vectorT = valueType.GetGenericArguments().First();
 
-        _writeVectorTMethod.MakeGenericMethod(vectorT).Invoke(this, new object[] { value, context });
+        _writeVectorTMethod.MakeGenericMethod(vectorT).Invoke(this, new[] { value, context });
     }
 
     private void WrapDictionary(object value, SerializationContext context)
@@ -86,12 +86,12 @@ public class Amf3Writer
         var tKey = valueType.GetGenericArguments().First();
         var tValue = valueType.GetGenericArguments().Last();
 
-        _writeDictionaryTMethod.MakeGenericMethod(tKey, tValue).Invoke(this, new object[] { value, context });
+        _writeDictionaryTMethod.MakeGenericMethod(tKey, tValue).Invoke(this, new[] { value, context });
     }
 
     private WriteHandler WriteHandlerWrapper<T>(WriteHandler<T> handler)
     {
-        return (object obj, SerializationContext context) =>
+        return (obj, context) =>
         {
             if (obj is T tObj)
             {
@@ -178,7 +178,7 @@ public class Amf3Writer
                     context.Buffer.WriteToBuffer((byte)(arr[3] & 0x7F));
                     break;
                 case 1:
-                    context.Buffer.WriteToBuffer((byte)(arr[3]));
+                    context.Buffer.WriteToBuffer(arr[3]);
                     break;
                 default:
                     throw new ApplicationException();
@@ -224,7 +224,6 @@ public class Amf3Writer
             {
                 var header = (uint)refIndex << 1;
                 WriteU29BytesImpl(header, context);
-                return;
             }
             else
             {
@@ -373,10 +372,8 @@ public class Amf3Writer
             context.Buffer.WriteToBuffer((byte)Amf3Type.Null);
             return;
         }
-        else
-        {
-            context.Buffer.WriteToBuffer((byte)Amf3Type.Object);
-        }
+
+        context.Buffer.WriteToBuffer((byte)Amf3Type.Object);
 
         var refIndex = context.ObjectReferenceTable.IndexOf(value);
         if (refIndex >= 0)
@@ -452,22 +449,20 @@ public class Amf3Writer
                 extObj.TryEncodeData(context.Buffer);
                 return;
             }
-            else
-            {
-                header = 0x03;
-                if (traits.IsDynamic)
-                {
-                    header |= 0x08;
-                }
-                var memberCount = (uint)traits.Members.Count;
-                header |= memberCount << 4;
-                WriteU29BytesImpl(header, context);
-                WriteStringBytesImpl(traits.ClassName, context, context.StringReferenceTable);
 
-                foreach (var memberName in traits.Members)
-                {
-                    WriteStringBytesImpl(memberName, context, context.StringReferenceTable);
-                }
+            header = 0x03;
+            if (traits.IsDynamic)
+            {
+                header |= 0x08;
+            }
+            var memberCount = (uint)traits.Members.Count;
+            header |= memberCount << 4;
+            WriteU29BytesImpl(header, context);
+            WriteStringBytesImpl(traits.ClassName, context, context.StringReferenceTable);
+
+            foreach (var memberName in traits.Members)
+            {
+                WriteStringBytesImpl(memberName, context, context.StringReferenceTable);
             }
             context.ObjectTraitsReferenceTable.Add(traits);
         }
@@ -499,7 +494,6 @@ public class Amf3Writer
         {
             var header = (uint)refIndex << 1;
             WriteU29BytesImpl(header, context);
-            return;
         }
         else
         {
@@ -533,7 +527,6 @@ public class Amf3Writer
         {
             var header = (uint)refIndex << 1;
             WriteU29BytesImpl(header, context);
-            return;
         }
         else
         {
@@ -556,7 +549,6 @@ public class Amf3Writer
             {
                 _arrayPool.Return(buffer);
             }
-            return;
         }
     }
 
@@ -569,7 +561,6 @@ public class Amf3Writer
         {
             var header = (uint)refIndex << 1;
             WriteU29BytesImpl(header, context);
-            return;
         }
         else
         {
@@ -591,7 +582,6 @@ public class Amf3Writer
             {
                 _arrayPool.Return(buffer);
             }
-            return;
         }
     }
 
@@ -604,7 +594,6 @@ public class Amf3Writer
         {
             var header = (uint)refIndex << 1;
             WriteU29BytesImpl(header, context);
-            return;
         }
         else
         {
@@ -628,7 +617,6 @@ public class Amf3Writer
             {
                 WriteValueBytes(i, context);
             }
-            return;
         }
 
     }
@@ -642,7 +630,6 @@ public class Amf3Writer
         {
             var header = (uint)refIndex << 1;
             WriteU29BytesImpl(header, context);
-            return;
         }
         else
         {
@@ -660,8 +647,6 @@ public class Amf3Writer
             {
                 WriteValueBytes(i, context);
             }
-
-            return;
         }
     }
 
@@ -675,7 +660,6 @@ public class Amf3Writer
         {
             var header = (uint)refIndex << 1;
             WriteU29BytesImpl(header, context);
-            return;
         }
         else
         {
@@ -689,7 +673,6 @@ public class Amf3Writer
                 WriteValueBytes(key, context);
                 WriteValueBytes(item, context);
             }
-            return;
         }
     }
 

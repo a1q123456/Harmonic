@@ -1,7 +1,7 @@
-﻿using Harmonic.Buffers;
+﻿using System;
+using Harmonic.Buffers;
 using Harmonic.Networking.Amf.Serialization.Amf0;
 using Harmonic.Networking.Amf.Serialization.Amf3;
-using System;
 
 namespace Harmonic.Networking.Rtmp.Serialization;
 

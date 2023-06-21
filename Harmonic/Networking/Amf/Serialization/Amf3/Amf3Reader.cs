@@ -1,15 +1,15 @@
-﻿using Harmonic.Networking.Amf.Common;
-using System;
-using System.Linq;
+﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Xml;
-using Harmonic.Networking.Utils;
-using System.Buffers;
-using Harmonic.Networking.Amf.Data;
-using System.Reflection;
 using Harmonic.Networking.Amf.Attributes;
+using Harmonic.Networking.Amf.Common;
+using Harmonic.Networking.Amf.Data;
 using Harmonic.Networking.Amf.Serialization.Attributes;
+using Harmonic.Networking.Utils;
 
 namespace Harmonic.Networking.Amf.Serialization.Amf3;
 
@@ -25,14 +25,14 @@ public class Amf3Reader
     private readonly Dictionary<string, TypeRegisterState> _registeredTypedObejectStates = new();
     private readonly List<Type> _registeredTypes = new();
     private readonly Dictionary<string, Type> _registeredExternalizable = new();
-    private readonly IReadOnlyList<Amf3Type> _supportedTypes = null;
+    private readonly IReadOnlyList<Amf3Type> _supportedTypes;
     private readonly MemoryPool<byte> _memoryPool = MemoryPool<byte>.Shared;
 
     public IReadOnlyList<Type> RegisteredTypes { get => _registeredTypes; }
 
     public Amf3Reader()
     {
-        var supportedTypes = new List<Amf3Type>()
+        var supportedTypes = new List<Amf3Type>
         {
             Amf3Type.Undefined ,
             Amf3Type.Null ,
@@ -125,7 +125,7 @@ public class Amf3Reader
         }
 
         var typeName = mapedName == null ? type.Name : mapedName;
-        var state = new TypeRegisterState()
+        var state = new TypeRegisterState
         {
             Members = members,
             Type = type
@@ -224,7 +224,8 @@ public class Amf3Reader
             value = true;
             return true;
         }
-        else if (DataIsType(buffer, Amf3Type.False))
+
+        if (DataIsType(buffer, Amf3Type.False))
         {
             consumed = Amf3CommonValues.MARKER_LENGTH;
             value = false;
@@ -866,7 +867,7 @@ public class Amf3Reader
             return true;
         }
 
-        var vector = new Vector<double>() { IsFixedSize = isFixedSize };
+        var vector = new Vector<double> { IsFixedSize = isFixedSize };
         _objectReferenceTable.Add(vector);
         for (int i = 0; i < itemCount; i++)
         {
@@ -927,10 +928,8 @@ public class Amf3Reader
                 isRef = true;
                 return true;
             }
-            else
-            {
-                return false;
-            }
+
+            return false;
         }
         isRef = false;
         return true;
@@ -1042,7 +1041,7 @@ public class Amf3Reader
             _objectReferenceTable.Add(resultVector);
             vectorType.GetProperty("IsFixedSize").SetValue(resultVector, isFixedSize);
             var addMethod = vectorType.GetMethod("Add");
-            addAction = o => addMethod.Invoke(resultVector, new object[] { o });
+            addAction = o => addMethod.Invoke(resultVector, new[] { o });
         }
         for (int i = 0; i < itemCount; i++)
         {
@@ -1094,7 +1093,7 @@ public class Amf3Reader
         var weakKeys = buffer[Amf3CommonValues.MARKER_LENGTH + headerLength] == 0x01;
 
         var dictBuffer = buffer[(Amf3CommonValues.MARKER_LENGTH + headerLength + /* weak key flag */ sizeof(byte))..];
-        var dict = new Amf3Dictionary<object, object>()
+        var dict = new Amf3Dictionary<object, object>
         {
             WeakKeys = weakKeys
         };

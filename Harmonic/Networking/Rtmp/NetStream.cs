@@ -1,6 +1,6 @@
-﻿using Harmonic.Controllers;
+﻿using System;
+using Harmonic.Controllers;
 using Harmonic.Rpc;
-using System;
 
 namespace Harmonic.Networking.Rtmp;
 
@@ -13,7 +13,7 @@ public abstract class NetStream : RtmpController, IDisposable
     }
 
     #region IDisposable Support
-    private bool disposedValue = false;
+    private bool disposedValue;
 
     protected virtual void Dispose(bool disposing)
     {

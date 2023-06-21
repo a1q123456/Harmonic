@@ -1,10 +1,10 @@
-﻿using Harmonic.Networking.Amf.Common;
+﻿using System;
+using System.Linq;
+using System.Xml;
+using Harmonic.Networking.Amf.Common;
 using Harmonic.Networking.Amf.Serialization.Amf3;
 using Harmonic.Networking.Amf.Serialization.Attributes;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
-using System.Linq;
-using System.Xml;
 
 namespace UnitTest;
 
@@ -98,7 +98,7 @@ public class TestAmf3Writer
         var writer = new Amf3Writer();
 
         using var sc = new SerializationContext();
-        writer.WriteBytes(new Harmonic.Networking.Amf.Common.Undefined(), sc);
+        writer.WriteBytes(new Undefined(), sc);
         var buffer = new byte[sc.MessageLength];
         sc.GetMessage(buffer);
 
@@ -185,8 +185,8 @@ public class TestAmf3Writer
 
         var dict = new Amf3Dictionary<object, object>();
         dict.Add("ss", 1.0);
-        dict.Add("sd", new Vector<int>() { 1, 2 });
-        dict.Add(new Vector<int>() { 1, 2 }, "sd");
+        dict.Add("sd", new Vector<int> { 1, 2 });
+        dict.Add(new Vector<int> { 1, 2 }, "sd");
 
         using var sc = new SerializationContext();
         writer.WriteBytes(dict, sc);
@@ -196,7 +196,7 @@ public class TestAmf3Writer
         Assert.IsTrue(reader.TryGetDictionary(buffer, out var readVal, out var consumed));
         Assert.AreEqual(dict["ss"], readVal["ss"]);
         Assert.AreEqual(dict["sd"], readVal["sd"]);
-        Assert.AreEqual(dict[new Vector<int>() { 1, 2 }], readVal[new Vector<int>() { 1, 2 }]);
+        Assert.AreEqual(dict[new Vector<int> { 1, 2 }], readVal[new Vector<int> { 1, 2 }]);
         Assert.AreEqual(buffer.Length, consumed);
     }
 
@@ -208,7 +208,7 @@ public class TestAmf3Writer
 
         reader.RegisterExternalizable<iexternalizable>();
 
-        var ext = new iexternalizable()
+        var ext = new iexternalizable
         {
             v1 = 0.1,
             v2 = 1
@@ -263,7 +263,7 @@ public class TestAmf3Writer
             { "t1", (uint)2 },
             { "t2", 3.1 }
         };
-        obj.AddDynamic("t3", new Vector<int>() { 2, 3, 4 });
+        obj.AddDynamic("t3", new Vector<int> { 2, 3, 4 });
 
         using var sc = new SerializationContext();
         writer.WriteBytes(obj, sc);
@@ -274,7 +274,7 @@ public class TestAmf3Writer
         var readObj = (AmfObject)readVal;
         Assert.AreEqual(readObj.Fields["t1"], (uint)2);
         Assert.AreEqual(readObj.Fields["t2"], 3.1);
-        Assert.AreEqual(readObj.DynamicFields["t3"], new Vector<int>() { 2, 3, 4 });
+        Assert.AreEqual(readObj.DynamicFields["t3"], new Vector<int> { 2, 3, 4 });
         Assert.AreEqual(buffer.Length, consumed);
     }
 
@@ -285,7 +285,7 @@ public class TestAmf3Writer
         var writer = new Amf3Writer();
         reader.RegisterTypedObject<TestCls2>();
 
-        var obj = new TestCls2()
+        var obj = new TestCls2
         {
             t1 = 3.5
         };
@@ -307,12 +307,12 @@ public class TestAmf3Writer
         var writer = new Amf3Writer();
         reader.RegisterTypedObject<TestCls>();
             
-        var t = new TestCls()
+        var t = new TestCls
         {
             T1 = 3.3,
             T2 = "abc",
             T3 = "abd",
-            t4 = new Vector<int>() { 2000, 30000, 400000 }
+            t4 = new Vector<int> { 2000, 30000, 400000 }
         };
 
         using var sc = new SerializationContext();
@@ -372,7 +372,7 @@ public class TestAmf3Writer
         var reader = new Amf3Reader();
 
         using var sc = new SerializationContext();
-        var v = new Vector<uint>() { 2, 3, 4 };
+        var v = new Vector<uint> { 2, 3, 4 };
         writer.WriteBytes(v, sc);
         var buffer = new byte[sc.MessageLength];
         sc.GetMessage(buffer);
@@ -389,7 +389,7 @@ public class TestAmf3Writer
         var reader = new Amf3Reader();
 
         using var sc = new SerializationContext();
-        var v = new Vector<int>() { 2, 3, 4 };
+        var v = new Vector<int> { 2, 3, 4 };
         writer.WriteBytes(v, sc);
         var buffer = new byte[sc.MessageLength];
         sc.GetMessage(buffer);
@@ -406,7 +406,7 @@ public class TestAmf3Writer
         var reader = new Amf3Reader();
 
         using var sc = new SerializationContext();
-        var v = new Vector<double>() { 2, 3, 4 };
+        var v = new Vector<double> { 2, 3, 4 };
         writer.WriteBytes(v, sc);
         var buffer = new byte[sc.MessageLength];
         sc.GetMessage(buffer);
@@ -424,17 +424,17 @@ public class TestAmf3Writer
 
         reader.RegisterTypedObject<TestCls>();
 
-        var t = new TestCls()
+        var t = new TestCls
         {
             T1 = 3.3,
             T2 = "abc",
             T3 = "abd",
-            t4 = new Vector<int>() { 2000, 30000, 400000 }
+            t4 = new Vector<int> { 2000, 30000, 400000 }
         };
-        t.AddDynamic("t5", new Vector<TestCls>() { new() { T1 = 5.6 } });
+        t.AddDynamic("t5", new Vector<TestCls> { new() { T1 = 5.6 } });
 
         using var sc = new SerializationContext();
-        var v = new Vector<TestCls>() { t, t, t };
+        var v = new Vector<TestCls> { t, t, t };
         writer.WriteBytes(v, sc);
         var buffer = new byte[sc.MessageLength];
         sc.GetMessage(buffer);
@@ -453,16 +453,16 @@ public class TestAmf3Writer
 
         reader.RegisterTypedObject<TestCls>();
 
-        var t = new TestCls()
+        var t = new TestCls
         {
             T1 = 3.3,
             T2 = "abc",
             T3 = "abd",
-            t4 = new Vector<int>() { 2000, 30000, 400000 }
+            t4 = new Vector<int> { 2000, 30000, 400000 }
         };
 
         using var sc = new SerializationContext();
-        var v = new Vector<object>() { t, 3.2, 4.5 };
+        var v = new Vector<object> { t, 3.2, 4.5 };
         writer.WriteBytes(v, sc);
         var buffer = new byte[sc.MessageLength];
         sc.GetMessage(buffer);

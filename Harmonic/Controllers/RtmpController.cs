@@ -11,8 +11,8 @@ public abstract class RtmpController
     public RtmpSession RtmpSession { get; internal set; } = null;
 
 
-    private FlvMuxer _flvMuxer = null;
-    private FlvDemuxer _flvDemuxer = null;
+    private FlvMuxer _flvMuxer;
+    private FlvDemuxer _flvDemuxer;
 
     public FlvMuxer FlvMuxer
     {

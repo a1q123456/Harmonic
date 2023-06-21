@@ -1,5 +1,5 @@
-﻿using Harmonic.Networking.Rtmp.Serialization;
-using System.Buffers;
+﻿using System.Buffers;
+using Harmonic.Networking.Rtmp.Serialization;
 
 namespace Harmonic.Networking.Rtmp.Data;
 
