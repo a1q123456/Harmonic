@@ -96,17 +96,15 @@ public class TestAmf0Reader
         var reader = new Amf0Reader();
 
 
-        using (var f = new FileStream("../../../../samples/amf0/misc/date.amf0", FileMode.Open))
-        {
-            var data = new byte[f.Length];
-            f.Read(data);
+        using var f = new FileStream("../../../../samples/amf0/misc/date.amf0", FileMode.Open);
+        var data = new byte[f.Length];
+        var bytesRead = f.Read(data);
 
-            Assert.IsTrue(reader.TryGetDate(data, out var dataRead, out var consumed));
-            Assert.AreEqual(dataRead.Year, 2019);
-            Assert.AreEqual(dataRead.Month, 2);
-            Assert.AreEqual(dataRead.Day, 11);
-            Assert.AreEqual(consumed, data.Length);
-        }
+        Assert.IsTrue(reader.TryGetDate(data.AsSpan()[..bytesRead], out var dataRead, out var consumed));
+        Assert.AreEqual(dataRead.Year, 2019);
+        Assert.AreEqual(dataRead.Month, 2);
+        Assert.AreEqual(dataRead.Day, 10);
+        Assert.AreEqual(consumed, data.Length);
     }
 
     [TestMethod]

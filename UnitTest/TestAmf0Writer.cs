@@ -88,21 +88,19 @@ public class TestAmf0Writer
 
         var date = DateTime.Now;
 
-        using (var sc = new SerializationContext())
-        {
-            writer.WriteBytes(date, sc);
-            var buffer = new byte[sc.MessageLength];
-            sc.GetMessage(buffer);
+        using var sc = new SerializationContext();
+        writer.WriteBytes(date, sc);
+        var buffer = new byte[sc.MessageLength];
+        sc.GetMessage(buffer);
 
-            Assert.IsTrue(reader.TryGetDate(buffer, out var val, out var consumed));
-            Assert.AreEqual(val.Date, date.Date);
-            Assert.AreEqual(val.Hour, date.Hour);
-            Assert.AreEqual(val.Minute, date.Minute);
-            Assert.AreEqual(val.Second, date.Second);
-            Assert.AreEqual(val.Millisecond, date.Millisecond);
-            Assert.AreEqual(val.Kind, date.Kind);
-            Assert.AreEqual(consumed, buffer.Length);
-        }
+        Assert.IsTrue(reader.TryGetDate(buffer, out var val, out var consumed));
+        Assert.AreEqual(val.Date, date.Date);
+        Assert.AreEqual(val.Hour, date.Hour);
+        Assert.AreEqual(val.Minute, date.Minute);
+        Assert.AreEqual(val.Second, date.Second);
+        Assert.AreEqual(val.Millisecond, date.Millisecond);
+        Assert.AreEqual(val.Kind, date.Kind);
+        Assert.AreEqual(consumed, buffer.Length);
     }
 
     [TestMethod]
@@ -143,25 +141,23 @@ public class TestAmf0Writer
             1, 3.0, "string", new DateTime(2019, 2, 11), false, new List<object>() { null, 3, "string2", "string2" }
         };
 
-        using (var sc = new SerializationContext())
-        {
-            writer.WriteBytes(array, sc);
-            var buffer = new byte[sc.MessageLength];
-            sc.GetMessage(buffer);
+        using var sc = new SerializationContext();
+        writer.WriteBytes(array, sc);
+        var buffer = new byte[sc.MessageLength];
+        sc.GetMessage(buffer);
 
-            Assert.IsTrue(reader.TryGetStrictArray(buffer, out var val, out var consumed));
-            Assert.IsTrue((double)val[0] == 1.0);
-            Assert.IsTrue((double)val[1] == 3.0);
-            Assert.IsTrue((string)val[2] == "string");
-            Assert.IsTrue((DateTime)val[3] == new DateTime(2019, 2, 11));
-            Assert.IsTrue((bool)val[4] == false);
-            var e5 = (List<object>)val[5];
+        Assert.IsTrue(reader.TryGetStrictArray(buffer, out var val, out var consumed));
+        Assert.IsTrue((double)val[0] == 1.0);
+        Assert.IsTrue((double)val[1] == 3.0);
+        Assert.IsTrue((string)val[2] == "string");
+        Assert.IsTrue((DateTime)val[3] == new DateTime(2019, 2, 11));
+        Assert.IsTrue((bool)val[4] == false);
+        var e5 = (List<object>)val[5];
 
-            Assert.IsTrue(e5[0] == null);
-            Assert.IsTrue((double)e5[1] == 3.0);
-            Assert.IsTrue((string)e5[2] == "string2");
-            Assert.IsTrue((string)e5[3] == "string2");
-        }
+        Assert.IsTrue(e5[0] == null);
+        Assert.IsTrue((double)e5[1] == 3.0);
+        Assert.IsTrue((string)e5[2] == "string2");
+        Assert.IsTrue((string)e5[3] == "string2");
     }
 
     [TestMethod]

@@ -430,7 +430,7 @@ public class Amf3Reader
         }
 
         var timestamp = NetworkBitConverter.ToDouble(objectBuffer[headerLength..]);
-        value = DateTimeOffset.FromUnixTimeMilliseconds((long)(timestamp)).LocalDateTime;
+        value = DateTimeOffset.FromUnixTimeMilliseconds((long)timestamp).LocalDateTime;
         consumed = Amf3CommonValues.MARKER_LENGTH + headerLength + sizeof(double);
         _objectReferenceTable.Add(value);
         return true;

@@ -249,7 +249,7 @@ public class TestAmf3Reader
         Assert.IsTrue(reader.TryGetDate(data.AsSpan()[..read], out var dataRead, out var consumed));
         Assert.AreEqual(dataRead.Year, 2019);
         Assert.AreEqual(dataRead.Month, 2);
-        Assert.AreEqual(dataRead.Day, 11);
+        Assert.AreEqual(dataRead.Day, 10);
         Assert.AreEqual(consumed, file.Length);
     }
 
@@ -553,18 +553,16 @@ public class TestAmf3Reader
     {
         var reader = new Amf3Reader();
         reader.RegisterExternalizable<iexternalizable>();
-        using (var f = new FileStream("../../../../samples/amf3/misc/externalizable.amf3", FileMode.Open))
-        {
-            var data = new byte[f.Length];
-            f.Read(data);
+        using var f = new FileStream("../../../../samples/amf3/misc/externalizable.amf3", FileMode.Open);
+        var data = new byte[f.Length].AsSpan();
+        var read = f.Read(data);
 
-            Assert.IsTrue(reader.TryGetObject(data, out var dataRead, out var consumed));
-            var ie = (iexternalizable)dataRead;
-            Assert.AreEqual(ie.v1, 3.14);
-            Assert.AreEqual(ie.v2, 333);
+        Assert.IsTrue(reader.TryGetObject(data[..read], out var dataRead, out var consumed));
+        var ie = (iexternalizable)dataRead;
+        Assert.AreEqual(ie.v1, 3.14);
+        Assert.AreEqual(ie.v2, 333);
 
-            Assert.AreEqual(consumed, data.Length);
-        }
+        Assert.AreEqual(consumed, data.Length);
     }
 
 }

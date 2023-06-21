@@ -608,8 +608,8 @@ public class Amf0Reader
 
     public bool TryGetDate(Span<byte> buffer, out DateTime value, out int consumendLength)
     {
-        value = default;
-        consumendLength = default;
+        value = default(DateTime);
+        consumendLength = default(int);
 
         if (!TryDescribeData(buffer, out var type, out var length))
         {
@@ -621,7 +621,7 @@ public class Amf0Reader
             return false;
         }
 
-        var timestamp = NetworkBitConverter.ToDouble(buffer.Slice(Amf0CommonValues.MARKER_LENGTH));
+        var timestamp = NetworkBitConverter.ToDouble(buffer[Amf0CommonValues.MARKER_LENGTH..]);
         value = DateTimeOffset.FromUnixTimeMilliseconds((long)timestamp).LocalDateTime;
         consumendLength = length;
         return true;

@@ -55,12 +55,12 @@ public static class NetworkBitConverter
             return BitConverter.ToUInt32(memory.Span);
         }
     }
-    public static double ToDouble(Span<byte> buffer, bool littleEndian = false)
+    public static double ToDouble(Span<byte> buffer)
     {
-        if (!littleEndian)
-        {
-            buffer[..sizeof(double)].Reverse();
-        }
+        buffer = buffer[..sizeof(double)];
+        if (BitConverter.IsLittleEndian)
+            buffer.Reverse();
+
         return BitConverter.ToDouble(buffer);
     }
 
