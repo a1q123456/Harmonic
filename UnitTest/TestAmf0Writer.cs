@@ -17,7 +17,7 @@ public class TestAmf0Writer
     [TestMethod]
     public void TestNumber()
     {
-        var random = new Random();
+        var random = Random.Shared;
         var writer = new Amf0Writer();
         var reader = new Amf0Reader();
         using var sc = new SerializationContext();

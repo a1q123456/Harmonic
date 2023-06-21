@@ -14,7 +14,7 @@ public class TestUnlimitedBuffer
     [TestMethod]
     public void TestBufferSegmentSize()
     {
-        var random = new Random();
+        var random = Random.Shared;
 
         Assert.ThrowsException<ArgumentOutOfRangeException>(() => new ByteBuffer(0));
 
@@ -46,7 +46,7 @@ public class TestUnlimitedBuffer
     [TestMethod]
     public void TestBufferLengthDifferentBufferSegmentSize()
     {
-        var random = new Random();
+        var random = Random.Shared;
 
         for (int i = 0; i < 1000; i++)
         {
@@ -68,7 +68,7 @@ public class TestUnlimitedBuffer
     [TestMethod]
     public void TestBufferLength()
     {
-        var random = new Random();
+        var random = Random.Shared;
 
         for (int i = 0; i < 1000; i++)
         {
@@ -92,7 +92,7 @@ public class TestUnlimitedBuffer
     {
         for (int i = 0; i < 10000; i++)
         {
-            var random = new Random();
+            var random = Random.Shared;
             var buffer = new ByteBuffer(random.Next(1, 3000));
             var bytes1 = new byte[1024];
             var data = (byte)random.Next(byte.MinValue, byte.MaxValue);
@@ -113,7 +113,7 @@ public class TestUnlimitedBuffer
     {
         for (int i = 0; i < 10000; i++)
         {
-            var random = new Random();
+            var random = Random.Shared;
             var buffer = new ByteBuffer(512);
             var bytes1 = new byte[4096];
             var data = (byte)random.Next(byte.MinValue, byte.MaxValue);
@@ -197,7 +197,7 @@ public class TestUnlimitedBuffer
             byte i = 0;
             while (c < short.MaxValue)
             {
-                var arr = new byte[new Random().Next(256, 512)];
+                var arr = new byte[Random.Shared.Next(256, 512)];
                 for (var j = 0; j < arr.Length; j++)
                 {
                     arr[j] = i;
@@ -217,7 +217,7 @@ public class TestUnlimitedBuffer
         {
             while (c < short.MaxValue)
             {
-                var arr = new byte[new Random().Next(129, 136)];
+                var arr = new byte[Random.Shared.Next(129, 136)];
                 if (buffer.Length >= arr.Length)
                 {
                     await buffer.TakeOutMemoryAsync(arr);
@@ -240,7 +240,7 @@ public class TestUnlimitedBuffer
     {
         for (int i = 0; i < 10000; i++)
         {
-            var random = new Random();
+            var random = Random.Shared;
             var buffer = new ByteBuffer(random.Next(1, 3000));
             var bytes1 = new byte[3];
             var data = (byte)random.Next(byte.MinValue, byte.MaxValue);
@@ -260,7 +260,7 @@ public class TestUnlimitedBuffer
     public void TestWriteToBuffer4()
     {
         var buffer = new ByteBuffer();
-        var random = new Random();
+        var random = Random.Shared;
         var bytes1 = new byte[1024];
         var data = (byte)random.Next(byte.MinValue, byte.MaxValue);
         random.NextBytes(bytes1);
@@ -278,7 +278,7 @@ public class TestUnlimitedBuffer
     public void TestWriteToBuffer3()
     {
         var buffer = new ByteBuffer();
-        var random = new Random();
+        var random = Random.Shared;
         var bytes1 = new byte[3];
         var data = (byte)random.Next(byte.MinValue, byte.MaxValue);
         random.NextBytes(bytes1);
@@ -297,7 +297,7 @@ public class TestUnlimitedBuffer
     {
         for (int i = 0; i < 10000; i++)
         {
-            var random = new Random();
+            var random = Random.Shared;
             var buffer = new ByteBuffer(random.Next(1, 3000));
             var bytes1 = new byte[3];
             var bytes2 = new byte[7];
@@ -318,7 +318,7 @@ public class TestUnlimitedBuffer
     public void TestWriteToBuffer1()
     {
         var buffer = new ByteBuffer();
-        var random = new Random();
+        var random = Random.Shared;
         var bytes1 = new byte[3];
         var bytes2 = new byte[7];
         random.NextBytes(bytes1);
@@ -337,7 +337,7 @@ public class TestUnlimitedBuffer
     public void TestWriteToBuffer2()
     {
         var buffer = new ByteBuffer();
-        var random = new Random();
+        var random = Random.Shared;
         var bytes1 = new byte[4000];
         var bytes2 = new byte[3001];
         random.NextBytes(bytes1);
@@ -360,7 +360,7 @@ public class TestUnlimitedBuffer
     [TestMethod]
     public void TestClearAndCopyToDifferentBufferSegmentSize()
     {
-        var random = new Random();
+        var random = Random.Shared;
         var buffer = new ByteBuffer(random.Next(1, 3000));
         var bytes1 = new byte[4000];
         random.NextBytes(bytes1);
@@ -378,7 +378,7 @@ public class TestUnlimitedBuffer
     public void TestClearAndCopyTo()
     {
         var buffer = new ByteBuffer();
-        var random = new Random();
+        var random = Random.Shared;
         var bytes1 = new byte[4000];
         random.NextBytes(bytes1);
         buffer.WriteToBuffer(bytes1);

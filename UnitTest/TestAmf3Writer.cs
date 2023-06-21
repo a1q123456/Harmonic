@@ -16,7 +16,7 @@ public class TestAmf3Writer
     {
         var reader = new Amf3Reader();
         var writer = new Amf3Writer();
-        var random = new Random();
+        var random = Random.Shared;
 
         using var sc = new SerializationContext();
         for (int i = 0; i < 1000; i++)
